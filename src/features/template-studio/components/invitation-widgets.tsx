@@ -9,6 +9,7 @@ import { WidgetBox } from "./date-widgets";
 import { eventTimestamp } from "./date-utils";
 import type { ItemProps } from "./items";
 import { InvitationGuestContext } from "./invitation-guest-context";
+import { useStudioMode } from "./studio-mode-context";
 import Link from "next/link";
 
 const buttonStyle: CSSProperties = {
@@ -221,6 +222,8 @@ StudioMap.craft = {
 export function StudioAction(props: ItemProps) {
   const { enabled } = useEditor((state) => ({ enabled: state.options.enabled }));
   const guestToken = useContext(InvitationGuestContext);
+  const mode = useStudioMode();
+  const isWebsite = mode === "website";
   const [open, setOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const kind = props.action ?? "rsvp";
@@ -254,6 +257,44 @@ export function StudioAction(props: ItemProps) {
         >
           {title}
         </a>
+      ) : isWebsite && kind === "rsvp" ? (
+        <div style={{ display: "grid", placeItems: "center", gap: 4 }}>
+          <button
+            disabled
+            style={{
+              ...buttonStyle,
+              background: "#9ca3af",
+              color: "#ffffff",
+              cursor: "not-allowed",
+              opacity: 0.6,
+            }}
+            title="RSVP không khả dụng trên Website"
+          >
+            {title}
+          </button>
+          <small style={{ fontSize: 11, color: "#6b7280" }}>
+            Xác nhận tham dự chỉ hỗ trợ qua thiệp mời cá nhân.
+          </small>
+        </div>
+      ) : isWebsite && kind === "gift" ? (
+        <div style={{ display: "grid", placeItems: "center", gap: 4 }}>
+          <button
+            disabled
+            style={{
+              ...buttonStyle,
+              background: "#9ca3af",
+              color: "#ffffff",
+              cursor: "not-allowed",
+              opacity: 0.6,
+            }}
+            title="Tính năng đang được phát triển ở studio của wedding story không cho dùng"
+          >
+            {title}
+          </button>
+          <small style={{ fontSize: 11, color: "#6b7280" }}>
+            Tính năng đang được phát triển ở studio của wedding story không cho dùng.
+          </small>
+        </div>
       ) : kind === "rsvp" && guestToken && !enabled ? (
         <Link
           href={`/invite/${encodeURIComponent(guestToken)}/rsvp`}
@@ -277,7 +318,7 @@ export function StudioAction(props: ItemProps) {
           {title}
         </button>
       )}
-      {open && (
+      {open && !isWebsite && (
         <Popup
           title={kind === "gift" ? "Hộp quà mừng" : "Xác nhận tham dự"}
           close={() => setOpen(false)}
@@ -352,56 +393,93 @@ StudioAction.craft = {
 
 export function StudioWishes(props: ItemProps) {
   const { enabled } = useEditor((state) => ({ enabled: state.options.enabled }));
+  const mode = useStudioMode();
+  const isWebsite = mode === "website";
   const [messages, setMessages] = useState([
     { name: "Bạn bè", text: "Chúc hai bạn luôn yêu thương và hạnh phúc!" },
   ]);
   return (
     <WidgetBox {...props} baseHeight={440}>
       <strong style={{ fontSize: 23 }}>{props.title ?? "Sổ lưu bút"}</strong>
-      <form
-        style={{ display: "grid", gap: 8 }}
-        onSubmit={(event) => {
-          event.preventDefault();
-          const data = new FormData(event.currentTarget);
-          setMessages((previous) =>
-            [
-              {
-                name: String(data.get("name")).slice(0, 150),
-                text: String(data.get("wish")).slice(0, 1000),
-              },
-              ...previous,
-            ].slice(0, 3),
-          );
-          event.currentTarget.reset();
-        }}
-      >
-        <input
-          aria-label="Tên người gửi lời chúc"
-          name="name"
-          placeholder="Nhập tên*"
-          required
-          maxLength={150}
-          disabled={enabled}
-          style={{ padding: 10, border: "1px solid #d5c9bc", borderRadius: 6 }}
-        />
-        <textarea
-          aria-label="Lời chúc"
-          name="wish"
-          placeholder="Nhập lời chúc*"
-          required
-          maxLength={1000}
-          disabled={enabled}
-          style={{ padding: 10, height: 80, border: "1px solid #d5c9bc", borderRadius: 6 }}
-        />
-        <button
-          disabled={enabled}
-          style={{ ...buttonStyle, color: "white", background: props.accent ?? defaults.accent }}
+      {isWebsite ? (
+        <div style={{ display: "grid", gap: 8, opacity: 0.6 }}>
+          <div
+            style={{
+              padding: "8px 12px",
+              background: "#e5e7eb",
+              borderRadius: 6,
+              fontSize: 12,
+              color: "#4b5563",
+              textAlign: "center",
+            }}
+          >
+            Tính năng đang được phát triển ở studio của wedding story k cho dùng
+          </div>
+          <input
+            aria-label="Tên người gửi lời chúc"
+            placeholder="Nhập tên*"
+            disabled
+            style={{ padding: 10, border: "1px solid #d5c9bc", borderRadius: 6, cursor: "not-allowed" }}
+          />
+          <textarea
+            aria-label="Lời chúc"
+            placeholder="Nhập lời chúc*"
+            disabled
+            style={{ padding: 10, height: 80, border: "1px solid #d5c9bc", borderRadius: 6, cursor: "not-allowed" }}
+          />
+          <button
+            disabled
+            style={{ ...buttonStyle, color: "white", background: "#9ca3af", cursor: "not-allowed" }}
+          >
+            GỬI LỜI CHÚC
+          </button>
+        </div>
+      ) : (
+        <form
+          style={{ display: "grid", gap: 8 }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            setMessages((previous) =>
+              [
+                {
+                  name: String(data.get("name")).slice(0, 150),
+                  text: String(data.get("wish")).slice(0, 1000),
+                },
+                ...previous,
+              ].slice(0, 3),
+            );
+            event.currentTarget.reset();
+          }}
         >
-          GỬI LỜI CHÚC
-        </button>
-      </form>
-      <small>Lời chúc trong bản xem thử, chưa lưu máy chủ.</small>
-      <div style={{ flex: 1, overflow: "auto", textAlign: "left" }}>
+          <input
+            aria-label="Tên người gửi lời chúc"
+            name="name"
+            placeholder="Nhập tên*"
+            required
+            maxLength={150}
+            disabled={enabled}
+            style={{ padding: 10, border: "1px solid #d5c9bc", borderRadius: 6 }}
+          />
+          <textarea
+            aria-label="Lời chúc"
+            name="wish"
+            placeholder="Nhập lời chúc*"
+            required
+            maxLength={1000}
+            disabled={enabled}
+            style={{ padding: 10, height: 80, border: "1px solid #d5c9bc", borderRadius: 6 }}
+          />
+          <button
+            disabled={enabled}
+            style={{ ...buttonStyle, color: "white", background: props.accent ?? defaults.accent }}
+          >
+            GỬI LỜI CHÚC
+          </button>
+          <small>Lời chúc trong bản xem thử, chưa lưu máy chủ.</small>
+        </form>
+      )}
+      <div style={{ flex: 1, overflow: "auto", textAlign: "left", opacity: isWebsite ? 0.6 : 1 }}>
         {messages.map((message, index) => (
           <div key={index} style={{ borderBottom: "1px solid #d5c9bc", padding: "10px 0" }}>
             <strong>{message.name}</strong>

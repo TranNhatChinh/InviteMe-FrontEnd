@@ -8,8 +8,16 @@ export { WeddingNavigation } from "./components/wedding-navigation";
 export { WebsiteEditor } from "./components/website-editor";
 export { WebsiteRenderer } from "./components/website-renderer";
 export {
+  getWebsite,
+  saveWebsite,
+  publishWebsite,
+  unpublishWebsite,
   getPublicWebsite,
   publicWebsiteSchema,
+  websiteSchema,
+  websiteDocumentSchema,
+  isStudioDocument,
+  isLegacyWebsiteDocument,
   listWeddingMedia,
   mediaUrl,
   uploadWeddingMedia,

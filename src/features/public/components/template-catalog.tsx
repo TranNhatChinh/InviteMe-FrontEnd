@@ -5,8 +5,6 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
 import { listPublicTemplateVisibility, listPublicTemplates } from "../api/templates.api";
-import "@fontsource/eb-garamond/400.css";
-import "@fontsource/eb-garamond/400-italic.css";
 type Design = {
   id: string;
   name: string;

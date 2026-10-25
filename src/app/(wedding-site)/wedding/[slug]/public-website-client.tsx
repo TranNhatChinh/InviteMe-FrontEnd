@@ -2,7 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
-import { getPublicWebsite, publicWebsiteSchema, WebsiteRenderer } from "@/features/weddings";
+import { WebsiteStoryRenderer } from "@/features/template-studio";
+import {
+  getPublicWebsite,
+  publicWebsiteSchema,
+  isStudioDocument,
+  WebsiteRenderer,
+} from "@/features/weddings";
 import { usePublicWeddingSignal } from "@/core/realtime/public-wedding-signal";
 import type { z } from "zod";
 import { useTranslation } from "react-i18next";
@@ -37,5 +43,10 @@ export function PublicWebsiteClient({
         </button>
       </main>
     );
+
+  if (isStudioDocument(site.data.document)) {
+    return <WebsiteStoryRenderer document={site.data.document} />;
+  }
+
   return <WebsiteRenderer document={site.data.document} />;
 }

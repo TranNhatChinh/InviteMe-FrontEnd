@@ -7,8 +7,6 @@ import { publicInvitationSchema, resolveInvitationDocument } from "../api/design
 import { usePublicWeddingSignal } from "@/core/realtime/public-wedding-signal";
 import { ApiError } from "@/core/api/api-error";
 import { useTranslation } from "react-i18next";
-import "@fontsource/eb-garamond/400.css";
-import "@fontsource/eb-garamond/400-italic.css";
 
 const Invitation = dynamic(
   () => import("./invitation-renderer").then((m) => m.InvitationRenderer),

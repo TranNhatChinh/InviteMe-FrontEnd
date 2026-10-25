@@ -3,14 +3,14 @@
 import { useTranslation } from "react-i18next";
 import { useLocale } from "@/i18n/language-context";
 import { formatDate } from "@/i18n/format";
-import { mediaUrl, websiteTemplates, type WebsiteDocument } from "../api/website.api";
+import { mediaUrl, websiteTemplates, type LegacyWebsiteDocument } from "../api/website.api";
 import { WEDDING_TIME_ZONE } from "../schemas/wedding.schema";
 
 export function WebsiteRenderer({
   document,
   preview = false,
 }: {
-  document: WebsiteDocument;
+  document: LegacyWebsiteDocument;
   preview?: boolean;
 }) {
   const { t } = useTranslation("public");
@@ -23,9 +23,10 @@ export function WebsiteRenderer({
   const seaside = document.templateId === "story-seaside-01";
   const scarlet = document.templateId === "story-scarlet-39";
   const sage = document.templateId === "story-sage-53";
-  const date = Number.isNaN(Date.parse(document.eventAt))
-    ? document.eventAt
-    : formatDate(document.eventAt, language, {
+  const rawDate = document.eventAt ?? "";
+  const date = Number.isNaN(Date.parse(rawDate))
+    ? rawDate
+    : formatDate(rawDate, language, {
         dateStyle: "full",
         timeStyle: "short",
         timeZone: document.timeZoneId ?? WEDDING_TIME_ZONE,
@@ -71,7 +72,7 @@ export function WebsiteRenderer({
           aria-label={photo ? t("weddingPhoto") : undefined}
         />
       </section>
-      {document.showStory && document.story.trim() && (
+      {document.showStory && document.story?.trim() && (
         <section
           className={`mx-auto max-w-3xl px-6 py-20 ${editorial ? "text-left" : "text-center"}`}
         >

@@ -12,7 +12,6 @@ import { getInvitationDesign, publishInvitationDesign } from "../api/design.api"
 import { TemplateThumbnail } from "./template-thumbnail";
 import { InvitationCover } from "./invitation-cover";
 import { findTemplate } from "../templates/catalog";
-import "@fontsource/eb-garamond/400.css";
 
 export function SavedInvitation({ weddingId }: { weddingId: string }) {
   const { t } = useTranslation("invitations");

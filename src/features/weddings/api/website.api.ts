@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
 import { env } from "@/core/config/env";
+import { resolveMediaUrl } from "@/core/config/media-url";
+// eslint-disable-next-line architecture/boundaries -- Website API contracts share the Studio JSON document schema
+import { studioDocumentSchema } from "@/features/template-studio/schemas/document";
 
 export const websiteTemplates = [
   { id: "story-red-velvet", name: "Đỏ nhung", color: "#7d1929", background: "#fff7f2" },
@@ -11,48 +14,191 @@ export const websiteTemplates = [
   { id: "story-sage-53", name: "Lá xô thơm", color: "#627260", background: "#f6f7f0" },
 ] as const;
 
-export const websiteDocumentSchema = z.object({
-  templateId: z.string(), title: z.string(), partnerOne: z.string(), partnerTwo: z.string(),
-  story: z.string(), eventAt: z.string(), venueName: z.string(), venueAddress: z.string(),
-  heroImageUrl: z.string().nullable(), showStory: z.boolean(), showEvent: z.boolean(),
-  contact: z.string().nullable(),
-  timeline: z.array(z.object({ title: z.string(), description: z.string() })).nullable().optional(),
-  events: z.array(z.object({ name: z.string(), startsAt: z.string(), address: z.string() })).nullable().optional(),
-  gallery: z.array(z.string()).nullable().optional(),
-  timeZoneId: z.string().nullable().optional(),
-});
-export const websiteSchema = z.object({
-  version: z.number(), document: websiteDocumentSchema.nullable(),
-  status: z.enum(["DRAFT", "PUBLISHED", "UNPUBLISHED"]),
-  hasUnpublishedChanges: z.boolean(), warnings: z.array(z.string()),
-});
-export const publicWebsiteSchema = z.object({
-  slug: z.string(), document: websiteDocumentSchema,
-});
-export const uploadedMediaSchema = z.object({ id: z.string(), url: z.string() });
+export type StudioDocument = z.infer<typeof studioDocumentSchema>;
+
+export const legacyWebsiteDocumentSchema = z
+  .object({
+    templateId: z.string().optional(),
+    title: z.string().optional(),
+    partnerOne: z.string().optional(),
+    partnerTwo: z.string().optional(),
+    story: z.string().optional(),
+    eventAt: z.string().optional(),
+    venueName: z.string().optional(),
+    venueAddress: z.string().optional(),
+    heroImageUrl: z.string().nullable().optional(),
+    showStory: z.boolean().optional(),
+    showEvent: z.boolean().optional(),
+    contact: z.string().nullable().optional(),
+    timeline: z.array(z.object({ title: z.string(), description: z.string() })).nullable().optional(),
+    events: z.array(z.object({ name: z.string(), startsAt: z.string(), address: z.string() })).nullable().optional(),
+    gallery: z.array(z.string()).nullable().optional(),
+    timeZoneId: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+export type LegacyWebsiteDocument = z.infer<typeof legacyWebsiteDocumentSchema>;
+
+export const websiteDocumentSchema = z.union([studioDocumentSchema, legacyWebsiteDocumentSchema]);
 export type WebsiteDocument = z.infer<typeof websiteDocumentSchema>;
+
+export const websiteSchema = z.object({
+  version: z.number(),
+  document: websiteDocumentSchema.nullable(),
+  status: z.enum(["DRAFT", "PUBLISHED", "UNPUBLISHED"]),
+  hasUnpublishedChanges: z.boolean(),
+  warnings: z.array(z.string()).optional().default([]),
+});
+
+export const publicWebsiteSchema = z.object({
+  slug: z.string(),
+  document: websiteDocumentSchema,
+});
+
+export const uploadedMediaSchema = z.object({ id: z.string(), url: z.string() });
 export type Website = z.infer<typeof websiteSchema>;
 
+export function isStudioDocument(doc: unknown): doc is StudioDocument {
+  return (
+    typeof doc === "object" &&
+    doc !== null &&
+    "schemaVersion" in doc &&
+    (doc as { schemaVersion: unknown }).schemaVersion === 1 &&
+    "nodes" in doc &&
+    typeof (doc as { nodes: unknown }).nodes === "object" &&
+    "ROOT" in (doc as { nodes: Record<string, unknown> }).nodes
+  );
+}
+
+export function isLegacyWebsiteDocument(doc: unknown): doc is LegacyWebsiteDocument {
+  return (
+    typeof doc === "object" &&
+    doc !== null &&
+    !("schemaVersion" in doc) &&
+    ("title" in doc || "partnerOne" in doc || "eventAt" in doc)
+  );
+}
+
+export function mapStudioMedia(document: StudioDocument, mapper: (src: string) => string): StudioDocument {
+  return {
+    ...document,
+    nodes: Object.fromEntries(
+      Object.entries(document.nodes).map(([id, node]) => [
+        id,
+        {
+          ...node,
+          props: {
+            ...node.props,
+            ...(node.props.src ? { src: mapper(node.props.src) } : {}),
+            ...(node.props.images ? { images: node.props.images.map(mapper) } : {}),
+            ...(node.props.cover?.decoration
+              ? { cover: { ...node.props.cover, decoration: mapper(node.props.cover.decoration) } }
+              : {}),
+          },
+        },
+      ]),
+    ),
+  };
+}
+
+export function toStoredSource(src: string) {
+  try {
+    const url = new URL(src);
+    if (
+      url.pathname.startsWith("/media/") &&
+      (url.hostname === "localhost" ||
+        url.hostname === "127.0.0.1" ||
+        (env.apiUrl && url.origin === new URL(env.apiUrl).origin))
+    ) {
+      return url.pathname;
+    }
+  } catch {
+    /* Relative asset paths are already portable. */
+  }
+  return src;
+}
+
+export const resolveWebsiteDocument = (document: StudioDocument) =>
+  mapStudioMedia(document, (src) => resolveMediaUrl(toStoredSource(src)) ?? src);
+
+export const storedWebsiteDocument = (document: StudioDocument) =>
+  mapStudioMedia(document, toStoredSource);
+
+function resolveDocumentMedia(doc: WebsiteDocument | null): WebsiteDocument | null {
+  if (!doc) return null;
+  if (isStudioDocument(doc)) {
+    return resolveWebsiteDocument(doc);
+  }
+  return doc;
+}
+
 const path = (id: string) => `/weddings/${encodeURIComponent(id)}/website`;
+
 export const getWebsite = (api: ApiClient, id: string, signal?: AbortSignal) =>
-  api.request(path(id), { signal, schema: websiteSchema });
-export const saveWebsite = (api: ApiClient, id: string, expectedVersion: number, document: WebsiteDocument) =>
-  api.request(path(id), { method: "PUT", body: { expectedVersion, document }, schema: websiteSchema });
+  api
+    .request(path(id), { signal, schema: websiteSchema })
+    .then((res) => ({ ...res, document: resolveDocumentMedia(res.document) }));
+
+export const saveWebsite = (
+  api: ApiClient,
+  id: string,
+  expectedVersion: number,
+  document: StudioDocument | string,
+) => {
+  const parsed =
+    typeof document === "string"
+      ? studioDocumentSchema.parse(JSON.parse(document))
+      : studioDocumentSchema.parse(document);
+
+  return api
+    .request(path(id), {
+      method: "PUT",
+      body: { expectedVersion, document: storedWebsiteDocument(parsed) },
+      schema: websiteSchema,
+    })
+    .then((res) => ({ ...res, document: resolveDocumentMedia(res.document) }));
+};
+
 export const publishWebsite = (api: ApiClient, id: string, expectedVersion: number) =>
-  api.request(`${path(id)}/publish`, { method: "POST", body: { expectedVersion }, schema: websiteSchema });
+  api
+    .request(`${path(id)}/publish`, {
+      method: "POST",
+      body: { expectedVersion },
+      schema: websiteSchema,
+    })
+    .then((res) => ({ ...res, document: resolveDocumentMedia(res.document) }));
+
 export const unpublishWebsite = (api: ApiClient, id: string, expectedVersion: number) =>
-  api.request(`${path(id)}/unpublish`, { method: "POST", body: { expectedVersion }, schema: websiteSchema });
+  api
+    .request(`${path(id)}/unpublish`, {
+      method: "POST",
+      body: { expectedVersion },
+      schema: websiteSchema,
+    })
+    .then((res) => ({ ...res, document: resolveDocumentMedia(res.document) }));
+
 export const getPublicWebsite = (api: ApiClient, slug: string, signal?: AbortSignal) =>
-  api.request(`/public/weddings/${encodeURIComponent(slug)}`, { auth: "none", signal, schema: publicWebsiteSchema });
+  api
+    .request(`/public/weddings/${encodeURIComponent(slug)}`, {
+      auth: "none",
+      signal,
+      schema: publicWebsiteSchema,
+    })
+    .then((res) => ({ ...res, document: (resolveDocumentMedia(res.document) ?? res.document) as WebsiteDocument }));
+
 export const listWeddingMedia = (api: ApiClient, id: string) =>
   api.request(`/weddings/${encodeURIComponent(id)}/media`, { schema: z.array(uploadedMediaSchema) });
+
 export const uploadWeddingMedia = (api: ApiClient, id: string, file: File) => {
-  const body = new FormData(); body.set("file", file);
-  return api.request(`/weddings/${encodeURIComponent(id)}/media`, { method: "POST", body, schema: uploadedMediaSchema });
+  const body = new FormData();
+  body.set("file", file);
+  return api.request(`/weddings/${encodeURIComponent(id)}/media`, {
+    method: "POST",
+    body,
+    schema: uploadedMediaSchema,
+  });
 };
+
 export function mediaUrl(value: string | null | undefined) {
-  if (!value) return undefined;
-  if (/^https?:\/\//.test(value)) return value;
-  const base = env.apiUrl;
-  return base ? new URL(value, base).toString() : value;
+  return resolveMediaUrl(value);
 }

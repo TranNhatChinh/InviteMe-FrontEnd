@@ -80,6 +80,7 @@ function Workspace({
   wordingPanel,
   backHref,
   initialDocument,
+  availableTemplates,
   onSave,
   onUploadImage,
   loadImages,
@@ -804,11 +805,11 @@ function Workspace({
                 <>
                   <h2>
                     {t("library.templatesCount", {
-                      count: formatNumber(templateCatalog.length, language),
+                      count: formatNumber((availableTemplates ?? templateCatalog).length, language),
                     })}
                   </h2>
                   <p>{t("library.templateHelp")}</p>
-                  {templateCatalog.map((template) => (
+                  {(availableTemplates ?? templateCatalog).map((template) => (
                     <div className={styles.templateCard} key={template.id}>
                       <TemplateThumbnail document={template.document} />
                       <h3>{template.name}</h3>
@@ -816,6 +817,9 @@ function Workspace({
                       <button
                         disabled={preview}
                         onClick={() => {
+                          if (canUndo && !window.confirm("Bạn có thay đổi chưa lưu. Bạn có chắc chắn muốn đổi mẫu và hủy các thay đổi này không?")) {
+                            return;
+                          }
                           importJson(
                             JSON.stringify({ ...template.document, templateId: template.id }),
                           );
@@ -2047,6 +2051,7 @@ export function TemplateStudio({
   wordingPanel,
   backHref,
   initialDocument,
+  availableTemplates,
   onSave,
   onUploadImage,
   loadImages,
@@ -2084,6 +2089,7 @@ export function TemplateStudio({
             wordingPanel={wordingPanel}
             backHref={backHref}
             initialDocument={initialDocument}
+            availableTemplates={availableTemplates}
             onSave={onSave}
             onUploadImage={onUploadImage}
             loadImages={loadImages}
