@@ -3,6 +3,7 @@
 import {
   useEffect,
   useCallback,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -200,9 +201,17 @@ function recipient(g: PlanningGuest, familyLabel: string, groupLabel: string) {
 export function PlanningSeating({ weddingId }: { weddingId: string }) {
   const { t } = useTranslation("guestPlanning");
   const { api, realtime } = useRuntime();
-  const { can, isWeddingWide } = usePermission();
+  const { can, scope, isWeddingWide } = usePermission();
   const editable = can("SEATING_EDIT") && can("SEATING_VIEW");
   const canPublishSeating = isWeddingWide("SEATING_EDIT");
+  const isAllGroupsSeating = isWeddingWide("SEATING_EDIT");
+  const allowedGroupIds = useMemo(
+    () =>
+      isAllGroupsSeating
+        ? null
+        : new Set(scope("SEATING_EDIT")?.groups.map((g) => g.id) ?? []),
+    [isAllGroupsSeating, scope],
+  );
   const cache = useQueryClient();
   const key = seatingKey(weddingId);
   const planQuery = useQuery({
@@ -264,10 +273,20 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     setDragTarget(null);
     setDragEpoch((value) => value + 1);
   }, []);
-  const collaborationError = useCallback(() => {
-    setFailure(true);
-    setMessage(t("seating.connectionLost"));
-  }, [t]);
+  const collaborationError = useCallback(
+    (error?: unknown) => {
+      setFailure(true);
+      const message = error instanceof Error ? error.message : String(error ?? "");
+      if (/SEATING_SCOPE_DENIED|PLACE_NOT_FOUND/.test(message)) {
+        setMessage(t("seating.scopeDenied"));
+      } else if (/SEATING_PLACE_LOCKED/.test(message)) {
+        setMessage(t("seating.placeLocked"));
+      } else {
+        setMessage(t("seating.connectionLost"));
+      }
+    },
+    [t],
+  );
   const collaboration = useSeatingCollaboration(weddingId, abortDrag, collaborationError);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -630,6 +649,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 plan={plan}
                 disabled={!editable || saving || status !== "connected"}
                 selection={selection}
+                allowedGroupIds={allowedGroupIds}
                 onSelect={(ids) => {
                   closeDetails();
                   setSelection(ids);

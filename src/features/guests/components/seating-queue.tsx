@@ -18,6 +18,7 @@ type QueueProps = {
   plan: SeatingPlan;
   disabled: boolean;
   selection: string[];
+  allowedGroupIds?: ReadonlySet<string> | null;
   onSelect: (ids: string[]) => void;
   onTable: (id: string) => void;
 };
@@ -39,6 +40,7 @@ function QueueDrag({
   disabled,
   selected,
   label,
+  outOfScope = false,
   onSelect,
   children,
 }: {
@@ -47,12 +49,13 @@ function QueueDrag({
   disabled: boolean;
   selected: boolean;
   label: string;
+  outOfScope?: boolean;
   onSelect: () => void;
   children: ReactNode;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "seating.queue" });
   const lock = useSeatingDragLock(ids);
-  const unavailable = disabled || !!lock;
+  const unavailable = disabled || outOfScope || !!lock;
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, isDragging } = useDraggable({
     id,
     data: { ids },
@@ -72,7 +75,8 @@ function QueueDrag({
         {...listeners}
         disabled={unavailable}
         aria-label={t("drag", { name: label })}
-        className="shrink-0 touch-none rounded p-1 text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-30"
+        title={outOfScope ? t("outOfScope") : undefined}
+        className="shrink-0 touch-none rounded p-1 text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <GripVertical className="size-4" aria-hidden="true" />
       </button>
@@ -82,10 +86,12 @@ function QueueDrag({
         disabled={unavailable}
         aria-pressed={selected}
         aria-label={t("select", { name: label })}
+        title={outOfScope ? t("outOfScope") : undefined}
         onPointerDown={(event) => listeners?.onPointerDown?.(event)}
         className={cn(
-          "flex min-w-0 flex-1 touch-pan-y items-center gap-2 rounded-lg py-2 pr-2 text-left focus-visible:outline-2 focus-visible:outline-primary",
+          "flex min-w-0 flex-1 touch-pan-y items-center gap-2 rounded-lg py-2 pr-2 text-left focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed",
           (isDragging || lock) && "opacity-40",
+          outOfScope && "opacity-60",
         )}
       >
         <span className="min-w-0 flex-1">
@@ -122,6 +128,7 @@ function GuestRow({
   table,
   disabled,
   selected,
+  outOfScope = false,
   onSelect,
   onTable,
   individual = false,
@@ -131,6 +138,7 @@ function GuestRow({
   table?: Table;
   disabled: boolean;
   selected: boolean;
+  outOfScope?: boolean;
   onSelect: () => void;
   onTable: QueueProps["onTable"];
   individual?: boolean;
@@ -144,6 +152,7 @@ function GuestRow({
         "flex min-w-0 items-center gap-1 rounded-xl border bg-white p-1",
         placeholder && "border-dashed",
         table && !selected && "bg-muted/30 text-muted-foreground",
+        outOfScope && "opacity-75 bg-muted/20",
         selected && "border-primary bg-primary/5",
       )}
     >
@@ -152,6 +161,7 @@ function GuestRow({
           id={`queue:${place.id}`}
           ids={[place.id]}
           disabled={disabled}
+          outOfScope={outOfScope}
           selected={selected}
           label={name}
           onSelect={onSelect}
@@ -200,6 +210,7 @@ function GroupCard({
   tablesByPlace,
   disabled,
   selection,
+  outOfScope = false,
   onSelect,
   onTable,
 }: {
@@ -207,6 +218,7 @@ function GroupCard({
   tablesByPlace: Map<string, Table>;
   disabled: boolean;
   selection: string[];
+  outOfScope?: boolean;
   onSelect: QueueProps["onSelect"];
   onTable: QueueProps["onTable"];
 }) {
@@ -217,7 +229,7 @@ function GroupCard({
   const { guest, places } = entry;
   const ids = places.map((p) => p.id);
   const lock = useSeatingDragLock(ids);
-  const unavailable = disabled || !!lock;
+  const unavailable = disabled || outOfScope || !!lock;
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, isDragging } = useDraggable({
     id: `queue-group:${guest.id}`,
     data: { ids },
@@ -243,6 +255,7 @@ function GroupCard({
       className={cn(
         "min-w-0 rounded-xl border bg-white p-2",
         !unavailable && "cursor-grab active:cursor-grabbing",
+        outOfScope && "opacity-75 bg-muted/20",
         selected && "border-primary bg-primary/5",
       )}
     >
@@ -255,7 +268,8 @@ function GroupCard({
             type="button"
             disabled={unavailable}
             aria-label={t("drag", { name })}
-            className="shrink-0 cursor-grab rounded p-1 text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-30"
+            title={outOfScope ? t("outOfScope") : undefined}
+            className="shrink-0 cursor-grab rounded p-1 text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <GripVertical className="size-4" aria-hidden="true" />
           </button>
@@ -265,8 +279,9 @@ function GroupCard({
             disabled={unavailable}
             aria-pressed={selected}
             aria-label={t("select", { name })}
+            title={outOfScope ? t("outOfScope") : undefined}
             onClick={() => onSelect(ids)}
-            className="min-w-0 flex-1 cursor-grab rounded-lg py-2 text-left focus-visible:outline-2 focus-visible:outline-primary"
+            className="min-w-0 flex-1 cursor-grab rounded-lg py-2 text-left focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-not-allowed"
           >
             <span className="block truncate text-xs font-semibold" title={name}>
               {name}
@@ -300,7 +315,15 @@ function GroupCard({
             )}
           </span>
           {guest.group && (
-            <span className="rounded-full bg-muted px-2 py-0.5">{guest.group.name}</span>
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5",
+                outOfScope ? "bg-amber-100 text-amber-800" : "bg-muted",
+              )}
+            >
+              {guest.group.name}
+              {outOfScope && " 🔒"}
+            </span>
           )}
           {tableCount > 1 && (
             <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800">
@@ -345,6 +368,7 @@ function GroupCard({
             guest={guest}
             table={tablesByPlace.get(place.id)}
             disabled={disabled}
+            outOfScope={outOfScope}
             selected={selection.includes(place.id)}
             onSelect={() => onSelect([place.id])}
             onTable={onTable}
@@ -355,7 +379,14 @@ function GroupCard({
   );
 }
 
-export function SeatingQueue({ plan, disabled, selection, onSelect, onTable }: QueueProps) {
+export function SeatingQueue({
+  plan,
+  disabled,
+  selection,
+  allowedGroupIds,
+  onSelect,
+  onTable,
+}: QueueProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"unassigned" | "assigned" | "all">("unassigned");
   const [side, setSide] = useState<PlanningGuest["side"] | "all">("all");
@@ -483,6 +514,9 @@ export function SeatingQueue({ plan, disabled, selection, onSelect, onTable }: Q
       >
         {visible.map((entry) => {
           const firstPlace = entry.places[0];
+          const outOfScope =
+            allowedGroupIds != null &&
+            (!entry.guest.group?.id || !allowedGroupIds.has(entry.guest.group.id));
           return entry.guest.invitationKind === "INDIVIDUAL" &&
             entry.places.length === 1 &&
             firstPlace ? (
@@ -493,6 +527,7 @@ export function SeatingQueue({ plan, disabled, selection, onSelect, onTable }: Q
               individual
               table={tablesByPlace.get(firstPlace.id)}
               disabled={disabled}
+              outOfScope={outOfScope}
               selected={selection.includes(firstPlace.id)}
               onSelect={() => onSelect([firstPlace.id])}
               onTable={onTable}
@@ -503,6 +538,7 @@ export function SeatingQueue({ plan, disabled, selection, onSelect, onTable }: Q
               entry={entry}
               tablesByPlace={tablesByPlace}
               disabled={disabled}
+              outOfScope={outOfScope}
               selection={selection}
               onSelect={onSelect}
               onTable={onTable}

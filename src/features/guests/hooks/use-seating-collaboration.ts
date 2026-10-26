@@ -28,7 +28,7 @@ type Operation = {
 export function useSeatingCollaboration(
   weddingId: string,
   onAbort: () => void,
-  onError: () => void,
+  onError: (error?: unknown) => void,
 ) {
   const { realtime } = useRuntime();
   const store = useMemo(() => createSeatingCollaborationStore(weddingId), [weddingId]);
@@ -94,8 +94,8 @@ export function useSeatingCollaboration(
         .then((snapshot) => {
           if (!disposed) store.getState().replace(seatingDragSnapshotSchema.parse(snapshot));
         })
-        .catch(() => {
-          if (!disposed && realtime.getStatus() === "connected") onError();
+        .catch((error: unknown) => {
+          if (!disposed && realtime.getStatus() === "connected") onError(error);
         });
     };
     const stopSnapshots = realtime.onSeatingDrags((snapshot) => {
@@ -168,18 +168,18 @@ export function useSeatingCollaboration(
         if (pointer.current)
           pointerSender.push({ operation, point: pointer.current, sequence: ++sequence.current });
         heartbeat.current = setInterval(() => {
-          void realtime.invokeSeating("RenewSeatingDrag", weddingId, lease.token).catch(() => {
+          void realtime.invokeSeating("RenewSeatingDrag", weddingId, lease.token).catch((error: unknown) => {
             if (active.current === operation && !operation.saving) {
               cancel();
-              onError();
+              onError(error);
             }
           });
         }, 5_000);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (active.current === operation) {
           cancel();
-          onError();
+          onError(error);
         }
       });
     return operation;
@@ -233,10 +233,10 @@ export function useSeatingCollaboration(
               next?.seatNumber ?? null,
             );
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (active.current === operation) {
             cancel();
-            onError();
+            onError(error);
           }
         });
     }
