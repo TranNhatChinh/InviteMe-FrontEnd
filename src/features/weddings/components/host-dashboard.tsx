@@ -20,21 +20,32 @@ import { Button } from "@/shared/ui/button";
 import { resolveWeddingMediaUrl } from "./wedding-cover-uploader";
 import { formatDate } from "@/i18n/format";
 
-function subscribeToClock(callback: () => void) {
-  const timer = setInterval(callback, 60000);
-  return () => clearInterval(timer);
-}
-
-function getNowSnapshot() {
-  return Date.now();
-}
-
-function getGreetingSnapshot() {
-  const hour = new Date().getHours();
+let currentNow = Date.now();
+function computeGreeting(hour: number) {
   if (hour < 12) return "Chào buổi sáng";
   if (hour < 18) return "Chào buổi chiều";
   return "Chào buổi tối";
 }
+let currentGreeting = computeGreeting(new Date().getHours());
+
+function subscribeToClock(callback: () => void) {
+  const timer = setInterval(() => {
+    currentNow = Date.now();
+    currentGreeting = computeGreeting(new Date().getHours());
+    callback();
+  }, 60000);
+  return () => clearInterval(timer);
+}
+
+function getNowSnapshot() {
+  return currentNow;
+}
+
+function getGreetingSnapshot() {
+  return currentGreeting;
+}
+
+const DASHBOARD_LIST_PARAMS = { page: 1, pageSize: 20 } as const;
 
 interface HostDashboardProps {
   user?: {
@@ -44,7 +55,7 @@ interface HostDashboardProps {
 }
 
 export function HostDashboard({ user }: HostDashboardProps) {
-  const { data: weddingsData, isPending } = useWeddings({ page: 1, pageSize: 20 });
+  const { data: weddingsData, isPending } = useWeddings(DASHBOARD_LIST_PARAMS);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const weddings = weddingsData?.items ?? [];
