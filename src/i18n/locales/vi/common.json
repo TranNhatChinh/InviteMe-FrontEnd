@@ -1,7 +1,10 @@
 {
   "language": "Ngôn ngữ hiển thị",
   "languageAria": "Chọn ngôn ngữ hiển thị",
-  "languages": { "vi": "Tiếng Việt", "en": "English" },
+  "languages": {
+    "vi": "Tiếng Việt",
+    "en": "English"
+  },
   "skipToContent": "Bỏ qua đến nội dung chính",
   "loading": "Đang tải…",
   "loadingInviteMe": "Đang tải InviteMe…",
@@ -41,5 +44,23 @@
     "network": "Không thể kết nối đến máy chủ. Hãy kiểm tra mạng rồi thử lại.",
     "configuration": "Ứng dụng chưa được cấu hình kết nối máy chủ.",
     "invalid-response": "Máy chủ trả về dữ liệu không hợp lệ. Vui lòng thử lại sau."
+  },
+  "messageRecipients": {
+    "selected": "Đã chọn {{count}} / {{total}} khách",
+    "clear": "Bỏ chọn",
+    "selectAll": "Chọn tất cả {{count}} khách",
+    "allSelected": "Đã chọn tất cả {{count}} khách",
+    "allPagesHint": "Chọn toàn bộ danh sách, bao gồm khách ở các trang khác.",
+    "search": "Tìm theo tên, nhóm, email hoặc số điện thoại",
+    "loading": "Đang tải đầy đủ danh sách khách…",
+    "failed": "Không tải được đầy đủ danh sách. Vui lòng tải lại trước khi chọn người nhận.",
+    "retry": "Tải lại danh sách",
+    "selectPage": "Chọn khách trong trang này",
+    "selectGuest": "Chọn {{name}}",
+    "noContact": "Chưa có thông tin liên hệ",
+    "empty": "Không tìm thấy khách phù hợp.",
+    "page": "Trang {{page}} / {{pages}} · {{count}} khách",
+    "previous": "Trang trước",
+    "next": "Trang sau"
   }
 }

@@ -1,12 +1,10 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
-  ChevronLeft,
-  ChevronRight,
   LoaderCircle,
   Mail,
   MessageSquareText,
@@ -30,8 +28,13 @@ import {
   type InvitationChannel,
   type InvitationDraft,
   type InvitationSendBody,
-  type InvitationTone,
 } from "../api/invitation-messaging.api";
+import { MessageRecipientPicker } from "@/shared/components/message-recipient-picker";
+import {
+  loadAllMessageRecipients,
+  MAX_MESSAGE_RECIPIENTS,
+  missingRecipientContacts,
+} from "@/shared/lib/message-recipients";
 import { z } from "zod";
 import { useTranslation } from "react-i18next";
 
@@ -48,15 +51,8 @@ const guestPageSchema = z.object({
   pageSize: z.number(),
   totalItems: z.number(),
 });
-const toneLabels: Record<InvitationTone, string> = {
-  FORMAL: "tones.formal",
-  WARM: "tones.warm",
-  HUMOROUS: "tones.humorous",
-};
 const batchKey = (weddingId: string) => `inviteme:last-invitation-batch:${weddingId}`;
 const draftKey = (weddingId: string) => ["invitation-messaging", weddingId, "draft"] as const;
-const pageKey = (weddingId: string, page: number, search: string, groupId: string) =>
-  ["invitation-messaging", weddingId, "guests", page, search, groupId] as const;
 const batchQueryKey = (weddingId: string, id: string) =>
   ["invitation-messaging", weddingId, "batch", id] as const;
 const batchChangeEvent = "inviteme:invitation-batch-change";
@@ -105,23 +101,13 @@ function validateTemplate(
   if (!subject.trim() || subject.length > 200 || /[\r\n]/.test(subject))
     errors.push(t("validation.subject"));
   if (!content.trim() || content.length > 10000) errors.push(t("validation.emailLength"));
-  for (const token of ["{{GuestName}}", "{{RsvpLink}}", "{{QrLink}}"])
-    if (!content.includes(token)) errors.push(t("validation.emailToken", { token }));
-  const emailRemainder = ["{{GuestName}}", "{{RsvpLink}}", "{{QrLink}}"].reduce(
-    (value, token) => value.replaceAll(token, ""),
-    content,
-  );
-  if (emailRemainder.includes("{{") || emailRemainder.includes("}}"))
-    errors.push(t("validation.emailTokensOnly"));
+  if (
+    /\{\{|\}\}|https?:\/\/|<[^>]*>|\bQR\b|mã QR|(?:đường )?link\s+(?:ở\s*)?bên dưới/i.test(content)
+  )
+    errors.push(t("validation.emailCopyRules"));
   if (!smsContent.trim() || smsContent.length > 10000) errors.push(t("validation.smsLength"));
-  for (const token of ["{{GuestName}}", "{{RsvpLink}}"])
-    if (!smsContent.includes(token)) errors.push(t("validation.smsToken", { token }));
-  const smsRemainder = ["{{GuestName}}", "{{RsvpLink}}"].reduce(
-    (value, token) => value.replaceAll(token, ""),
-    smsContent,
-  );
-  if (smsRemainder.includes("{{") || smsRemainder.includes("}}"))
-    errors.push(t("validation.smsTokensOnly"));
+  if (/\{\{|\}\}|https?:\/\/|<[^>]*>|\bQR\b|mã QR/i.test(smsContent))
+    errors.push(t("validation.smsCopyRules"));
   return [...new Set(errors)];
 }
 
@@ -162,7 +148,6 @@ export function InvitationMessaging({
     subject: string;
     content: string;
     smsContent: string;
-    tone: InvitationTone;
     version: number;
   } | null>(null);
   const [instructions, setInstructions] = useState("");
@@ -170,18 +155,13 @@ export function InvitationMessaging({
   const [saveMessage, setSaveMessage] = useState("");
   const [previewGuestId, setPreviewGuestId] = useState("");
   const [previewTab, setPreviewTab] = useState<"EMAIL" | "SMS">("EMAIL");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [recipientMode, setRecipientMode] = useState<"GUESTS" | "GROUP">("GUESTS");
   const [groupId, setGroupId] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [selectedContactFlags, setSelectedContactFlags] = useState<
-    Record<string, { email: boolean; phone: boolean }>
-  >({});
   const [channels, setChannels] = useState<InvitationChannel[]>(["EMAIL"]);
   const activeBatchId = useStoredBatchId(weddingId);
   const [showRecipients, setShowRecipients] = useState(false);
-  const deferredSearch = useDeferredValue(search.trim());
+  const [visibleJobs, setVisibleJobs] = useState(50);
   const [uncertainSend, setUncertainSend] = useState<{
     body: InvitationSendBody;
     key: string;
@@ -192,7 +172,6 @@ export function InvitationMessaging({
       subject: "",
       content: "",
       smsContent: "",
-      tone: "WARM" as const,
       version: 0,
       weddingId,
       usedFallback: false,
@@ -200,55 +179,32 @@ export function InvitationMessaging({
     };
   const dirty = edits !== null;
 
-  const guestQuery = useQuery({
-    queryKey: pageKey(weddingId, page, deferredSearch, recipientMode === "GROUP" ? groupId : ""),
-    queryFn: async ({ signal }) => {
-      const params = new URLSearchParams({
-        page: String(page),
-        pageSize: "100",
-        search: deferredSearch,
-      });
-      if (recipientMode === "GROUP" && groupId) params.set("groupId", groupId);
-      const result = await api.request(
-        `/weddings/${encodeURIComponent(weddingId)}/guest-planning/guests?${params}`,
-        {
-          signal,
-          schema: guestPageSchema,
-        },
-      );
-      return result;
-    },
-    enabled: canViewGuests,
-  });
-  const groupsQuery = useQuery({
-    queryKey: pageKey(weddingId, 1, "", "all-groups"),
-    queryFn: async ({ signal }) => {
-      const endpoint = `/weddings/${encodeURIComponent(weddingId)}/guest-planning/guests`;
-      const first = await api.request(`${endpoint}?page=1&pageSize=100`, {
-        signal,
-        schema: guestPageSchema,
-      });
-      const pages = Math.ceil(first.totalItems / first.pageSize);
-      if (pages <= 1) return first.items;
-      const remaining = await Promise.all(
-        Array.from({ length: pages - 1 }, (_, index) =>
-          api.request(`${endpoint}?page=${index + 2}&pageSize=100`, {
-            signal,
-            schema: guestPageSchema,
-          }),
+  const recipientsQuery = useQuery({
+    queryKey: ["invitation-messaging", weddingId, "all-recipients"],
+    queryFn: ({ signal }) =>
+      loadAllMessageRecipients((page) =>
+        api.request(
+          `/weddings/${encodeURIComponent(weddingId)}/guest-planning/guests?${new URLSearchParams({ page: String(page), pageSize: "100", archivedOnly: "false" })}`,
+          { signal, schema: guestPageSchema },
         ),
-      );
-      return [...first.items, ...remaining.flatMap((result) => result.items)];
-    },
+      ),
     staleTime: 60_000,
     enabled: canViewGuests,
   });
+  const allRecipients = useMemo(
+    () =>
+      (recipientsQuery.data ?? []).map((guest) => ({
+        ...guest,
+        groupName: guest.group?.name,
+      })),
+    [recipientsQuery.data],
+  );
   const groups = useMemo(() => {
     const unique = new Map<string, string>();
-    for (const guest of groupsQuery.data ?? [])
+    for (const guest of recipientsQuery.data ?? [])
       if (guest.group?.id) unique.set(guest.group.id, guest.group.name);
     return [...unique].map(([id, name]) => ({ id, name }));
-  }, [groupsQuery.data]);
+  }, [recipientsQuery.data]);
 
   const previewQuery = useQuery({
     queryKey: ["invitation-messaging", weddingId, "preview", previewGuestId],
@@ -259,7 +215,6 @@ export function InvitationMessaging({
   const generateMutation = useMutation({
     mutationFn: () =>
       generateInvitationDraft(api, weddingId, {
-        tone: form.tone,
         ...(instructions.trim() ? { additionalInstructions: instructions.trim() } : {}),
       }),
     onSuccess: (next) => {
@@ -274,14 +229,12 @@ export function InvitationMessaging({
       subject: string;
       content: string;
       smsContent: string;
-      tone: InvitationTone;
       version: number;
     }) =>
       saveInvitationDraft(api, weddingId, {
         subject: input.subject,
         content: input.content,
         smsContent: input.smsContent,
-        tone: input.tone,
         expectedVersion: input.version,
       }),
     onSuccess: (next) => {
@@ -310,6 +263,7 @@ export function InvitationMessaging({
     onSuccess: (batch) => {
       setUncertainSend(null);
       persistBatchId(weddingId, batch.id);
+      setVisibleJobs(50);
       void queryClient.invalidateQueries({ queryKey: batchQueryKey(weddingId, batch.id) });
     },
     onError: (error) => {
@@ -333,36 +287,35 @@ export function InvitationMessaging({
     onSuccess: () => void batchQuery.refetch(),
   });
 
-  const { subject, content, smsContent, tone } = form;
+  const { subject, content, smsContent } = form;
   const templateErrors = validateTemplate(subject, content, smsContent, t);
-  const missingContacts = selectedIds.filter((id) => {
-    const contact = selectedContactFlags[id];
-    return (
-      contact &&
-      ((channels.includes("EMAIL") && !contact.email) ||
-        (channels.includes("SMS") && !contact.phone))
-    );
-  });
-  const selectionCount =
+  const recipientIds =
     recipientMode === "GROUP"
-      ? groupId
-        ? (guestQuery.data?.totalItems ?? 0)
-        : 0
-      : selectedIds.length;
+      ? (recipientsQuery.data ?? [])
+          .filter((guest) => guest.group?.id === groupId)
+          .map((guest) => guest.id)
+      : selectedIds;
+  const missingContacts = missingRecipientContacts(allRecipients, recipientIds, channels);
+  const selectionCount = recipientIds.length;
   const canSend = Boolean(
     draftQuery.data &&
     isPublished &&
     canViewGuests &&
     selectionCount > 0 &&
-    selectionCount <= 180 &&
+    selectionCount <= MAX_MESSAGE_RECIPIENTS &&
+    recipientsQuery.isSuccess &&
+    templateErrors.length === 0 &&
     channels.length &&
     !dirty &&
+    !generateMutation.isPending &&
+    !saveMutation.isPending &&
+    !conflictDraft &&
     !missingContacts.length &&
     !uncertainSend &&
     !sendMutation.isPending,
   );
 
-  function updateField<K extends "subject" | "content" | "smsContent" | "tone">(
+  function updateField<K extends "subject" | "content" | "smsContent">(
     key: K,
     value: (typeof form)[K],
   ) {
@@ -370,7 +323,6 @@ export function InvitationMessaging({
       subject: current?.subject ?? form.subject,
       content: current?.content ?? form.content,
       smsContent: current?.smsContent ?? form.smsContent,
-      tone: current?.tone ?? form.tone,
       version: current?.version ?? form.version,
       [key]: value,
     }));
@@ -407,7 +359,6 @@ export function InvitationMessaging({
       subject: current?.subject ?? subject,
       content: current?.content ?? content,
       smsContent: current?.smsContent ?? smsContent,
-      tone: current?.tone ?? tone,
       version: conflictDraft.version,
     }));
     setConflictDraft(null);
@@ -457,20 +408,6 @@ export function InvitationMessaging({
         )}
         <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="space-y-4">
-            <label className="block space-y-2 text-sm font-medium">
-              {t("tone")}
-              <select
-                className="h-11 w-full rounded-lg border bg-background px-3"
-                value={tone}
-                onChange={(event) => updateField("tone", event.target.value as InvitationTone)}
-              >
-                {Object.entries(toneLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {t(label)}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="block space-y-2 text-sm font-medium">
               {t("aiInstructions")}{" "}
               <span className="font-normal text-muted-foreground">({instructions.length}/500)</span>
@@ -541,7 +478,14 @@ export function InvitationMessaging({
                 value={smsContent}
                 onChange={(event) => updateField("smsContent", event.target.value)}
                 placeholder={t("smsContentPlaceholder")}
+                aria-describedby={`invitation-sms-help-${weddingId}`}
               />
+              <p
+                id={`invitation-sms-help-${weddingId}`}
+                className="text-xs font-normal leading-relaxed text-muted-foreground"
+              >
+                {t("smsContentHelp")}
+              </p>
             </label>
           </div>
         </div>
@@ -579,7 +523,7 @@ export function InvitationMessaging({
                 Boolean(conflictDraft)
               }
               onClick={() =>
-                saveMutation.mutate({ subject, content, smsContent, tone, version: form.version })
+                saveMutation.mutate({ subject, content, smsContent, version: form.version })
               }
             >
               {saveMutation.isPending ? <LoaderCircle className="animate-spin" /> : <Check />}{" "}
@@ -609,7 +553,7 @@ export function InvitationMessaging({
               onChange={(event) => setPreviewGuestId(event.target.value)}
             >
               <option value="">{t("selectGuest")}</option>
-              {(guestQuery.data?.items ?? []).map((guest) => (
+              {(recipientsQuery.data ?? []).map((guest) => (
                 <option key={guest.id} value={guest.id}>
                   {guest.recipientName}
                 </option>
@@ -647,31 +591,10 @@ export function InvitationMessaging({
               {previewTab === "EMAIL" ? (
                 <div className="space-y-3">
                   <p className="font-semibold">{previewQuery.data.subject}</p>
-                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-background p-3 font-sans text-sm">
-                    {previewQuery.data.content}
-                  </pre>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <a
-                      className="truncate text-sm underline"
-                      href={previewQuery.data.rsvpLink}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {t("openRsvpLink")}
-                    </a>
-                    <a
-                      className="truncate text-sm underline"
-                      href={previewQuery.data.qrLink}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {t("openPersonalQr")}
-                    </a>
-                  </div>
                   <iframe
-                    className="size-36 rounded-lg border bg-white p-2"
-                    src={previewQuery.data.qrLink}
-                    title={t("qrPreviewTitle")}
+                    className="h-[680px] w-full rounded-xl border bg-white"
+                    srcDoc={previewQuery.data.emailHtml}
+                    title={t("emailPreviewTitle")}
                     sandbox=""
                     loading="lazy"
                   />
@@ -728,27 +651,29 @@ export function InvitationMessaging({
             {(["GUESTS", "GROUP"] as const).map((mode) => (
               <button
                 key={mode}
+                disabled={sendMutation.isPending || Boolean(uncertainSend)}
                 className={`rounded-lg px-3 py-2 text-sm ${recipientMode === mode ? "bg-primary text-primary-foreground" : "bg-muted"}`}
                 onClick={() => {
                   setRecipientMode(mode);
                   setSelectedIds([]);
-                  setSelectedContactFlags({});
-                  setPage(1);
                 }}
               >
                 {mode === "GUESTS" ? t("chooseGuests") : t("chooseGroup")}
               </button>
             ))}
           </div>
-          {guestQuery.isError && (
-            <p role="alert" className="mt-3 text-sm text-destructive">
-              {t("guestListFailed", { error: friendlyError(guestQuery.error, t) })}
-            </p>
-          )}
-          {groupsQuery.isError && (
-            <p role="alert" className="mt-3 text-sm text-destructive">
-              {t("groupListFailed", { error: friendlyError(groupsQuery.error, t) })}
-            </p>
+          {recipientMode === "GROUP" && recipientsQuery.isError && (
+            <div role="alert" className="mt-3 text-sm text-destructive">
+              <p>{t("groupListFailed", { error: friendlyError(recipientsQuery.error, t) })}</p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-2"
+                onClick={() => void recipientsQuery.refetch()}
+              >
+                {t("reload")}
+              </Button>
+            </div>
           )}
           {recipientMode === "GROUP" ? (
             <label className="mt-3 block space-y-2 text-sm">
@@ -756,9 +681,11 @@ export function InvitationMessaging({
               <select
                 className="h-11 w-full rounded-lg border bg-background px-3"
                 value={groupId}
+                disabled={
+                  recipientsQuery.isPending || sendMutation.isPending || Boolean(uncertainSend)
+                }
                 onChange={(event) => {
                   setGroupId(event.target.value);
-                  setPage(1);
                 }}
               >
                 <option value="">{t("selectGroup")}</option>
@@ -770,88 +697,17 @@ export function InvitationMessaging({
               </select>
             </label>
           ) : (
-            <>
-              <input
-                className="mt-3 h-11 w-full rounded-lg border bg-background px-3 text-sm"
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(1);
-                }}
-                placeholder={t("searchGuestsPlaceholder")}
-                aria-label={t("searchRecipientsAria")}
+            <div className="mt-4">
+              <MessageRecipientPicker
+                recipients={allRecipients}
+                selectedIds={selectedIds}
+                onChange={setSelectedIds}
+                loading={recipientsQuery.isPending}
+                failed={recipientsQuery.isError}
+                onRetry={() => void recipientsQuery.refetch()}
+                disabled={sendMutation.isPending || Boolean(uncertainSend)}
               />
-              <div className="mt-3 max-h-56 space-y-2 overflow-auto rounded-lg border p-3">
-                {(guestQuery.data?.items ?? []).map((guest) => (
-                  <label key={guest.id} className="flex items-start gap-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(guest.id)}
-                      onChange={(event) => {
-                        const selected = event.target.checked;
-                        setSelectedIds((current) =>
-                          selected
-                            ? [...current, guest.id]
-                            : current.filter((id) => id !== guest.id),
-                        );
-                        setSelectedContactFlags((current) => {
-                          const next = { ...current };
-                          if (selected)
-                            next[guest.id] = {
-                              email: Boolean(guest.email),
-                              phone: Boolean(guest.phone),
-                            };
-                          else delete next[guest.id];
-                          return next;
-                        });
-                      }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{guest.recipientName}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {guest.group?.name ?? t("noGroup")} ·{" "}
-                        {guest.email ? t("hasEmail") : t("missingEmail")} ·{" "}
-                        {guest.phone ? t("hasPhone") : t("missingPhone")}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-                {!guestQuery.isPending && !guestQuery.data?.items.length && (
-                  <p className="text-sm text-muted-foreground">{t("noGuestsFound")}</p>
-                )}
-                {guestQuery.isPending && (
-                  <p className="text-sm text-muted-foreground">{t("loadingGuests")}</p>
-                )}
-              </div>
-              {guestQuery.data && (
-                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    {t("matchingGuestsPage", { count: guestQuery.data.totalItems, page })}
-                  </span>
-                  <span className="flex gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={t("previousPage")}
-                      disabled={page <= 1}
-                      onClick={() => setPage((value) => value - 1)}
-                    >
-                      <ChevronLeft />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={t("nextPage")}
-                      disabled={page * guestQuery.data.pageSize >= guestQuery.data.totalItems}
-                      onClick={() => setPage((value) => value + 1)}
-                    >
-                      <ChevronRight />
-                    </Button>
-                  </span>
-                </div>
-              )}
-              <p className="mt-1 text-xs text-muted-foreground">{t("selectionAcrossPages")}</p>
-            </>
+            </div>
           )}
           <fieldset className="mt-4">
             <legend className="text-sm font-medium">{t("deliveryChannels")}</legend>
@@ -861,6 +717,7 @@ export function InvitationMessaging({
                   <input
                     type="checkbox"
                     checked={channels.includes(channel)}
+                    disabled={sendMutation.isPending || Boolean(uncertainSend)}
                     onChange={(event) =>
                       setChannels((current) =>
                         event.target.checked
@@ -879,12 +736,24 @@ export function InvitationMessaging({
               ))}
             </div>
           </fieldset>
-          {recipientMode === "GUESTS" && missingContacts.length > 0 && (
-            <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">
+          {missingContacts.length > 0 && (
+            <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">
               {t("missingContacts", { count: missingContacts.length })}
-            </p>
+              <button
+                type="button"
+                disabled={sendMutation.isPending || Boolean(uncertainSend)}
+                className="mt-2 block text-xs font-medium underline underline-offset-4"
+                onClick={() => {
+                  const missing = new Set(missingContacts);
+                  setSelectedIds(recipientIds.filter((id) => !missing.has(id)));
+                  setRecipientMode("GUESTS");
+                }}
+              >
+                {t("removeMissingContacts", { count: missingContacts.length })}
+              </button>
+            </div>
           )}
-          {selectionCount > 180 && (
+          {selectionCount > MAX_MESSAGE_RECIPIENTS && (
             <p className="mt-3 text-sm text-destructive">{t("maxRecipients")}</p>
           )}
           <p className="mt-3 text-sm">
@@ -906,7 +775,7 @@ export function InvitationMessaging({
           )}
           <Button className="mt-4 w-full" disabled={!canSend} onClick={beginSend}>
             {sendMutation.isPending ? <LoaderCircle className="animate-spin" /> : <Send />}{" "}
-            {t("queueSend")}
+            {t("queueSend", { count: selectionCount })}
           </Button>
           {!isPublished && (
             <p className="mt-2 text-sm text-muted-foreground">{t("publishBeforeSend")}</p>
@@ -960,7 +829,7 @@ export function InvitationMessaging({
                   ],
                 ].map(([label, value]) => (
                   <div key={String(label)} className="rounded-xl bg-muted/60 p-3">
-                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-xs text-muted-foreground">{t(String(label))}</p>
                     <p className="mt-1 font-semibold">{value}</p>
                   </div>
                 ))}
@@ -991,7 +860,7 @@ export function InvitationMessaging({
                 )}
               </div>
               <div className="mt-4 divide-y rounded-xl border">
-                {batchQuery.data.jobs.map((job) => (
+                {batchQuery.data.jobs.slice(0, visibleJobs).map((job) => (
                   <div
                     key={job.id}
                     className="grid gap-1 p-3 text-sm sm:grid-cols-[1fr_1fr_auto] sm:items-center"
@@ -1014,6 +883,16 @@ export function InvitationMessaging({
                   </div>
                 ))}
               </div>
+              {batchQuery.data.jobs.length > visibleJobs && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="mt-3"
+                  onClick={() => setVisibleJobs((count) => count + 50)}
+                >
+                  {t("loadMore")}
+                </Button>
+              )}
               <p className="mt-3 text-xs text-muted-foreground">{t("deliveryDisclaimer")}</p>
             </>
           )}
