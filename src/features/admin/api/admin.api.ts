@@ -99,6 +99,90 @@ export const adminAuditLogSchema = z.object({
 });
 export const adminAuditLogsSchema = pageSchema(adminAuditLogSchema);
 
+export const planLimitsSchema = z.object({
+  guestPlaces: z.number().nullable().optional(),
+  mediaImages: z.number().nullable().optional(),
+  emailInvites: z.number().nullable().optional(),
+  smsInvites: z.number().nullable().optional(),
+  reminderRounds: z.number().nullable().optional(),
+  coHosts: z.number().nullable().optional(),
+  seatingTables: z.number().nullable().optional(),
+  checkin: z.boolean().optional(),
+  giftQr: z.boolean().optional(),
+  giftExport: z.boolean().optional(),
+  aiThankYouRuns: z.number().nullable().optional(),
+  premiumTemplates: z.boolean().optional(),
+  brandingBadge: z.boolean().optional(),
+  customSlug: z.boolean().optional(),
+  publicLinkDaysAfterWedding: z.number().nullable().optional(),
+  publicSeatLookup: z.boolean().optional(),
+  retentionDaysAfterWedding: z.number().nullable().optional(),
+});
+export type PlanLimits = z.infer<typeof planLimitsSchema>;
+
+export const adminPlanSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  price: z.number(),
+  currency: z.string(),
+  status: z.string(),
+  limits: planLimitsSchema,
+  activeWeddings: z.number(),
+});
+export type AdminPlan = z.infer<typeof adminPlanSchema>;
+
+export const adminPlanOrderSchema = z.object({
+  id: z.string(),
+  weddingId: z.string().nullable().optional(),
+  weddingTitle: z.string().nullable().optional(),
+  ownerEmail: z.string().nullable().optional(),
+  planCode: z.string(),
+  code: z.string(),
+  amount: z.number(),
+  paidAmount: z.number(),
+  status: z.string(),
+  note: z.string().nullable().optional(),
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  paidAt: z.string().nullable().optional(),
+  cancelledAt: z.string().nullable().optional(),
+});
+export type AdminPlanOrder = z.infer<typeof adminPlanOrderSchema>;
+export const adminPlanOrdersPageSchema = pageSchema(adminPlanOrderSchema);
+
+export const adminPlanPaymentSchema = z.object({
+  id: z.string(),
+  providerTransactionId: z.number(),
+  orderId: z.string().nullable().optional(),
+  code: z.string().nullable().optional(),
+  amount: z.number(),
+  accountNumber: z.string(),
+  content: z.string(),
+  referenceCode: z.string().nullable().optional(),
+  status: z.string(),
+  reason: z.string().nullable().optional(),
+  transactionAt: z.string(),
+  receivedAt: z.string(),
+});
+export type AdminPlanPayment = z.infer<typeof adminPlanPaymentSchema>;
+export const adminPlanPaymentsPageSchema = pageSchema(adminPlanPaymentSchema);
+
+export const planRevenueRowSchema = z.object({
+  key: z.string(),
+  amount: z.number(),
+  orders: z.number(),
+});
+export const planRevenueSchema = z.object({
+  from: z.string().nullable().optional(),
+  to: z.string().nullable().optional(),
+  total: z.number(),
+  paidOrders: z.number(),
+  byPlan: z.array(planRevenueRowSchema),
+  byMonth: z.array(planRevenueRowSchema),
+  paymentsToReview: z.number(),
+});
+export type PlanRevenue = z.infer<typeof planRevenueSchema>;
+
 function queryString(values: Record<string, string | number | undefined>) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values))
@@ -196,5 +280,72 @@ export const adminApi = {
     api.request(`/admin/audit-logs?${queryString(input)}`, {
       signal,
       schema: adminAuditLogsSchema,
+    }),
+  plans: (api: ApiClient, signal?: AbortSignal) =>
+    api.request("/admin/plans", { signal, schema: z.array(adminPlanSchema) }),
+  updatePlan: (
+    api: ApiClient,
+    code: string,
+    input: { name: string; price: number; status: string; limits: PlanLimits },
+  ) =>
+    api.request(`/admin/plans/${encodeURIComponent(code)}`, {
+      method: "PUT",
+      body: input,
+      schema: adminPlanSchema,
+    }),
+  planOrders: (
+    api: ApiClient,
+    input: { page: number; pageSize?: number; status?: string; search?: string },
+    signal?: AbortSignal,
+  ) =>
+    api.request(`/admin/plan-orders?${queryString(input)}`, {
+      signal,
+      schema: adminPlanOrdersPageSchema,
+    }),
+  approvePlanOrder: (api: ApiClient, orderId: string, note?: string) =>
+    api.request(`/admin/plan-orders/${encodeURIComponent(orderId)}/approve`, {
+      method: "POST",
+      body: { note },
+      schema: adminPlanOrderSchema,
+    }),
+  cancelPlanOrder: (api: ApiClient, orderId: string, note?: string) =>
+    api.request(`/admin/plan-orders/${encodeURIComponent(orderId)}/cancel`, {
+      method: "POST",
+      body: { note },
+      schema: adminPlanOrderSchema,
+    }),
+  planPayments: (
+    api: ApiClient,
+    input: { page: number; pageSize?: number; status?: string },
+    signal?: AbortSignal,
+  ) =>
+    api.request(`/admin/plan-payments?${queryString(input)}`, {
+      signal,
+      schema: adminPlanPaymentsPageSchema,
+    }),
+  grantWeddingPlan: (
+    api: ApiClient,
+    weddingId: string,
+    input: { planCode: string; note?: string },
+  ) =>
+    api.request(`/admin/weddings/${encodeURIComponent(weddingId)}/plan`, {
+      method: "PUT",
+      body: input,
+      schema: z.object({
+        weddingId: z.string(),
+        planCode: z.string(),
+        planName: z.string(),
+        legacy: z.boolean(),
+        limits: planLimitsSchema,
+      }),
+    }),
+  planRevenue: (
+    api: ApiClient,
+    input?: { from?: string; to?: string },
+    signal?: AbortSignal,
+  ) =>
+    api.request(`/admin/plan-revenue?${queryString(input ?? {})}`, {
+      signal,
+      schema: planRevenueSchema,
     }),
 };

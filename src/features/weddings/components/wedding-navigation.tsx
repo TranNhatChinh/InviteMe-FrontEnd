@@ -134,6 +134,14 @@ const sections: WeddingSection[] = [
     ownerOnly: true,
   },
   {
+    slug: "plan",
+    label: "Gói dịch vụ",
+    permission: "WEDDING_VIEW",
+    group: "Quản lý",
+    icon: "plans",
+    ownerOnly: true,
+  },
+  {
     slug: "settings",
     label: "Cài đặt đám cưới",
     permission: "WEDDING_EDIT",
