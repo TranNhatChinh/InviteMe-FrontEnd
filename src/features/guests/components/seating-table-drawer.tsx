@@ -99,8 +99,14 @@ export function SeatingTableDrawer({
                 tabIndex={-1}
                 className="min-w-0 break-words font-display text-2xl outline-none"
               >
-                {table.name}
+                {table.number ? `Bàn ${String(table.number).padStart(2, "0")} · ` : ""}{table.name}
               </h2>
+              {table.isVip && <Chip tone="accent" className="bg-amber-500/20 text-amber-700 font-bold">👑 VIP</Chip>}
+              {table.side && (
+                <Chip tone={table.side === "BRIDE" ? "danger" : "accent"}>
+                  {table.side === "GROOM" ? "Nhà trai" : table.side === "BRIDE" ? "Nhà gái" : "Bàn chung"}
+                </Chip>
+              )}
               <Chip tone={occupied === table.capacity ? "success" : "neutral"}>
                 {!occupied ? "Trống" : !free ? "Đầy" : `Còn ${free} chỗ`}
               </Chip>
@@ -364,7 +370,7 @@ export function SeatingTableDrawer({
         className="fixed left-1/2 top-1/2 m-0 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-foreground/10 bg-white p-5 text-foreground shadow-xl backdrop:bg-black/40"
       >
         <h3 id={`${id}-delete-title`} className="text-lg font-semibold">
-          Xoá {table.name}?
+          Xoá {table.number ? `Bàn ${String(table.number).padStart(2, "0")} · ` : ""}{table.name}?
         </h3>
         <p id={`${id}-delete-description`} className="mt-2 text-sm text-muted-foreground">
           Bàn trống này sẽ bị xoá khỏi sơ đồ. Bạn có chắc muốn tiếp tục?

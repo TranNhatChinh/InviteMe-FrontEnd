@@ -6,11 +6,10 @@ import {
   getWeddingPlan,
   createPlanOrder,
   planLimitsSchema,
-  planDtoSchema,
   weddingPlanDtoSchema,
   planOrderDtoSchema,
 } from "@/features/plans";
-import { adminApi, adminPlanSchema, adminPlanOrderSchema } from "@/features/admin/api/admin.api";
+import { adminApi } from "@/features/admin/api/admin.api";
 
 test("plans schema validates limits, prices and feature flags", () => {
   const freeLimits = planLimitsSchema.parse({
