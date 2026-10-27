@@ -15,6 +15,7 @@ export const WEDDING_PERMISSIONS = [
   "GIFT_VIEW",
   "GIFT_EDIT",
   "ANALYTICS_VIEW",
+  "GIFT_RECORD",
 ] as const;
 export type WeddingPermission = (typeof WEDDING_PERMISSIONS)[number];
 export const weddingAccessScopeSchema = z.object({

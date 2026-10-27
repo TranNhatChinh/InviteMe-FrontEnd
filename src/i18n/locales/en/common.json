@@ -1,7 +1,10 @@
 {
   "language": "Display language",
   "languageAria": "Choose display language",
-  "languages": { "vi": "Tiếng Việt", "en": "English" },
+  "languages": {
+    "vi": "Tiếng Việt",
+    "en": "English"
+  },
   "skipToContent": "Skip to main content",
   "loading": "Loading…",
   "loadingInviteMe": "Loading InviteMe…",
@@ -41,5 +44,23 @@
     "network": "Couldn't connect to the server. Check your connection and try again.",
     "configuration": "The application isn't configured to connect to the server.",
     "invalid-response": "The server returned an invalid response. Please try again later."
+  },
+  "messageRecipients": {
+    "selected": "{{count}} / {{total}} guests selected",
+    "clear": "Clear selection",
+    "selectAll": "Select all {{count}} guests",
+    "allSelected": "All {{count}} guests selected",
+    "allPagesHint": "Selects the full guest list, including guests on other pages.",
+    "search": "Search name, group, email or phone",
+    "loading": "Loading the complete guest list…",
+    "failed": "The complete guest list could not be loaded. Reload before choosing recipients.",
+    "retry": "Reload list",
+    "selectPage": "Select guests on this page",
+    "selectGuest": "Select {{name}}",
+    "noContact": "No contact details",
+    "empty": "No matching guests.",
+    "page": "Page {{page}} / {{pages}} · {{count}} guests",
+    "previous": "Previous page",
+    "next": "Next page"
   }
 }

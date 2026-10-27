@@ -3,8 +3,23 @@ import test from "node:test";
 import type { ApiClient } from "@/core/api/api-client";
 import {
   getInvitationDraft,
+  invitationDraftSchema,
   queueInvitationBatch,
 } from "@/features/invitations/api/invitation-messaging.api";
+
+test("email redesign draft response is readable without the retired tone field", () => {
+  const draft = invitationDraftSchema.parse({
+    weddingId: "wedding-1",
+    subject: "Lời mời ngày vui",
+    content: "Chúng mình rất mong được đón bạn đến chung vui.",
+    version: 1,
+    usedFallback: false,
+    smsContent: "Chúng mình mong được đón bạn.",
+    smsUsedFallback: false,
+  });
+  assert.equal(draft.tone, undefined);
+  assert.equal(draft.smsContent, "Chúng mình mong được đón bạn.");
+});
 
 test("invitation draft reads the API-owned draft or null", async () => {
   let capturedPath = "";

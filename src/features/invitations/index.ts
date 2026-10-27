@@ -5,5 +5,4 @@ export type {
   InvitationDraft,
   InvitationPreview,
   InvitationSendBody,
-  InvitationTone,
 } from "./api/invitation-messaging.api";

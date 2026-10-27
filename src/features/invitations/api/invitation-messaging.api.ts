@@ -1,12 +1,11 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
 
-const toneSchema = z.enum(["FORMAL", "WARM", "HUMOROUS"]);
 export const invitationDraftSchema = z.object({
   weddingId: z.string(),
   subject: z.string(),
   content: z.string(),
-  tone: toneSchema,
+  tone: z.enum(["FORMAL", "WARM", "HUMOROUS"]).optional(),
   version: z.number().int().nonnegative(),
   usedFallback: z.boolean(),
   smsContent: z.string(),
@@ -20,6 +19,9 @@ export const invitationPreviewSchema = z.object({
   smsContent: z.string(),
   rsvpLink: z.string(),
   qrLink: z.string(),
+  emailHtml: z.string(),
+  emailPlainText: z.string(),
+  weddingImageUrl: z.string().nullable(),
 });
 export const invitationBatchSchema = z.object({
   id: z.string(),
@@ -45,7 +47,6 @@ export const invitationBatchSchema = z.object({
 export type InvitationDraft = z.infer<typeof invitationDraftSchema>;
 export type InvitationPreview = z.infer<typeof invitationPreviewSchema>;
 export type InvitationBatch = z.infer<typeof invitationBatchSchema>;
-export type InvitationTone = z.infer<typeof toneSchema>;
 export type InvitationChannel = "EMAIL" | "SMS";
 export type InvitationSendBody = {
   guestIds?: string[];
@@ -68,7 +69,7 @@ export function getInvitationDraft(api: ApiClient, weddingId: string, signal?: A
 export function generateInvitationDraft(
   api: ApiClient,
   weddingId: string,
-  input: { tone: InvitationTone; additionalInstructions?: string },
+  input: { additionalInstructions?: string },
 ) {
   return api.request(`${base(weddingId)}/draft/generate`, {
     method: "POST",
@@ -82,7 +83,6 @@ export function saveInvitationDraft(
   input: {
     subject: string;
     content: string;
-    tone: InvitationTone;
     expectedVersion: number;
     smsContent: string;
   },

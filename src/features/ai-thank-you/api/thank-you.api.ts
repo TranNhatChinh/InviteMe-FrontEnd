@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
+import { loadAllMessageRecipients } from "@/shared/lib/message-recipients";
 
 export const thankYouTemplateSchema = z.object({
   id: z.string(),
@@ -80,11 +81,16 @@ export function listThankYouGuests(
   weddingId: string,
   page: number,
   signal?: AbortSignal,
+  pageSize = 20,
 ) {
   return api.request(
-    `/weddings/${encodeURIComponent(weddingId)}/guest-planning/guests?${new URLSearchParams({ page: String(page), pageSize: "20", search: "", archivedOnly: "false" })}`,
+    `/weddings/${encodeURIComponent(weddingId)}/guest-planning/guests?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), search: "", archivedOnly: "false" })}`,
     { signal, schema: thankYouGuestPageSchema },
   );
+}
+
+export function listAllThankYouGuests(api: ApiClient, weddingId: string, signal?: AbortSignal) {
+  return loadAllMessageRecipients((page) => listThankYouGuests(api, weddingId, page, signal, 100));
 }
 
 export function listThankYouTemplates(api: ApiClient, weddingId: string, signal?: AbortSignal) {
@@ -99,14 +105,12 @@ export function generateThankYouTemplateOptions(
   weddingId: string,
   input: {
     guestIds: string[];
-    variantCount: 1 | 3;
-    tone: "FORMAL" | "WARM" | "FRIENDLY";
     includeGiftAmount: boolean;
   },
 ) {
   return api.request(`${templateBase(weddingId)}/generate-options`, {
     method: "POST",
-    body: input,
+    body: { ...input, variantCount: 1 },
     schema: z.array(thankYouTemplateSchema),
   });
 }
