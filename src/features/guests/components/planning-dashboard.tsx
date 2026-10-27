@@ -13,6 +13,7 @@ import {
   restorePlanningGuest,
   importBody,
   importGuests,
+  checkImportGuests,
   listPlanningGuests,
   getPlanningGuest,
   listPlanningGroups,
@@ -194,14 +195,32 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
       createAttempt.current = { serialized, key: crypto.randomUUID() };
     createGuest.mutate({ input, key: createAttempt.current.key });
   }
+  async function checkImport(rows: CoupleRow[], signal?: AbortSignal) {
+    const body = importBody(rows);
+    return await checkImportGuests(api, weddingId, body, signal);
+  }
   async function save(rows: CoupleRow[]) {
     const body = importBody(rows),
       serialized = JSON.stringify(body);
     if (attempt.current?.serialized !== serialized)
       attempt.current = { serialized, key: crypto.randomUUID() };
     const result = await importGuests(api, weddingId, body, attempt.current.key);
+    const skippedCount = result.skipped?.length ?? 0;
+    const skippedText =
+      skippedCount > 0
+        ? " · Bỏ qua " + formatNumber(skippedCount, language) + " dòng đã có sẵn"
+        : "";
     setNotice(
-      `${t("imported", { guests: formatNumber(result.createdGuestCount, language), people: formatNumber(result.createdPlaceCount, language) })}${result.warnings.length ? ` ${t("importedDuplicateWarning", { count: formatNumber(result.warnings.length, language) })}` : ""}`,
+      "Đã thêm thành công " +
+        formatNumber(result.createdGuestCount, language) +
+        " thiệp (" +
+        formatNumber(result.createdPlaceCount, language) +
+        " khách)" +
+        skippedText +
+        "." +
+        (result.warnings.length
+          ? " Có " + formatNumber(result.warnings.length, language) + " dòng cần lưu ý trùng tên."
+          : "")
     );
     await cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] });
     setPage(1);
@@ -209,7 +228,14 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
     setImporting(false);
     attempt.current = null;
   }
-  if (importing) return <CoupleImport onClose={() => setImporting(false)} onImport={save} />;
+  if (importing)
+    return (
+      <CoupleImport
+        onClose={() => setImporting(false)}
+        onImport={save}
+        onCheck={checkImport}
+      />
+    );
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">

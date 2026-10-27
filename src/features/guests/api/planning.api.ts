@@ -53,7 +53,20 @@ const result = z.object({
   ),
   createdGroups: z.array(group),
   warnings: z.array(issue),
+  skipped: z.array(issue).nullable().optional(),
 });
+export const importIssueSchema = issue;
+export type ImportIssue = z.infer<typeof importIssueSchema>;
+
+export const importCheckSchema = z.object({
+  errors: z.array(issue),
+  warnings: z.array(issue),
+  guestCount: z.number(),
+  peopleCount: z.number(),
+  skipped: z.array(issue),
+});
+export type ImportCheckResult = z.infer<typeof importCheckSchema>;
+
 export type PlanningGuest = z.infer<typeof planningGuestSchema>;
 export type PlanningDetail = z.infer<typeof planningDetailSchema>;
 export type PlanningGuestValidationMessages = {
@@ -148,25 +161,34 @@ export function importBody(rows: CoupleRow[]) {
   return {
     rows: rows.map((r) => ({
       rowNumber: r.line,
-      recipientName: r.values[0],
+      recipientName: r.values[0] || "",
       honorific: r.values[1] || null,
-      invitationKind:
-        (
-          { "Cá nhân": "INDIVIDUAL", "Gia đình": "FAMILY", Nhóm: "GROUP" } as Record<string, string>
-        )[r.values[2] ?? ""] ?? "INDIVIDUAL",
-      expectedPeople: r.expected,
+      expectedPeople: r.expected ?? 1,
       side:
         ({ "Nhà gái": "BRIDE", "Nhà trai": "GROOM", Chung: "MUTUAL" } as Record<string, string>)[
-          r.values[4] ?? ""
+          r.values[3] ?? ""
         ] ?? "UNSPECIFIED",
-      group: r.values[5] ? { newName: r.values[5], confirmed: true } : null,
-      phone: r.values[6] || null,
-      email: r.values[8] || null,
-      note: r.values[7] || null,
+      group: r.values[4] ? { newName: r.values[4], confirmed: true } : null,
+      phone: r.values[5] || null,
+      note: r.values[6] || null,
+      email: r.values[7] || null,
     })),
   };
 }
 const path = (id: string) => `/weddings/${encodeURIComponent(id)}/guest-planning`;
+export function checkImportGuests(
+  api: ApiClient,
+  id: string,
+  body: ReturnType<typeof importBody>,
+  signal?: AbortSignal,
+) {
+  return api.request(`${path(id)}/imports/check`, {
+    method: "POST",
+    body,
+    signal,
+    schema: importCheckSchema,
+  });
+}
 export function importGuests(
   api: ApiClient,
   id: string,

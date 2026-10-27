@@ -59,12 +59,12 @@ export function seatingParties(rows: CoupleRow[]): SeatingParty[] {
       id: String(row.line),
       name: row.values[0] ?? "",
       address: row.values[1] ?? "",
-      kind: row.values[2] ?? "Cá nhân",
+      kind: "Cá nhân",
       count: row.expected ?? 1,
-      group: row.values[5] || "Chưa phân nhóm",
-      note: row.values[7] ?? "",
-      phone: row.values[6] ?? "",
-      side: row.values[4] || "Chưa xác định",
+      group: row.values[4] || "Chưa phân nhóm",
+      note: row.values[6] ?? "",
+      phone: row.values[5] ?? "",
+      side: row.values[3] || "Chưa xác định",
     }));
 }
 

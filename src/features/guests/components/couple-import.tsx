@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "@/i18n/format";
 import { useLanguage } from "@/i18n/language-context";
@@ -33,11 +33,11 @@ import {
 } from "../utils/group-catalog";
 import { readCoupleFile } from "../utils/read-couple-file";
 import { ApiError } from "@/core/api/api-error";
+import type { ImportCheckResult } from "../api/planning.api";
 
 const columns = [
   ["recipient", "Nguyễn Văn An"],
   ["honorific", "Bác, Cô, Anh, Chị, Bạn, Dì…"],
-  ["kind", "Gia đình"],
   ["expected", "4"],
   ["side", "Nhà gái"],
   ["group", "Bạn đại học"],
@@ -52,22 +52,21 @@ const rowMessageKeys: Record<string, string> = {
   "Email không đúng định dạng hoặc vượt quá 254 ký tự.": "email",
   "Thiếu tên người nhận.": "name",
   "Tổng người dự kiến phải là số nguyên từ 1 trở lên.": "expected",
-  "Kiểu lời mời chọn Cá nhân, Gia đình hoặc Nhóm.": "kind",
   "Phía khách mời chọn Nhà gái, Nhà trai hoặc Chung.": "side",
   "Chưa xác định phía khách mời; không mặc định là Chung.": "sideMissing",
-  "Chưa chọn kiểu lời mời: đang dùng Cá nhân. Chọn Gia đình nếu mời cả nhà; không suy từ số người.":
-    "kindMissing",
   "Dùng văn bản hoặc số, không dùng công thức trong các ô.": "formula",
   "Tên hoặc SĐT trùng dòng trước. Kiểm tra lại; các dòng vẫn được giữ riêng.": "duplicate",
-  "Dòng cần đủ 9 ô, kể cả ô để trống.": "rowCells",
+  "Dòng cần đủ 8 ô, kể cả ô để trống.": "rowCells",
 };
 
 export function CoupleImport({
   onClose,
   onImport,
+  onCheck,
 }: {
   onClose: () => void;
   onImport?: (rows: CoupleRow[]) => Promise<void>;
+  onCheck?: (rows: CoupleRow[], signal?: AbortSignal) => Promise<ImportCheckResult>;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "importPage" });
   const { language } = useLanguage();
@@ -82,6 +81,84 @@ export function CoupleImport({
   const [catalog, setCatalog] = useState<string[]>([...defaultGroups]);
   const [saving, setSaving] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<number, string[]>>({});
+  const [checkState, setCheckState] = useState<{
+    key: string;
+    result: ImportCheckResult | null;
+  }>({
+    key: "",
+    result: null,
+  });
+
+  const normalizedRows = useMemo(() => {
+    return rows?.map((row) => {
+      const values = [...row.values];
+      values[4] = findGroup(values[4] ?? "", catalog) ?? values[4] ?? "";
+      return { ...row, values };
+    });
+  }, [rows, catalog]);
+
+  const currentKey = normalizedRows ? JSON.stringify(normalizedRows.map((r) => r.values)) : "";
+  const checking = Boolean(
+    onCheck &&
+      normalizedRows &&
+      normalizedRows.length &&
+      !normalizedRows.some((r) => r.errors.length > 0) &&
+      currentKey !== checkState.key,
+  );
+  const checkResult =
+    currentKey && currentKey === checkState.key && !normalizedRows?.some((r) => r.errors.length > 0)
+      ? checkState.result
+      : null;
+
+  useEffect(() => {
+    if (!onCheck || !normalizedRows || !normalizedRows.length) return;
+    if (normalizedRows.some((r) => r.errors.length > 0)) return;
+
+    const key = JSON.stringify(normalizedRows.map((r) => r.values));
+    if (key === checkState.key) return;
+
+    const controller = new AbortController();
+    onCheck(normalizedRows, controller.signal)
+      .then((res) => {
+        if (!controller.signal.aborted) {
+          setCheckState({ key, result: res });
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setCheckState({ key, result: null });
+        }
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [onCheck, normalizedRows, checkState.key]);
+
+  const skippedSet = useMemo(
+    () => new Set(checkResult?.skipped?.map((s) => s.rowNumber) ?? []),
+    [checkResult],
+  );
+
+  const checkErrorsByRow = useMemo(() => {
+    const map: Record<number, string[]> = {};
+    if (checkResult?.errors) {
+      for (const issue of checkResult.errors) {
+        (map[issue.rowNumber] ??= []).push(issue.message);
+      }
+    }
+    return map;
+  }, [checkResult]);
+
+  const checkWarningsByRow = useMemo(() => {
+    const map: Record<number, string[]> = {};
+    if (checkResult?.warnings) {
+      for (const issue of checkResult.warnings) {
+        (map[issue.rowNumber] ??= []).push(issue.message);
+      }
+    }
+    return map;
+  }, [checkResult]);
+
   async function submit() {
     if (!onImport || !normalizedRows || saving) return;
     setSaving(true);
@@ -113,6 +190,7 @@ export function CoupleImport({
       setSaving(false);
     }
   }
+
   async function trySample(file = "khach-moi-20-nguoi.csv") {
     setServerErrors({});
     const id = ++request.current;
@@ -133,6 +211,7 @@ export function CoupleImport({
       if (id === request.current) setBusy(false);
     }
   }
+
   async function choose(file?: File) {
     if (!file) return;
     setServerErrors({});
@@ -162,18 +241,22 @@ export function CoupleImport({
       if (id === request.current) setBusy(false);
     }
   }
+
   const valid = rows?.filter((row) => !row.errors.length) ?? [];
   const pendingGroups = unknownGroups(rows ?? [], catalog);
   const total = valid.reduce((sum, row) => sum + (row.expected ?? 0), 0);
+
   function resolve(key: string, label: string) {
     if (rows) setRows(validateCoupleRows(resolveGroupRows(rows, key, label, catalog)));
   }
+
   function create(key: string, label: string) {
     if (!rows) return;
     const result = addGroup(catalog, label);
     setCatalog(result.catalog);
     setRows(validateCoupleRows(resolveGroupRows(rows, key, result.label, result.catalog)));
   }
+
   function setSide(line: number, side: string) {
     if (rows)
       setRows(
@@ -181,25 +264,21 @@ export function CoupleImport({
           rows.map((row) => {
             if (row.line !== line) return row;
             const values = [...row.values];
-            values[4] = side;
+            values[3] = side;
             return { ...row, values };
           }),
         ),
       );
   }
-  const normalizedRows = rows?.map((row) => {
-    const values = [...row.values];
-    values[5] = findGroup(values[5] ?? "", catalog) ?? values[5] ?? "";
-    return { ...row, values };
-  });
+
   const localizeRowMessage = (message: string) => {
     const key = rowMessageKeys[message];
     return key ? t(`validation.${key}`) : message;
   };
+
   const headerLabels: Record<string, string> = {
     "Tên người nhận": t("fields.recipientName"),
     "Danh xưng": t("fields.honorific"),
-    "Kiểu lời mời": t("fields.invitationKind"),
     "Tổng người dự kiến": t("fields.expectedPeople"),
     "Phía khách mời": t("fields.side"),
     "Nhóm khách": t("fields.group"),
@@ -207,16 +286,15 @@ export function CoupleImport({
     "Ghi chú": t("fields.note"),
     Email: t("fields.email"),
   };
+
   const translatedSide = (value: string) =>
     ({ "Nhà gái": t("enums.bride"), "Nhà trai": t("enums.groom"), Chung: t("enums.shared") })[
       value
     ] ?? value;
-  const translatedKind = (value: string) =>
-    ({ "Cá nhân": t("enums.individual"), "Gia đình": t("enums.family"), Nhóm: t("enums.group") })[
-      value
-    ] ?? value;
+
   if (seating && normalizedRows)
     return <CoupleSeatingPreview rows={normalizedRows} onBack={() => setSeating(false)} />;
+
   return (
     <fieldset disabled={saving} className="min-w-0 space-y-6">
       <Button variant="ghost" onClick={onClose}>
@@ -356,15 +434,60 @@ export function CoupleImport({
           className="space-y-4 rounded-2xl border bg-card p-5"
           aria-label={t("previewResult")}
         >
-          <h2 className="break-all font-serif text-2xl">
-            {t("previewResult")} · {filename}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="break-all font-serif text-2xl">
+              {t("previewResult")} · {filename}
+            </h2>
+            {checking && (
+              <span className="text-xs text-muted-foreground animate-pulse">
+                Đang đối chiếu danh sách…
+              </span>
+            )}
+          </div>
           <p role="status" className="text-sm">
-            {t("validRows", { count: formatNumber(valid.length, language) })} ·{" "}
-            {t("expectedTotal", { count: formatNumber(total, language) })} ·{" "}
-            {t("invalidRows", { count: formatNumber(rows.length - valid.length, language) })} ·{" "}
-            {t("groupsPending", { count: formatNumber(pendingGroups.length, language) })}.{" "}
-            {t("invalidRowsNote")}
+            {checkResult ? (
+              <>
+                <span className="font-medium text-foreground">
+                  {formatNumber(checkResult.guestCount, language)} thiệp sẽ thêm mới (
+                  {formatNumber(checkResult.peopleCount, language)} khách)
+                </span>
+                {checkResult.skipped.length > 0 && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <span className="text-muted-foreground">
+                      {formatNumber(checkResult.skipped.length, language)} dòng bỏ qua do đã có sẵn
+                    </span>
+                  </>
+                )}
+                {checkResult.errors.length > 0 && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <span className="text-destructive font-medium">
+                      {formatNumber(checkResult.errors.length, language)} dòng cần sửa
+                    </span>
+                  </>
+                )}
+                {pendingGroups.length > 0 && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <span className="text-amber-800">
+                      {t("groupsPending", { count: formatNumber(pendingGroups.length, language) })}
+                    </span>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {t("validRows", { count: formatNumber(valid.length, language) })} ·{" "}
+                {t("expectedTotal", { count: formatNumber(total, language) })} ·{" "}
+                {t("invalidRows", { count: formatNumber(rows.length - valid.length, language) })} ·{" "}
+                {t("groupsPending", { count: formatNumber(pendingGroups.length, language) })}.{" "}
+                {t("invalidRowsNote")}
+              </>
+            )}
           </p>
           <div className="max-h-96 overflow-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
@@ -387,51 +510,23 @@ export function CoupleImport({
                     <td className="p-3">{formatNumber(row.line, language)}</td>
                     {coupleHeaders.map((h, i) => (
                       <td key={h} className="max-w-64 break-words p-3">
-                        {i === 4 ? (
+                        {i === 3 ? (
                           <select
                             className="h-9 rounded-lg border bg-background px-2 text-xs"
                             aria-label={`${t("fields.side")} ${formatNumber(row.line, language)}`}
-                            value={row.values[4] ?? ""}
+                            value={row.values[3] ?? ""}
                             onChange={(e) => setSide(row.line, e.target.value)}
                           >
                             <option value="">{t("unknownSide")}</option>
-                            {row.values[4] &&
-                              !["Nhà gái", "Nhà trai", "Chung"].includes(row.values[4]) && (
-                                <option value={row.values[4]}>
-                                  {translatedSide(row.values[4])} {t("invalidValue")}
+                            {row.values[3] &&
+                              !["Nhà gái", "Nhà trai", "Chung"].includes(row.values[3]) && (
+                                <option value={row.values[3]}>
+                                  {translatedSide(row.values[3])} {t("invalidValue")}
                                 </option>
                               )}
                             {["Nhà gái", "Nhà trai", "Chung"].map((label) => (
                               <option key={label} value={label}>
                                 {translatedSide(label)}
-                              </option>
-                            ))}
-                          </select>
-                        ) : onImport && i === 2 ? (
-                          <select
-                            aria-label={`${headerLabels[h] ?? h} ${formatNumber(row.line, language)}`}
-                            value={row.values[2]}
-                            className="rounded border bg-background p-2"
-                            onChange={(e) =>
-                              setRows(
-                                validateCoupleRows(
-                                  rows.map((r) =>
-                                    r.line === row.line
-                                      ? {
-                                          ...r,
-                                          values: r.values.map((v, index) =>
-                                            index === 2 ? e.target.value : v,
-                                          ),
-                                        }
-                                      : r,
-                                  ),
-                                ),
-                              )
-                            }
-                          >
-                            {["Cá nhân", "Gia đình", "Nhóm"].map((label) => (
-                              <option key={label} value={label}>
-                                {translatedKind(label)}
                               </option>
                             ))}
                           </select>
@@ -458,7 +553,7 @@ export function CoupleImport({
                               setServerErrors((current) => ({ ...current, [row.line]: [] }));
                             }}
                           />
-                        ) : i === 3 && row.defaulted ? (
+                        ) : i === 2 && row.defaulted ? (
                           t("defaultValue")
                         ) : (
                           row.values[i] || "—"
@@ -471,9 +566,19 @@ export function CoupleImport({
                           {localizeRowMessage(message)}
                         </p>
                       ))}
+                      {checkErrorsByRow[row.line]?.map((message) => (
+                        <p key={message} className="text-destructive font-medium text-xs">
+                          {message}
+                        </p>
+                      ))}
                       {row.errors.map((message) => (
                         <p key={message} className="text-destructive">
                           {localizeRowMessage(message)}
+                        </p>
+                      ))}
+                      {checkWarningsByRow[row.line]?.map((message) => (
+                        <p key={message} className="text-amber-800 text-xs">
+                          {message}
                         </p>
                       ))}
                       {row.warnings.map((message) => (
@@ -481,13 +586,21 @@ export function CoupleImport({
                           {localizeRowMessage(message)}
                         </p>
                       ))}
-                      {row.values[5] && !findGroup(row.values[5], catalog) && (
+                      {row.values[4] && !findGroup(row.values[4], catalog) && (
                         <p className="text-amber-800">{t("unknownGroup")}</p>
+                      )}
+                      {skippedSet.has(row.line) && (
+                        <span className="inline-block rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
+                          Đã có sẵn (sẽ bỏ qua khi thêm)
+                        </span>
                       )}
                       {!row.errors.length &&
                         !serverErrors[row.line]?.length &&
+                        !checkErrorsByRow[row.line]?.length &&
                         !row.warnings.length &&
-                        (!row.values[5] || !!findGroup(row.values[5], catalog)) && (
+                        !checkWarningsByRow[row.line]?.length &&
+                        !skippedSet.has(row.line) &&
+                        (!row.values[4] || !!findGroup(row.values[4], catalog)) && (
                           <span className="text-emerald-700">{t("valid")}</span>
                         )}
                     </td>
@@ -504,8 +617,13 @@ export function CoupleImport({
               disabled={
                 saving ||
                 busy ||
+                checking ||
                 !valid.length ||
-                (onImport ? valid.length !== rows.length : total > 500) ||
+                (onImport
+                  ? valid.length !== rows.length ||
+                    (checkResult !== null &&
+                      (checkResult.errors.length > 0 || checkResult.guestCount === 0))
+                  : total > 500) ||
                 pendingGroups.length > 0
               }
               onClick={() => (onImport ? void submit() : setSeating(true))}
@@ -515,8 +633,14 @@ export function CoupleImport({
                   t("importing")
                 ) : (
                   t("importButton", {
-                    recipients: formatNumber(valid.length, language),
-                    guests: formatNumber(total, language),
+                    recipients: formatNumber(
+                      checkResult ? checkResult.guestCount : valid.length,
+                      language,
+                    ),
+                    guests: formatNumber(
+                      checkResult ? checkResult.peopleCount : total,
+                      language,
+                    ),
                   })
                 )
               ) : (
@@ -526,6 +650,16 @@ export function CoupleImport({
               )}
             </Button>
           </div>
+          {checkResult && checkResult.errors.length > 0 && (
+            <p className="text-xs text-destructive">
+              Vui lòng sửa các dòng bị lỗi trước khi bấm lưu.
+            </p>
+          )}
+          {checkResult && checkResult.guestCount === 0 && checkResult.skipped.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Tất cả các dòng trong file đều đã có sẵn trong danh sách khách.
+            </p>
+          )}
           {pendingGroups.length > 0 && (
             <p className="text-xs text-amber-900">
               {t("resolveGroups", { count: formatNumber(pendingGroups.length, language) })}
@@ -603,15 +737,13 @@ export function CoupleImport({
                 <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
                   {name === "recipient"
                     ? t("guide.recipientBadge")
-                    : name === "kind"
-                      ? t("guide.kindBadge")
-                      : name === "expected"
-                        ? t("guide.expectedBadge")
-                        : name === "side"
-                          ? t("guide.sideBadge")
-                          : name === "group"
-                            ? t("guide.groupBadge")
-                            : t("guide.optional")}
+                    : name === "expected"
+                      ? t("guide.expectedBadge")
+                      : name === "side"
+                        ? t("guide.sideBadge")
+                        : name === "group"
+                          ? t("guide.groupBadge")
+                          : t("guide.optional")}
                 </span>
               </div>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">

@@ -11,7 +11,7 @@ test("contact columns are mapped to backend and email errors retain spreadsheet 
   const rows = validateCoupleRows([
     {
       line: 17,
-      values: ["Nam", "Anh", "Cá nhân", "1", "Chung", "", "0900123456", "", "nam@example.com"],
+      values: ["Nam", "Anh", "1", "Chung", "", "0900123456", "", "nam@example.com"],
     },
   ]);
   const row = importBody(rows).rows[0];
@@ -27,7 +27,7 @@ test("import maps expected places including primary, explicit side and family wi
   const rows = validateCoupleRows([
     {
       line: 8,
-      values: ["Nguyễn Văn An", "Bác", "Gia đình", "4", "Nhà gái", "Họ ngoại", "", "Hai trẻ nhỏ"],
+      values: ["Nguyễn Văn An", "Bác", "4", "Nhà gái", "Họ ngoại", "", "Hai trẻ nhỏ", ""],
     },
   ]);
   assert.deepEqual(importBody(rows), {
@@ -36,13 +36,12 @@ test("import maps expected places including primary, explicit side and family wi
         rowNumber: 8,
         recipientName: "Nguyễn Văn An",
         honorific: "Bác",
-        invitationKind: "FAMILY",
         expectedPeople: 4,
         side: "BRIDE",
         group: { newName: "Họ ngoại", confirmed: true },
         phone: null,
-        email: null,
         note: "Hai trẻ nhỏ",
+        email: null,
       },
     ],
   });

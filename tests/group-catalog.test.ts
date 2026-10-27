@@ -38,10 +38,10 @@ test("unknown labels require explicit mapping or creation; side is preserved", (
     "Bạn đại học",
     defaultGroups,
   );
-  assert.equal(mapped[2]?.values[5], "Bạn đại học");
-  assert.equal(mapped[2]?.values[4], "Nhà gái");
+  assert.equal(mapped[2]?.values[4], "Bạn đại học");
+  assert.equal(mapped[2]?.values[3], "Nhà gái");
   assert.equal(unknownGroups(mapped, defaultGroups).length, 1);
-  assert.equal(rows[2]?.values[5], "Bạn đai học");
+  assert.equal(rows[2]?.values[4], "Bạn đai học");
   const created = addGroup(defaultGroups, " Công ty ABC ");
   const resolved = resolveGroupRows(
     mapped,
@@ -62,13 +62,13 @@ test("custom group names are validated and repeated names are not duplicated", (
 });
 test("invalid sides fail validation; blank stays unknown; editing side clears only its validation error", () => {
   const rows = parseCoupleCsv(
-    `${coupleHeaders.join(",")}\nAn,Bác,Gia đình,4,Nhà sai,Họ ngoại,,\nHoa,Cô,Cá nhân,1,,Họ ngoại,,`,
+    `${coupleHeaders.join(",")}\nAn,Bác,4,Nhà sai,Họ ngoại,,,\nHoa,Cô,1,,Họ ngoại,,,`,
   );
   assert.ok(rows[0]?.errors.some((error) => error.includes("Phía khách mời")));
-  assert.equal(rows[1]?.values[4], "");
+  assert.equal(rows[1]?.values[3], "");
   assert.ok(rows[1]?.warnings.length);
   const edited = rows.map((row) => ({ ...row, values: [...row.values] }));
-  if (edited[0]) edited[0].values[4] = "Nhà gái";
+  if (edited[0]) edited[0].values[3] = "Nhà gái";
   const checked = validateCoupleRows(edited);
   assert.equal(checked[0]?.errors.length, 0);
   assert.equal(checked[0]?.expected, 4);
@@ -94,7 +94,7 @@ test("all sample counts remain correct and all non-test groups are known", () =>
 });
 test("the same group label on opposite wedding sides never becomes one affinity group or table", () => {
   const rows = parseCoupleCsv(
-    `${coupleHeaders.join(",")}\nAn,Bác,Gia đình,4,Nhà gái,Họ ngoại,,\nHoa,Cô,Gia đình,2,Nhà trai,Họ ngoại,,`,
+    `${coupleHeaders.join(",")}\nAn,Bác,4,Nhà gái,Họ ngoại,,,\nHoa,Cô,2,Nhà trai,Họ ngoại,,,`,
   );
   const parties = seatingParties(rows);
   assert.equal(recommendedTableCount(parties, 10), 2);

@@ -1,7 +1,6 @@
 export const coupleHeaders = [
   "Tên người nhận",
   "Danh xưng",
-  "Kiểu lời mời",
   "Tổng người dự kiến",
   "Phía khách mời",
   "Nhóm khách",
@@ -14,18 +13,18 @@ export const coupleExamples = [
   [
     "Nguyễn Văn An",
     "Bác",
-    "Gia đình",
     "4",
     "Nhà gái",
     "Họ ngoại",
     "",
     "Gia đình có hai trẻ nhỏ cần ghế",
+    "",
   ],
-  ["Trần Thị Hoa", "Cô", "Gia đình", "2", "Nhà gái", "Họ ngoại", "", "Muốn ngồi gần lối ra"],
-  ["Lê Minh Anh", "Bạn", "Cá nhân", "2", "Nhà gái", "Bạn đại học", "", "Đi cùng một người"],
-  ["Phạm Thu Hà", "Bạn", "Cá nhân", "1", "Nhà gái", "Bạn đại học", "", ""],
-  ["Hoàng Quốc Nam", "Anh", "Cá nhân", "1", "Nhà trai", "Đồng nghiệp", "", ""],
-].map((row) => [...row, ""]);
+  ["Trần Thị Hoa", "Cô", "2", "Nhà gái", "Họ ngoại", "", "Muốn ngồi gần lối ra", ""],
+  ["Lê Minh Anh", "Bạn", "2", "Nhà gái", "Bạn đại học", "", "Đi cùng một người", ""],
+  ["Phạm Thu Hà", "Bạn", "1", "Nhà gái", "Bạn đại học", "", "", ""],
+  ["Hoàng Quốc Nam", "Anh", "1", "Nhà trai", "Đồng nghiệp", "", "", ""],
+];
 
 export type CoupleRow = {
   line: number;
@@ -87,30 +86,50 @@ export function parseCoupleCsv(source: string): CoupleRow[] {
   if (quoted) throw new Error("Có ô chưa đóng dấu ngoặc kép. Hãy kiểm tra và lưu lại file CSV.");
   if (cell || cells.length || closed) record();
   const header = records.shift()?.cells.map((value) => value.trim());
-  const oldHeaders = coupleHeaders.filter((name) => name !== "Email");
-  const sevenHeaders = oldHeaders.filter((name) => name !== "Phía khách mời");
-  const legacyHeaders = sevenHeaders.filter((name) => name !== "Kiểu lời mời");
-  const legacy = header?.length === 6 && legacyHeaders.every((name, i) => name === header[i]);
-  const seven = header?.length === 7 && sevenHeaders.every((name, i) => name === header[i]);
-  const eight = header?.length === 8 && oldHeaders.every((name, i) => name === header[i]);
-  if (
-    !header ||
-    (!legacy &&
-      !seven &&
-      !eight &&
-      (header.length !== 9 || !coupleHeaders.every((name, i) => name === header[i])))
-  )
+  if (!header)
     throw new Error(
-      "File cần đúng 9 cột theo thứ tự trong mẫu. Hãy tải mẫu và giữ nguyên dòng tiêu đề.",
+      "File cần đúng 8 cột theo thứ tự trong mẫu. Hãy tải mẫu và giữ nguyên dòng tiêu đề.",
     );
+
+  // If the file includes the legacy "Kiểu lời mời" column, strip it from header and records
+  const kindIndex = header.indexOf("Kiểu lời mời");
+  if (kindIndex !== -1) {
+    header.splice(kindIndex, 1);
+    for (const record of records) {
+      if (record.cells.length > kindIndex) {
+        record.cells.splice(kindIndex, 1);
+      }
+    }
+  }
+
+  const sevenHeaders = coupleHeaders.slice(0, 7);
+  const sixLegacyHeaders = [
+    coupleHeaders[0], // Tên người nhận
+    coupleHeaders[1], // Danh xưng
+    coupleHeaders[2], // Tổng người dự kiến
+    coupleHeaders[4], // Nhóm khách
+    coupleHeaders[5], // SĐT
+    coupleHeaders[6], // Ghi chú
+  ];
+
+  const isStandard = header.length === 8 && coupleHeaders.every((name, i) => name === header[i]);
+  const isSeven = header.length === 7 && sevenHeaders.every((name, i) => name === header[i]);
+  const isSixLegacy =
+    header.length === 6 && sixLegacyHeaders.every((name, i) => name === header[i]);
+
+  if (!isStandard && !isSeven && !isSixLegacy) {
+    throw new Error(
+      "File cần đúng 8 cột theo thứ tự trong mẫu. Hãy tải mẫu và giữ nguyên dòng tiêu đề.",
+    );
+  }
   if (!records.length) throw new Error("File chưa có khách. Thêm ít nhất một người nhận thiệp.");
   if (records.length > 500)
     throw new Error("Mỗi file tối đa 500 dòng khách. Hãy chia thành nhiều file.");
   return validateCoupleRows(
     records.map(({ line, cells }) => {
       const values = cells.map((value) => value.trim());
-      if (legacy) values.splice(2, 0, "");
-      if (legacy || seven) values.splice(4, 0, "");
+      if (isSixLegacy) values.splice(3, 0, "");
+      if (isSixLegacy || isSeven) values.push("");
       return { line, values };
     }),
   );
@@ -122,12 +141,11 @@ export function validateCoupleRows(rows: { line: number; values: string[] }[]): 
   return rows.map(({ line, values: rawValues }) => {
     const values = rawValues.map((value) => value.trim());
     // Existing templates have no Email column; missing optional trailing cells stay blank.
-    if (values.length === 8) values.push("");
+    if (values.length === 7) values.push("");
     const errors: string[] = [],
       warnings: string[] = [];
-    if (values.length !== 9) errors.push("Dòng cần đủ 9 ô, kể cả ô để trống.");
-    const [name = "", , rawKind = "", rawCount = "", rawSide = "", , phone = ""] = values;
-    const email = values[8] ?? "";
+    if (values.length !== 8) errors.push("Dòng cần đủ 8 ô, kể cả ô để trống.");
+    const [name = "", , rawCount = "", rawSide = "", , phone = "", , email = ""] = values;
     if (
       phone &&
       (phone.length > 30 ||
@@ -149,22 +167,13 @@ export function validateCoupleRows(rows: { line: number; values: string[] }[]): 
     const expected = rawCount === "" ? 1 : /^\d+$/.test(rawCount) ? Number(rawCount) : null;
     if (expected === null || !Number.isSafeInteger(expected) || expected < 1)
       errors.push("Tổng người dự kiến phải là số nguyên từ 1 trở lên.");
-    const kind = ["Cá nhân", "Gia đình", "Nhóm"].find(
-      (item) => item.toLocaleLowerCase("vi") === rawKind.toLocaleLowerCase("vi"),
-    );
-    if (rawKind && !kind) errors.push("Kiểu lời mời chọn Cá nhân, Gia đình hoặc Nhóm.");
-    values[2] = kind ?? "Cá nhân";
     const side = ["Nhà gái", "Nhà trai", "Chung"].find(
       (label) => label.toLocaleLowerCase("vi") === rawSide.toLocaleLowerCase("vi"),
     );
     if (rawSide && !side) errors.push("Phía khách mời chọn Nhà gái, Nhà trai hoặc Chung.");
     if (!rawSide) warnings.push("Chưa xác định phía khách mời; không mặc định là Chung.");
-    values[4] = side ?? rawSide;
-    if (!rawKind && expected !== null && expected > 1)
-      warnings.push(
-        "Chưa chọn kiểu lời mời: đang dùng Cá nhân. Chọn Gia đình nếu mời cả nhà; không suy từ số người.",
-      );
-    if (values.some((value, index) => /^[=+@-]/.test(value) && index !== 6))
+    values[3] = side ?? rawSide;
+    if (values.some((value, index) => /^[=+@-]/.test(value) && index !== 5))
       errors.push("Dùng văn bản hoặc số, không dùng công thức trong các ô.");
     const nameKey = name.normalize("NFC").toLocaleLowerCase("vi").replace(/\s+/g, " ");
     const phoneKey = phone.replace(/[\s().-]/g, "");

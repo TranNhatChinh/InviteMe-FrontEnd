@@ -21,8 +21,8 @@ export const groupReviewKey = (side: string, label: string) =>
 export function unknownGroups(rows: CoupleRow[], catalog: readonly string[]) {
   const unknown = new Map<string, { key: string; label: string; side: string; lines: number[] }>();
   for (const row of rows) {
-    const label = row.values[5] ?? "",
-      side = row.values[4] ?? "";
+    const label = row.values[4] ?? "",
+      side = row.values[3] ?? "";
     if (!label || findGroup(label, catalog)) continue;
     const key = groupReviewKey(side, label);
     const entry = unknown.get(key) ?? { key, label, side, lines: [] };
@@ -41,9 +41,9 @@ export function resolveGroupRows(
   const label = findGroup(target, catalog);
   if (!label) throw new Error("Chọn nhóm trong danh mục hoặc xác nhận tạo nhóm mới.");
   return rows.map((row) => {
-    if (groupReviewKey(row.values[4] ?? "", row.values[5] ?? "") !== key) return row;
+    if (groupReviewKey(row.values[3] ?? "", row.values[4] ?? "") !== key) return row;
     const values = [...row.values];
-    values[5] = label;
+    values[4] = label;
     return { ...row, values };
   });
 }
