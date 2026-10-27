@@ -50,6 +50,8 @@
   "faqAccountAnswer": "Khách xem lời mời và xác nhận tham dự qua link mời hợp lệ, không cần tài khoản InviteMe.",
   "faqGuestListQuestion": "Ai xem được danh sách khách mời?",
   "faqGuestListAnswer": "Danh sách khách và phản hồi dành cho chủ tiệc và người được cấp quyền quản lý. Không hiển thị công khai trên trang cưới.",
+  "faqPricingQuestion": "Gói dịch vụ thanh toán một lần hay theo tháng?",
+  "faqPricingAnswer": "Tất cả các gói của InviteMe đều thanh toán một lần duy nhất cho toàn bộ sự kiện cưới của hai bạn, không có phí gia hạn hàng tháng hay bất kỳ chi phí ẩn nào.",
   "faqTemplateQuestion": "Wedding Invite và Wedding Story khác nhau thế nào?",
   "faqTemplateAnswer": "Invite ưu tiên thông tin lời mời; Story dành thêm không gian cho câu chuyện và ảnh. Cả hai cùng sử dụng thông tin ngày cưới và RSVP.",
   "faqDemoQuestion": "Demo có lưu phản hồi của mình không?",

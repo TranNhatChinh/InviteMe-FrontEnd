@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import Image from "next/image";
+import type { ReactNode } from "react";
 import { SampleSite } from "./sample-site";
 import { StoryCover } from "./story-cover";
 import { useTranslation } from "react-i18next";
@@ -58,15 +59,17 @@ function SectionBotanicals() {
     </div>
   );
 }
+
 const questions = [
   ["faqAccountQuestion", "faqAccountAnswer"],
   ["faqGuestListQuestion", "faqGuestListAnswer"],
+  ["faqPricingQuestion", "faqPricingAnswer"],
   ["faqTemplateQuestion", "faqTemplateAnswer"],
   ["faqDemoQuestion", "faqDemoAnswer"],
   ["faqLinkQuestion", "faqLinkAnswer"],
 ] as const;
 
-export function LandingContent() {
+export function LandingContent({ pricingSection }: { pricingSection?: ReactNode }) {
   const { t } = useTranslation("landing");
   return (
     <div className="landing-content">
@@ -115,6 +118,7 @@ export function LandingContent() {
         </div>
         <p className="landing-caption">{t("templateCaption")}</p>
       </section>
+
       <section id="features" className="landing-section" aria-labelledby="feature-title">
         <div className="landing-heading">
           <p className="landing-eyebrow">{t("prepareTogether")}</p>
@@ -181,6 +185,7 @@ export function LandingContent() {
           </article>
         </div>
       </section>
+
       <section
         id="guide"
         className="landing-section landing-decorated"
@@ -219,6 +224,10 @@ export function LandingContent() {
           ))}
         </div>
       </section>
+
+      {/* Vị trí bảng giá dịch vụ */}
+      {pricingSection}
+
       <section
         id="faq"
         className="landing-section landing-faq landing-decorated"
@@ -239,6 +248,7 @@ export function LandingContent() {
           </details>
         ))}
       </section>
+
       <section className="landing-section landing-closing">
         <SectionBotanicals />
         <p className="landing-eyebrow">{t("closingEyebrow")}</p>

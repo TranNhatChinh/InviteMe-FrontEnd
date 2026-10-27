@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 const links = [
   { href: "/templates", namespace: "public", key: "templates" },
   { href: "/#features", namespace: "public", key: "features" },
+  { href: "/#pricing", namespace: "public", key: "pricing" },
   { href: "/#guide", namespace: "public", key: "guide" },
 ] as const;
 

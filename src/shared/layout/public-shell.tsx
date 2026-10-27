@@ -25,6 +25,7 @@ export function PublicShell({ children, account }: { children: ReactNode; accoun
           />
           <nav aria-label={tPublic("footerNavigation")} className="public-footer__links">
             <Link href="/templates">{tPublic("templates")}</Link>
+            <Link href="/#pricing">{tPublic("pricing")}</Link>
             <Link href="/#guide">{tPublic("guide")}</Link>
             <Link href="/#faq">{tPublic("faq")}</Link>
             <Link href="/#contact">{tPublic("contact")}</Link>

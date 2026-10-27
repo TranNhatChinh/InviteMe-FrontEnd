@@ -50,6 +50,8 @@
   "faqAccountAnswer": "Guests can view an invitation and RSVP using a valid invitation link. They don't need an InviteMe account.",
   "faqGuestListQuestion": "Who can view the guest list?",
   "faqGuestListAnswer": "The hosts and people they've authorized can view guest details and responses. The guest list isn't public on the wedding website.",
+  "faqPricingQuestion": "Are plans billed one-time or monthly?",
+  "faqPricingAnswer": "All InviteMe packages are billed once for your entire wedding event. There are no monthly recurring fees or hidden costs.",
   "faqTemplateQuestion": "What's the difference between Wedding Invite and Wedding Story?",
   "faqTemplateAnswer": "Invite puts the invitation details first. Story gives more space to your story and photos. Both use the same wedding date and RSVP details.",
   "faqDemoQuestion": "Will the demo save my response?",
