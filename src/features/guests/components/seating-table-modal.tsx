@@ -78,6 +78,14 @@ export function SeatingTableModal({
       name: name.trim() || undefined,
       capacity,
       side: side ? (side as "GROOM" | "BRIDE" | "MUTUAL") : null,
+      half:
+        targetCell?.side === "BRIDE"
+          ? "BRIDE"
+          : targetCell?.side === "GROOM"
+            ? "GROOM"
+            : side === "GROOM" || side === "BRIDE"
+              ? side
+              : null,
       row: targetCell?.row ?? null,
       column: targetCell?.column ?? null,
       isVip,

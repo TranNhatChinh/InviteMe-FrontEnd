@@ -386,39 +386,88 @@ export function SeatingSuggestionsModal({
 
         {/* Details & Warnings of chosen strategy */}
         {currentSuggestion && (
-          <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-3 text-xs">
-            <div className="font-serif font-semibold text-foreground">
-              Chi tiết phân bổ của phương án{" "}
-              {selectedStrategy === "AFFINITY"
-                ? "Giữ nhóm"
-                : selectedStrategy === "COMPACT"
-                  ? "Ít bàn nhất"
-                  : "Đơn giản"}
-              :
-            </div>
-
-            {currentSuggestion.unassigned.length > 0 && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-200">
-                <div className="font-semibold">
-                  Còn {currentSuggestion.unassigned.length} nhóm chưa xếp được đủ chỗ:
+          <div className="space-y-3">
+            {/* Additional table shortage advice from backend */}
+            {currentSuggestion.suggestedAdditionalTables &&
+              currentSuggestion.suggestedAdditionalTables.length > 0 && (
+                <div className="rounded-2xl border border-blue-500/30 bg-blue-50/60 dark:bg-blue-950/20 p-4 space-y-2 text-xs">
+                  <div className="flex items-center gap-2 font-serif font-semibold text-blue-950 dark:text-blue-200">
+                    <Sparkles className="size-4 text-blue-600 dark:text-blue-400" />
+                    <span>Gợi ý kê thêm bàn cho sảnh tiệc:</span>
+                  </div>
+                  <ul className="space-y-1 text-muted-foreground list-disc list-inside">
+                    {currentSuggestion.suggestedAdditionalTables.map((s, idx) => (
+                      <li key={idx} className="text-foreground">
+                        {s.message}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className="mt-1 list-disc list-inside space-y-0.5 text-[11px]">
-                  {currentSuggestion.unassigned.slice(0, 5).map((u, i) => (
-                    <li key={i}>{u.message}</li>
-                  ))}
-                  {currentSuggestion.unassigned.length > 5 && (
-                    <li>...và {currentSuggestion.unassigned.length - 5} nhóm khác.</li>
-                  )}
-                </ul>
-              </div>
-            )}
+              )}
 
-            {currentSuggestion.warnings.length > 0 && (
-              <div className="text-[11px] text-muted-foreground">
-                <span className="font-semibold text-foreground">Cảnh báo: </span>
-                {currentSuggestion.warnings.join(" · ")}
+            <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-3 text-xs">
+              <div className="font-serif font-semibold text-foreground">
+                Chi tiết phân bổ của phương án{" "}
+                {selectedStrategy === "AFFINITY" || selectedStrategy === "KEEP_GROUPS"
+                  ? "Giữ nhóm"
+                  : selectedStrategy === "COMPACT" || selectedStrategy === "FEWEST_TABLES"
+                    ? "Ít bàn nhất"
+                    : "Đơn giản"}
+                :
               </div>
-            )}
+
+              {currentSuggestion.scoreBreakdown && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-b border-border/40 pb-3 text-[11px]">
+                  <div className="bg-card p-2 rounded-xl border border-border text-center shadow-xs">
+                    <div className="text-muted-foreground text-[10px]">Cùng nhóm ngồi chung</div>
+                    <div className="font-semibold text-foreground">
+                      {currentSuggestion.scoreBreakdown.sameGroupMatchesCount} cặp
+                    </div>
+                  </div>
+                  <div className="bg-card p-2 rounded-xl border border-border text-center shadow-xs">
+                    <div className="text-muted-foreground text-[10px]">Bậc trên ở bàn VIP</div>
+                    <div className="font-semibold text-emerald-600">
+                      {currentSuggestion.scoreBreakdown.eldersInVipCount} người
+                    </div>
+                  </div>
+                  <div className="bg-card p-2 rounded-xl border border-border text-center shadow-xs">
+                    <div className="text-muted-foreground text-[10px]">Số bàn sử dụng</div>
+                    <div className="font-semibold text-foreground">
+                      {currentSuggestion.scoreBreakdown.usedTablesCount} bàn
+                    </div>
+                  </div>
+                  <div className="bg-card p-2 rounded-xl border border-border text-center shadow-xs">
+                    <div className="text-muted-foreground text-[10px]">Nhóm bị tách</div>
+                    <div className="font-semibold text-amber-600">
+                      {currentSuggestion.scoreBreakdown.splitPartiesCount} nhóm
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {currentSuggestion.unassigned.length > 0 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-200">
+                  <div className="font-semibold">
+                    Còn {currentSuggestion.unassigned.length} nhóm chưa xếp được đủ chỗ:
+                  </div>
+                  <ul className="mt-1 list-disc list-inside space-y-0.5 text-[11px]">
+                    {currentSuggestion.unassigned.slice(0, 5).map((u, i) => (
+                      <li key={i}>{u.message}</li>
+                    ))}
+                    {currentSuggestion.unassigned.length > 5 && (
+                      <li>...và {currentSuggestion.unassigned.length - 5} nhóm khác.</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {currentSuggestion.warnings.length > 0 && (
+                <div className="text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-foreground">Cảnh báo: </span>
+                  {currentSuggestion.warnings.join(" · ")}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

@@ -47,6 +47,7 @@ const ACTION_LABELS: Record<string, string> = {
   START_EVENT: "Khai tiệc & Chốt mốc dự kiến",
   SWAP_UNATTENDED: "Điều chuyển ghế khách vắng",
   OPERATIONAL_MOVE: "Đổi chỗ trong ngày cưới",
+  RELEASE_DECLINED_SEATS: "Thu hồi ghế khách không tham dự",
   ADD_TABLE: "Thêm bàn tiệc mới",
   REMOVE_TABLE: "Thu hồi bàn tiệc",
 };
@@ -270,6 +271,24 @@ export function SeatingDayOfDrawer({
                   Tất cả khách ở bàn này đã có mặt hoặc chưa có ghế vắng.
                 </div>
               )}
+            </div>
+
+            {/* Release seats of declined guests */}
+            <div className="rounded-2xl border border-border p-4 space-y-3">
+              <span className="font-serif text-sm font-semibold text-foreground">
+                4. Thu hồi ghế khách không tham dự
+              </span>
+              <p className="text-muted-foreground leading-relaxed">
+                Tự động bỏ xếp chỗ những khách đã phản hồi từ chối tham dự để nhường chỗ trống cho người khác.
+              </p>
+              <Button
+                variant="outline"
+                disabled={saving}
+                onClick={() => onChange({ action: "RELEASE_DECLINED_SEATS" })}
+                className="w-full rounded-full py-4 font-semibold text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+              >
+                Thu hồi ghế khách từ chối
+              </Button>
             </div>
           </div>
         )}

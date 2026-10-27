@@ -25,6 +25,7 @@ export const planningTableSchema = z.object({
   groupId: z.string().nullable().optional(),
   number: z.number().int().optional(),
   side: z.enum(["GROOM", "BRIDE", "MUTUAL", "TRAY"]).nullable().optional(),
+  half: z.enum(["GROOM", "BRIDE"]).nullable().optional(),
   row: z.number().int().nullable().optional(),
   column: z.number().int().nullable().optional(),
   isVip: z.boolean().optional(),
@@ -83,7 +84,13 @@ export const seatingPlanSchema = z.object({
 });
 export type SeatingPlan = z.infer<typeof seatingPlanSchema>;
 
-export type SeatingStrategy = "AFFINITY" | "PARTY" | "COMPACT";
+export type SeatingStrategy =
+  | "KEEP_GROUPS"
+  | "FEWEST_TABLES"
+  | "SIMPLE"
+  | "AFFINITY"
+  | "PARTY"
+  | "COMPACT";
 export type SuggestionMode = "UNASSIGNED" | "REPLACE_ALL";
 
 export const unassignedPlanningGroupSchema = z.object({
@@ -103,8 +110,45 @@ export const planningTableReasonSchema = z.object({
 });
 export type PlanningTableReason = z.infer<typeof planningTableReasonSchema>;
 
+export const suggestedAdditionalTableSchema = z.object({
+  side: z.string(),
+  groupName: z.string().nullable().optional(),
+  neededTables: z.number(),
+  recommendedCapacity: z.number(),
+  reasonCode: z.string(),
+  message: z.string(),
+});
+export type SuggestedAdditionalTable = z.infer<typeof suggestedAdditionalTableSchema>;
+
+export const seatingScoreBreakdownSchema = z.object({
+  totalScore: z.number(),
+  seatedPlacesCount: z.number(),
+  sameGroupMatchesCount: z.number(),
+  eldersInVipCount: z.number(),
+  usedTablesCount: z.number(),
+  mixedGroupTablesCount: z.number(),
+  splitPartiesCount: z.number(),
+});
+export type SeatingScoreBreakdown = z.infer<typeof seatingScoreBreakdownSchema>;
+
+export const strategySuggestionDtoSchema = z.object({
+  strategy: z.string(),
+  strategyName: z.string(),
+  score: z.number(),
+  scoreBreakdown: seatingScoreBreakdownSchema.optional(),
+  assignments: z.array(planningAssignmentSchema),
+  unassigned: z.array(unassignedPlanningGroupSchema),
+  suggestedAdditionalTables: z.array(suggestedAdditionalTableSchema).optional(),
+  warnings: z.array(z.string()),
+  reasons: z.array(planningTableReasonSchema),
+  changedPlaceCount: z.number(),
+  preservedCount: z.number(),
+  usedTableCount: z.number(),
+});
+export type StrategySuggestionDto = z.infer<typeof strategySuggestionDtoSchema>;
+
 export const seatingSuggestionSchema = z.object({
-  strategy: z.enum(["AFFINITY", "PARTY", "COMPACT"]),
+  strategy: z.string(),
   mode: z.enum(["UNASSIGNED", "REPLACE_ALL"]),
   sourceVersion: z.number().int(),
   sourceFingerprint: z.string(),
@@ -115,6 +159,12 @@ export const seatingSuggestionSchema = z.object({
   reasons: z.array(planningTableReasonSchema),
   changedPlaceCount: z.number(),
   preservedCount: z.number(),
+  score: z.number().optional(),
+  scoreBreakdown: seatingScoreBreakdownSchema.optional(),
+  suggestedAdditionalTables: z.array(suggestedAdditionalTableSchema).optional(),
+  keepGroups: strategySuggestionDtoSchema.optional(),
+  fewestTables: strategySuggestionDtoSchema.optional(),
+  simple: strategySuggestionDtoSchema.optional(),
 });
 export type SeatingSuggestion = z.infer<typeof seatingSuggestionSchema>;
 
@@ -144,6 +194,7 @@ export const seatingSummaryTableSchema = z.object({
   name: z.string(),
   number: z.number(),
   side: z.string().nullable().optional(),
+  half: z.string().nullable().optional(),
   row: z.number().nullable().optional(),
   column: z.number().nullable().optional(),
   isVip: z.boolean(),
@@ -172,6 +223,7 @@ export type SeatingChange =
       capacity: number;
       groupId?: string | null;
       side?: "GROOM" | "BRIDE" | "MUTUAL" | null;
+      half?: "GROOM" | "BRIDE" | null;
       row?: number | null;
       column?: number | null;
       isVip?: boolean;
@@ -191,6 +243,7 @@ export type SeatingChange =
       action: "PLACE_TABLE";
       tableId: string;
       side: "GROOM" | "BRIDE" | "MUTUAL";
+      half?: "GROOM" | "BRIDE" | null;
       row: number;
       column: number;
     }
@@ -198,6 +251,7 @@ export type SeatingChange =
       action: "MOVE_TABLE";
       tableId: string;
       side?: "GROOM" | "BRIDE" | "MUTUAL" | "TRAY" | null;
+      half?: "GROOM" | "BRIDE" | null;
       row?: number | null;
       column?: number | null;
     }
@@ -226,7 +280,8 @@ export type SeatingChange =
     }
   | {
       action: "APPLY_SUGGESTION";
-      strategy: SeatingStrategy;
+      strategy?: SeatingStrategy;
+      plan?: string;
       mode: SuggestionMode;
       sourceFingerprint: string;
       confirmReplace: boolean;
@@ -236,8 +291,10 @@ export type SeatingChange =
   | { action: "START_EVENT" }
   | {
       action: "OPERATIONAL_MOVE";
-      placeId: string;
-      tableId: string;
+      placeId?: string;
+      placeIds?: string[];
+      tableId?: string | null;
+      seatNumber?: number;
       extraSeats?: number;
       reason?: string;
     }
@@ -326,7 +383,7 @@ export function suggestSeatingPlan(
 ) {
   return api.request(`/weddings/${encodeURIComponent(id)}/guest-planning/seating-suggestions`, {
     method: "POST",
-    body: { strategy, mode },
+    body: { strategy, mode, plan: strategy },
     signal,
     schema: seatingSuggestionSchema,
   });
@@ -341,11 +398,12 @@ export function applySeatingSuggestion(
     mode: SuggestionMode;
     sourceFingerprint: string;
     confirmReplace?: boolean;
+    plan?: string;
   },
 ) {
   return api.request(`/weddings/${encodeURIComponent(id)}/guest-planning/seating-suggestions/apply`, {
     method: "POST",
-    body: input,
+    body: { ...input, plan: input.strategy },
     schema: seatingPlanSchema,
   });
 }

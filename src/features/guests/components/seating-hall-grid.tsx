@@ -37,12 +37,21 @@ export function SeatingHallGrid({
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
-  // Map tables by coordinate: `${side}:${row}:${col}`
+  // Map tables by coordinate: `${half}:${row}:${col}`
   const tableMap = useMemo(() => {
     const map = new Map<string, PlanningTable>();
     for (const table of tables) {
-      if (table.row !== null && table.row !== undefined && table.column !== null && table.column !== undefined && table.side) {
-        map.set(`${table.side}:${table.row}:${table.column}`, table);
+      const half =
+        table.half ??
+        (table.side === "GROOM" || table.side === "BRIDE" ? table.side : null);
+      if (
+        table.row !== null &&
+        table.row !== undefined &&
+        table.column !== null &&
+        table.column !== undefined &&
+        half
+      ) {
+        map.set(`${half}:${table.row}:${table.column}`, table);
       }
     }
     return map;

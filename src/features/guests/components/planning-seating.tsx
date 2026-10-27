@@ -288,12 +288,15 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     if (!plan) return { placedTables: placed, unplacedTables: unplaced };
 
     for (const table of plan.tables) {
+      const half =
+        table.half ??
+        (table.side === "GROOM" || table.side === "BRIDE" ? table.side : null);
       if (
         table.row !== null &&
         table.row !== undefined &&
         table.column !== null &&
         table.column !== undefined &&
-        table.side &&
+        half &&
         table.side !== "TRAY"
       ) {
         placed.push(table);

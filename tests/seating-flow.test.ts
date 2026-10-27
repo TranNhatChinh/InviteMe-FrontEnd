@@ -53,7 +53,8 @@ test("planningTableSchema validates both full table details and legacy mock form
     name: "Bàn VIP 01",
     capacity: 10,
     number: 1,
-    side: "GROOM",
+    side: "MUTUAL",
+    half: "GROOM",
     row: 1,
     column: 1,
     isVip: true,
@@ -62,7 +63,8 @@ test("planningTableSchema validates both full table details and legacy mock form
 
   assert.equal(fullTable.id, "tbl-1");
   assert.equal(fullTable.number, 1);
-  assert.equal(fullTable.side, "GROOM");
+  assert.equal(fullTable.side, "MUTUAL");
+  assert.equal(fullTable.half, "GROOM");
   assert.equal(fullTable.row, 1);
   assert.equal(fullTable.column, 1);
   assert.equal(fullTable.isVip, true);
@@ -121,10 +123,32 @@ test("seatingSuggestionSchema parses strategy preview metrics", () => {
     reasons: [],
     changedPlaceCount: 2,
     preservedCount: 15,
+    score: 850,
+    scoreBreakdown: {
+      totalScore: 850,
+      seatedPlacesCount: 20,
+      sameGroupMatchesCount: 15,
+      eldersInVipCount: 4,
+      usedTablesCount: 3,
+      mixedGroupTablesCount: 0,
+      splitPartiesCount: 0,
+    },
+    suggestedAdditionalTables: [
+      {
+        side: "GROOM",
+        groupName: "Họ Hàng Nội",
+        neededTables: 1,
+        recommendedCapacity: 10,
+        reasonCode: "GROUP_TABLES_FULL",
+        message: "Cần thêm 1 bàn 10 chỗ cho nhà trai (nhóm Họ Hàng Nội).",
+      },
+    ],
   });
 
   assert.equal(suggestion.strategy, "AFFINITY");
   assert.equal(suggestion.preservedCount, 15);
+  assert.equal(suggestion.score, 850);
+  assert.equal(suggestion.suggestedAdditionalTables?.length, 1);
   assert.equal(suggestion.assignments.length, 2);
   assert.equal(suggestion.unassigned.length, 1);
 });
