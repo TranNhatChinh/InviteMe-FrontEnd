@@ -5,6 +5,7 @@ import { Search, UserCheck, Users, X } from "lucide-react";
 import { Input } from "@/shared/ui/input";
 import type { PlanningGuest } from "../api/planning.api";
 import type { PlanningSeatingPlace } from "../api/planning-seating.api";
+import { useSeatingDragLock } from "./seating-drag-presence";
 
 interface SeatingGuestTrayProps {
   guests: PlanningGuest[];
@@ -13,6 +14,100 @@ interface SeatingGuestTrayProps {
   onSelectParty: (guestId: string, placeIds: string[]) => void;
   selectedGuestId?: string | null;
   groups?: { id: string; name: string }[];
+}
+
+function SeatingGuestPartyItem({
+  guest,
+  unseatedPlaces,
+  isSelected,
+  onSelectParty,
+}: {
+  guest: PlanningGuest;
+  unseatedPlaces: PlanningSeatingPlace[];
+  isSelected: boolean;
+  onSelectParty: (guestId: string, placeIds: string[]) => void;
+}) {
+  const placeIds = useMemo(() => unseatedPlaces.map((p) => p.id), [unseatedPlaces]);
+  const lock = useSeatingDragLock(placeIds);
+  const isLockedByOther = Boolean(lock);
+
+  return (
+    <div
+      onClick={() => {
+        if (!isLockedByOther) {
+          onSelectParty(guest.id, placeIds);
+        }
+      }}
+      className={`group relative flex flex-col justify-between rounded-xl border p-3 transition-all ${
+        isLockedByOther
+          ? "border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/20 opacity-70 cursor-not-allowed"
+          : isSelected
+            ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary cursor-pointer"
+            : "border-border/80 bg-card hover:border-primary/40 hover:bg-muted/30 cursor-pointer"
+      }`}
+      role="button"
+      aria-disabled={isLockedByOther}
+      tabIndex={isLockedByOther ? -1 : 0}
+      onKeyDown={(e) => {
+        if (!isLockedByOther && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onSelectParty(guest.id, placeIds);
+        }
+      }}
+    >
+      <div className="flex items-start justify-between">
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
+              {guest.honorific ? `${guest.honorific} ` : ""}
+              {guest.recipientName}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <span
+              className={`font-semibold ${
+                guest.side === "GROOM"
+                  ? "text-blue-600 dark:text-blue-400"
+                  : guest.side === "BRIDE"
+                    ? "text-rose-600 dark:text-rose-400"
+                    : "text-amber-600 dark:text-amber-400"
+              }`}
+            >
+              {guest.side === "GROOM"
+                ? "Nhà trai"
+                : guest.side === "BRIDE"
+                  ? "Nhà gái"
+                  : "Khách chung"}
+            </span>
+            {guest.group && <span>· {guest.group.name}</span>}
+          </div>
+
+          {/* Locked by another co-host badge */}
+          {lock && (
+            <div className="flex items-center gap-1.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full mt-1.5 w-fit">
+              <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+              <span>Đang được xử lý bởi {lock.displayName}</span>
+            </div>
+          )}
+        </div>
+
+        <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
+          {unseatedPlaces.length} chỗ
+        </span>
+      </div>
+
+      {/* Sub-members preview if more than 1 place */}
+      {unseatedPlaces.length > 1 && (
+        <div className="mt-2 text-[10px] text-muted-foreground border-t border-border/40 pt-1.5">
+          Gồm:{" "}
+          {unseatedPlaces
+            .map((p, idx) => p.person?.fullName || `Khách ${idx + 1}`)
+            .join(", ")}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SeatingGuestTray({
@@ -207,71 +302,15 @@ export function SeatingGuestTray({
             <p>Không có khách nào phù hợp bộ lọc.</p>
           </div>
         ) : (
-          filteredParties.map(({ guest, unseatedPlaces }) => {
-            const isSelected = selectedGuestId === guest.id;
-            const placeIds = unseatedPlaces.map((p) => p.id);
-
-            return (
-              <div
-                key={guest.id}
-                onClick={() => onSelectParty(guest.id, placeIds)}
-                className={`group relative flex flex-col justify-between rounded-xl border p-3 transition-all cursor-pointer ${
-                  isSelected
-                    ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary"
-                    : "border-border/80 bg-card hover:border-primary/40 hover:bg-muted/30"
-                }`}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onSelectParty(guest.id, placeIds);
-                  }
-                }}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {guest.honorific ? `${guest.honorific} ` : ""}
-                      {guest.recipientName}
-                    </span>
-                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                      <span
-                        className={`font-semibold ${
-                          guest.side === "GROOM"
-                            ? "text-blue-600 dark:text-blue-400"
-                            : guest.side === "BRIDE"
-                              ? "text-rose-600 dark:text-rose-400"
-                              : "text-amber-600 dark:text-amber-400"
-                        }`}
-                      >
-                        {guest.side === "GROOM"
-                          ? "Nhà trai"
-                          : guest.side === "BRIDE"
-                            ? "Nhà gái"
-                            : "Khách chung"}
-                      </span>
-                      {guest.group && <span>· {guest.group.name}</span>}
-                    </div>
-                  </div>
-
-                  <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
-                    {unseatedPlaces.length} chỗ
-                  </span>
-                </div>
-
-                {/* Sub-members preview if more than 1 place */}
-                {unseatedPlaces.length > 1 && (
-                  <div className="mt-2 text-[10px] text-muted-foreground border-t border-border/40 pt-1.5">
-                    Gồm:{" "}
-                    {unseatedPlaces
-                      .map((p, idx) => p.person?.fullName || `Khách ${idx + 1}`)
-                      .join(", ")}
-                  </div>
-                )}
-              </div>
-            );
-          })
+          filteredParties.map(({ guest, unseatedPlaces }) => (
+            <SeatingGuestPartyItem
+              key={guest.id}
+              guest={guest}
+              unseatedPlaces={unseatedPlaces}
+              isSelected={selectedGuestId === guest.id}
+              onSelectParty={onSelectParty}
+            />
+          ))
         )}
       </div>
     </div>

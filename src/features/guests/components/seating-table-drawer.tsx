@@ -11,8 +11,10 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { cn } from "@/shared/lib/utils";
 import { trapDialogFocus } from "@/shared/lib/dialog-focus";
-import type { SeatingPlan } from "../api/planning-seating.api";
+import type { SeatingPlan, PlanningSeatingPlace } from "../api/planning-seating.api";
+import type { PlanningGuest } from "../api/planning.api";
 import { queuePlaceName } from "./seating-queue";
+import { useSeatingDragLock } from "./seating-drag-presence";
 
 const attendanceLabels: Record<string, string> = {
   ATTENDING: "Đã xác nhận",
@@ -28,6 +30,149 @@ const groupColors = [
   "bg-indigo-300",
   "bg-orange-300",
 ];
+
+function TableSeatItem({
+  seatNumber,
+  place,
+  guest,
+  personName,
+  placeholder,
+  status,
+  household,
+  adjacent,
+  color,
+  saving,
+  editable,
+  onView,
+  onAssign,
+  onMove,
+  onUnassign,
+}: {
+  seatNumber: number;
+  place?: PlanningSeatingPlace;
+  guest?: PlanningGuest;
+  personName: string;
+  placeholder: boolean;
+  status: string;
+  household?: string;
+  adjacent: boolean;
+  color?: string;
+  saving: boolean;
+  editable: boolean;
+  onView: (placeId: string, seatNumber: number) => void;
+  onAssign: (seatNumber: number) => void;
+  onMove: (placeId: string) => void;
+  onUnassign: (placeId: string) => void;
+}) {
+  const assigned = Boolean(place && guest);
+  const lock = useSeatingDragLock(place ? [place.id] : []);
+  const isLocked = Boolean(lock);
+
+  return (
+    <li
+      data-seat-number={seatNumber}
+      className={cn(
+        "relative flex min-h-16 items-center rounded-xl border border-foreground/10 bg-white transition-colors hover:bg-foreground/[0.025]",
+        !assigned && "border-dashed",
+        isLocked && "border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20",
+      )}
+    >
+      {adjacent && (
+        <span
+          aria-hidden="true"
+          className={cn("absolute bottom-3 left-0 top-3 w-0.5 rounded-full", color)}
+        />
+      )}
+      <button
+        type="button"
+        className="flex min-h-16 min-w-0 flex-1 items-center gap-2 rounded-xl px-2.5 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+        aria-label={`Ghế ${seatNumber}, ${personName}${status ? `, ${status.toLocaleLowerCase("vi")}` : ""}`}
+        onClick={() => {
+          if (isLocked) return;
+          if (assigned && place) onView(place.id, seatNumber);
+          else onAssign(seatNumber);
+        }}
+        disabled={isLocked || (!assigned && (!editable || saving))}
+      >
+        <span
+          className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/5 text-[10px] tabular-nums text-muted-foreground"
+          aria-hidden="true"
+        >
+          {seatNumber}
+        </span>
+        <Avatar name={personName} placeholder={placeholder || !assigned} />
+        <span className="min-w-0 flex-1">
+          <span
+            title={personName}
+            className={cn(
+              "block truncate text-xs font-semibold",
+              placeholder && "font-normal italic text-muted-foreground",
+              !assigned && "font-normal text-muted-foreground",
+            )}
+          >
+            {personName}
+          </span>
+          {household && (
+            <span
+              title={household}
+              className="mt-1 block truncate text-[10px] text-muted-foreground"
+            >
+              {household}
+            </span>
+          )}
+          {lock && (
+            <span className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+              <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Đang được xử lý bởi {lock.displayName}
+            </span>
+          )}
+        </span>
+        {assigned && (
+          <Chip
+            tone={place?.person?.attendanceStatus === "ATTENDING" ? "success" : "neutral"}
+            className="px-1.5 text-[9px]"
+          >
+            {status}
+          </Chip>
+        )}
+      </button>
+      {assigned && place ? (
+        <ActionMenu
+          label={`Thao tác ghế ${seatNumber}`}
+          disabled={saving || isLocked}
+          items={[
+            { label: "Xem thông tin", onSelect: () => onView(place.id, seatNumber) },
+            {
+              label: "Chuyển chỗ",
+              onSelect: () => onMove(place.id),
+              disabled: !editable || isLocked,
+            },
+            {
+              label: "Bỏ xếp",
+              onSelect: () => onUnassign(place.id),
+              disabled: !editable || isLocked,
+              destructive: true,
+            },
+          ]}
+        />
+      ) : (
+        editable && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mr-1 min-h-11 shrink-0 gap-1 px-2 text-[10px] text-muted-foreground hover:bg-foreground/5"
+            disabled={saving}
+            onClick={() => onAssign(seatNumber)}
+          >
+            <Plus aria-hidden="true" />
+            Xếp vào đây
+          </Button>
+        )
+      )}
+    </li>
+  );
+}
 
 export function SeatingTableDrawer({
   table,
@@ -177,98 +322,24 @@ export function SeatingTableDrawer({
                 ]
               : undefined;
             return (
-              <li
+              <TableSeatItem
                 key={seatNumber}
-                data-seat-number={seatNumber}
-                className={cn(
-                  "relative flex min-h-16 items-center rounded-xl border border-foreground/10 bg-white transition-colors hover:bg-foreground/[0.025]",
-                  !assigned && "border-dashed",
-                )}
-              >
-                {adjacent && (
-                  <span
-                    aria-hidden="true"
-                    className={cn("absolute bottom-3 left-0 top-3 w-0.5 rounded-full", color)}
-                  />
-                )}
-                <button
-                  type="button"
-                  className="flex min-h-16 min-w-0 flex-1 items-center gap-2 rounded-xl px-2.5 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-                  aria-label={`Ghế ${seatNumber}, ${personName}${status ? `, ${status.toLocaleLowerCase("vi")}` : ""}`}
-                  onClick={() => (assigned ? onView(place.id, seatNumber) : onAssign(seatNumber))}
-                  disabled={!assigned && (!editable || saving)}
-                >
-                  <span
-                    className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/5 text-[10px] tabular-nums text-muted-foreground"
-                    aria-hidden="true"
-                  >
-                    {seatNumber}
-                  </span>
-                  <Avatar name={personName} placeholder={placeholder || !assigned} />
-                  <span className="min-w-0 flex-1">
-                    <span
-                      title={personName}
-                      className={cn(
-                        "block truncate text-xs font-semibold",
-                        placeholder && "font-normal italic text-muted-foreground",
-                        !assigned && "font-normal text-muted-foreground",
-                      )}
-                    >
-                      {personName}
-                    </span>
-                    {household && (
-                      <span
-                        title={household}
-                        className="mt-1 block truncate text-[10px] text-muted-foreground"
-                      >
-                        {household}
-                      </span>
-                    )}
-                  </span>
-                  {assigned && (
-                    <Chip
-                      tone={place.person?.attendanceStatus === "ATTENDING" ? "success" : "neutral"}
-                      className="px-1.5 text-[9px]"
-                    >
-                      {status}
-                    </Chip>
-                  )}
-                </button>
-                {assigned ? (
-                  <ActionMenu
-                    label={`Thao tác ghế ${seatNumber}`}
-                    disabled={saving}
-                    items={[
-                      { label: "Xem thông tin", onSelect: () => onView(place.id, seatNumber) },
-                      {
-                        label: "Chuyển chỗ",
-                        onSelect: () => onMove(place.id),
-                        disabled: !editable,
-                      },
-                      {
-                        label: "Bỏ xếp",
-                        onSelect: () => onUnassign(place.id),
-                        disabled: !editable,
-                        destructive: true,
-                      },
-                    ]}
-                  />
-                ) : (
-                  editable && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="mr-1 min-h-11 shrink-0 gap-1 px-2 text-[10px] text-muted-foreground hover:bg-foreground/5"
-                      disabled={saving}
-                      onClick={() => onAssign(seatNumber)}
-                    >
-                      <Plus aria-hidden="true" />
-                      Xếp vào đây
-                    </Button>
-                  )
-                )}
-              </li>
+                seatNumber={seatNumber}
+                place={place}
+                guest={guest}
+                personName={personName}
+                placeholder={placeholder}
+                status={status}
+                household={household}
+                adjacent={adjacent}
+                color={color}
+                saving={saving}
+                editable={editable}
+                onView={onView}
+                onAssign={onAssign}
+                onMove={onMove}
+                onUnassign={onUnassign}
+              />
             );
           })}
         </ol>

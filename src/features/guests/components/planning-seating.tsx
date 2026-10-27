@@ -328,14 +328,18 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
 
     try {
       const source = planQuery.data;
-      const latest =
+      const latest: SeatingPlan =
         input.action === "MOVE_PLACES"
           ? await collaboration.run(input.placeIds, (token) =>
               moveSeatingWithRetry(api, weddingId, source, input, token, () =>
                 realtime.invokeSeating("RenewSeatingDrag", weddingId, token),
               ),
             )
-          : await changeSeatingPlan(api, weddingId, source.version, input);
+          : input.action === "MOVE_PARTY" && input.placeIds && input.placeIds.length > 0
+            ? await collaboration.run(input.placeIds, () =>
+                changeSeatingPlan(api, weddingId, source.version, input),
+              )
+            : await changeSeatingPlan(api, weddingId, source.version, input);
 
       cache.setQueryData<SeatingPlan>(key, (current) =>
         current && current.version > latest.version ? current : latest,
@@ -513,14 +517,19 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           const ids = (active.data.current?.ids as string[] | undefined) ?? [];
           setDragIds(ids);
           setDragTarget(null);
+          if (ids.length > 0) {
+            collaboration.begin(ids);
+          }
         }}
         onDragOver={({ over }) => {
           const target = (over?.data.current as DropPosition | undefined) ?? null;
           setDragTarget(target);
+          collaboration.hover(target);
         }}
         onDragCancel={() => {
           setDragIds([]);
           setDragTarget(null);
+          collaboration.cancel();
         }}
         onDragEnd={({ active, over }) => {
           setDragIds([]);
@@ -719,7 +728,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setSelectedParty(null)}
+                onClick={() => {
+                  setSelectedParty(null);
+                  collaboration.cancel();
+                }}
                 className="h-7 text-xs rounded-full"
               >
                 Hủy chọn
@@ -767,7 +779,15 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 selectedGuestId={selectedParty?.guestId}
                 groups={groups}
                 onSelectParty={(guestId, placeIds) => {
-                  setSelectedParty({ guestId, placeIds });
+                  if (selectedParty?.guestId === guestId) {
+                    setSelectedParty(null);
+                    collaboration.cancel();
+                  } else {
+                    setSelectedParty({ guestId, placeIds });
+                    if (placeIds.length > 0 && realtime.getStatus() === "connected") {
+                      collaboration.begin(placeIds);
+                    }
+                  }
                 }}
               />
             </div>
