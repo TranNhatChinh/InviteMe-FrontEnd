@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { templateCatalog } from "../templates/catalog";
+import type { parseStudioDocument } from "../schemas/document";
 import { imageShapeStyle } from "./items";
 import { resolveStudioText } from "./wording-text";
 export function TemplateThumbnail({
@@ -9,7 +9,7 @@ export function TemplateThumbnail({
   height = 230,
   fluid = false,
 }: {
-  document: (typeof templateCatalog)[number]["document"];
+  document: ReturnType<typeof parseStudioDocument>;
   scale?: number;
   height?: number;
   fluid?: boolean;
