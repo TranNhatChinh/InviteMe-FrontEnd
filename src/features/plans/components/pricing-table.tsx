@@ -154,9 +154,17 @@ const FAQS = [
 
 export interface PricingTableProps {
   embedded?: boolean;
+  /** Where "start" buttons go; the app passes the workspace for a signed-in user. */
+  startHref?: string;
+  /** Where a paid plan button goes; the app sends a signed-in user to that wedding's plan page. */
+  planHref?: (code: string) => string;
 }
 
-export function PricingTable({ embedded = false }: PricingTableProps) {
+export function PricingTable({
+  embedded = false,
+  startHref = "/register",
+  planHref = (code) => `/register?plan=${code}`,
+}: PricingTableProps) {
   const { api } = useRuntime();
   const [showComparison, setShowComparison] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -401,7 +409,7 @@ export function PricingTable({ embedded = false }: PricingTableProps) {
               <div className="pt-2">
                 {plan.code === "FREE" ? (
                   <Button asChild variant="outline" className="w-full rounded-full py-5 text-sm font-medium">
-                    <Link href="/register">Bắt đầu miễn phí</Link>
+                    <Link href={startHref}>{startHref === "/register" ? "Bắt đầu miễn phí" : "Vào không gian làm việc"}</Link>
                   </Button>
                 ) : (
                   <Button
@@ -413,7 +421,7 @@ export function PricingTable({ embedded = false }: PricingTableProps) {
                         : "bg-amber-600 text-white hover:bg-amber-700 shadow-sm"
                     }`}
                   >
-                    <Link href={`/register?plan=${plan.code}`}>
+                    <Link href={planHref(plan.code)}>
                       <span>Chọn gói {plan.name}</span>
                       <ArrowRight className="size-4" />
                     </Link>
@@ -539,7 +547,7 @@ export function PricingTable({ embedded = false }: PricingTableProps) {
             </p>
             <div className="pt-2 flex flex-wrap items-center justify-center gap-4">
               <Button asChild className="rounded-full px-8 h-12 font-semibold shadow-md">
-                <Link href="/register">
+                <Link href={startHref}>
                   Bắt đầu tạo thiệp ngay <ArrowRight className="size-4 ml-1" />
                 </Link>
               </Button>

@@ -57,5 +57,73 @@
   "transactionCount": "{{count}} transactions",
   "page": "Page {{page}}",
   "previous": "Previous",
-  "next": "Next"
+  "next": "Next",
+  "desk": {
+    "title": "Gift desk",
+    "description": "Record envelopes, presents and transfers handed over at the desk.",
+    "summary": "Recorded at the desk: {{cash}} envelopes · {{items}} presents · {{transfers}} transfers",
+    "formTitle": "Record a gift",
+    "method": "Given as",
+    "methods": {
+      "CASH": "Envelope",
+      "ITEM": "Present",
+      "TRANSFER": "Transfer",
+      "QR": "Online QR"
+    },
+    "giver": "Given by",
+    "giverSearchHint": "Type at least 2 letters to search the guest list; otherwise just write the name.",
+    "changeGiver": "Change",
+    "sides": {
+      "GROOM": "Groom’s side",
+      "BRIDE": "Bride’s side",
+      "MUTUAL": "Both",
+      "UNSPECIFIED": ""
+    },
+    "amount": "Amount",
+    "amountOptional": "Amount (if the guest says)",
+    "sealedHint": "Leave empty for a sealed envelope; the couple enters the amount when they open it.",
+    "transferHint": "The amount on the guest’s transfer screen.",
+    "itemName": "Present",
+    "quantity": "Quantity",
+    "itemValue": "Estimated value (optional)",
+    "proofOptional": "Transfer screenshot (optional)",
+    "proofHint": "A photo of the guest’s phone screen; the couple checks it against their account.",
+    "submit": {
+      "CASH": "Record envelope",
+      "ITEM": "Record present",
+      "TRANSFER": "Record transfer"
+    },
+    "saving": "Recording…",
+    "recorded": {
+      "CASH": "Envelope from {{name}} recorded.",
+      "ITEM": "Present from {{name}} recorded.",
+      "TRANSFER": "Transfer from {{name}} recorded, waiting for the couple to confirm."
+    },
+    "listTitle": "Recorded at the desk",
+    "loading": "Loading…",
+    "empty": "Nothing recorded at the desk yet. The first gift will show here.",
+    "retry": "Retry",
+    "sealed": "Sealed envelope",
+    "status": {
+      "PENDING": "Waiting",
+      "CLAIMED": "Waiting",
+      "PAID": "Received",
+      "CANCELLED": "Cancelled",
+      "EXPIRED": "Expired"
+    },
+    "cancel": "Cancel record",
+    "keep": "Keep",
+    "cancelTitle": "Cancel this gift?",
+    "cancelDescription": "The record from {{name}} becomes Cancelled and leaves the gift book.",
+    "errors": {
+      "giver": "Pick a guest or write the giver’s name.",
+      "itemName": "Write the present.",
+      "quantity": "Quantity from 1 to 1,000.",
+      "amount": "Amount from {{min}} to {{max}}.",
+      "proofUpload": "Couldn’t upload the photo; take it again or choose another.",
+      "failed": "Couldn’t record it, please try again.",
+      "network": "Couldn’t reach the server. Check the connection and try again.",
+      "load": "Couldn’t load what was recorded."
+    }
+  }
 }

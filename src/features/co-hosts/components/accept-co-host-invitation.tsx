@@ -10,7 +10,11 @@ import { useRuntime } from "@/core/config/runtime";
 import { LoadingState } from "@/shared/feedback/loading-state";
 import { Button } from "@/shared/ui/button";
 import { Chip } from "@/shared/ui/chip";
-import { acceptCoHostInvitation, previewCoHostInvitation } from "../api/co-host.api";
+import {
+  acceptCoHostInvitation,
+  isWeddingWideOnly,
+  previewCoHostInvitation,
+} from "../api/co-host.api";
 import { useLocale } from "@/i18n/language-context";
 import { formatDate } from "@/i18n/format";
 
@@ -113,7 +117,7 @@ export function AcceptCoHostInvitation() {
 
   if (accepted) {
     return (
-      <div className="mx-auto max-w-xl space-y-6 rounded-3xl border bg-card p-7 text-center shadow-sm md:p-10">
+      <div className="mx-auto max-w-xl space-y-6 rounded-3xl border bg-card p-7 text-center md:p-10">
         <BadgeCheck className="mx-auto size-12 text-emerald-600" aria-hidden="true" />
         <div className="space-y-2">
           <h1 className="font-display text-3xl">{t("accept.successTitle")}</h1>
@@ -187,11 +191,11 @@ export function AcceptCoHostInvitation() {
   if (!preview.data) return <LoadingState label={t("accept.loadingDetails")} />;
 
   const hasInvalidCheckInScope = preview.data.grants.some(
-    (grant) => grant.permission === "CHECKIN_MANAGE" && !grant.weddingWide,
+    (grant) => isWeddingWideOnly(grant.permission) && !grant.weddingWide,
   );
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 rounded-3xl border bg-card p-6 shadow-sm md:p-9">
+    <div className="mx-auto max-w-2xl space-y-6 rounded-3xl border bg-card p-6 md:p-9">
       <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
         <HeartHandshake className="size-7" aria-hidden="true" />
       </div>
@@ -218,7 +222,7 @@ export function AcceptCoHostInvitation() {
               >
                 <span>{t(`permissions.${grant.permission}`)}</span>
                 <Chip>
-                  {grant.permission === "CHECKIN_MANAGE" && !grant.weddingWide
+                  {isWeddingWideOnly(grant.permission) && !grant.weddingWide
                     ? t("accept.unsupportedGroupScope")
                     : grant.weddingWide
                       ? t("wholeWedding")
@@ -231,7 +235,7 @@ export function AcceptCoHostInvitation() {
           <p className="text-sm text-muted-foreground">{t("accept.noPermissions")}</p>
         )}
         {preview.data.grants.some(
-          (grant) => grant.permission === "CHECKIN_MANAGE" && !grant.weddingWide,
+          (grant) => isWeddingWideOnly(grant.permission) && !grant.weddingWide,
         ) && (
           <p role="alert" className="text-sm text-destructive">
             {t("accept.legacyCheckInScope")}
@@ -275,7 +279,7 @@ export function AcceptCoHostInvitation() {
 
 function InviteCard({ children }: { children: ReactNode }) {
   return (
-    <section className="mx-auto max-w-xl space-y-5 rounded-3xl border bg-card p-7 shadow-sm md:p-10">
+    <section className="mx-auto max-w-xl space-y-5 rounded-3xl border bg-card p-7 md:p-10">
       {children}
     </section>
   );

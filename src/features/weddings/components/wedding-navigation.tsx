@@ -111,6 +111,13 @@ const sections: WeddingSection[] = [
     icon: "gifts",
   },
   {
+    slug: "gift-desk",
+    label: "Quầy ghi quà",
+    permission: "GIFT_RECORD",
+    group: "Tiệc cưới",
+    icon: "gifts",
+  },
+  {
     slug: "thank-you",
     label: "Thư cảm ơn",
     permission: "GUEST_VIEW",

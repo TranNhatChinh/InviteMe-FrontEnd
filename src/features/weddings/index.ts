@@ -23,3 +23,4 @@ export {
   mediaUrl,
   uploadWeddingMedia,
 } from "./api/website.api";
+export { getWeddings } from "./api/wedding.api";

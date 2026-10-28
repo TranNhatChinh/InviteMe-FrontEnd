@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MailPlus, RefreshCw, UsersRound } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { z } from "zod";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
@@ -22,6 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   coHostKeys,
   createCoHostInvitation,
+  isWeddingWideOnly,
   listCoHostInvitations,
   listCoHosts,
   listPlanningGroups,
@@ -32,9 +33,9 @@ import {
   type PermissionScope,
 } from "../api/co-host.api";
 import { ScopeEditor } from "./scope-editor";
-import { PERMISSION_LABELS } from "../utils/scopes";
+import { PERMISSION_AREAS, PERMISSION_LABELS } from "../utils/scopes";
 import { useLocale } from "@/i18n/language-context";
-import { formatDate } from "@/i18n/format";
+import { formatDate, formatNumber } from "@/i18n/format";
 
 type InviteInput = { email: string };
 
@@ -57,7 +58,7 @@ function scopeDescription(
   names: Map<string, string>,
   t: (key: string) => string,
 ) {
-  if (grant.permission === "CHECKIN_MANAGE" && !grant.weddingWide) {
+  if (isWeddingWideOnly(grant.permission) && !grant.weddingWide) {
     return t("legacyScope");
   }
   return grant.weddingWide
@@ -172,36 +173,136 @@ export function CoHostManagement({ weddingId }: { weddingId: string }) {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader title={t("title")} description={t("description")} />
+      <p className="text-sm text-muted-foreground">
+        {t("summaryLine", {
+          members: formatNumber(activeMembers.length, language),
+          invites: formatNumber(openInvitations.length, language),
+        })}
+      </p>
       {notice && (
-        <p
-          role="status"
-          className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"
-        >
+        <p role="status" className="rounded-lg bg-success/10 px-4 py-3 text-sm text-foreground">
           {notice}
         </p>
       )}
       {actionError && (
-        <p
-          role="alert"
-          className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive"
-        >
+        <p role="alert" className="rounded-lg bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {actionError}
         </p>
       )}
 
-      <section className="space-y-5 rounded-2xl border bg-card p-5 md:p-6">
-        <div className="flex items-start gap-3">
-          <span className="rounded-xl bg-primary/10 p-2 text-primary">
-            <MailPlus aria-hidden="true" />
-          </span>
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
+        <div className="space-y-8">
+          <section aria-labelledby="co-host-members" className="space-y-3">
+            <h2 id="co-host-members" className="text-lg font-semibold">
+              {t("activeMembers")}{" "}
+              <span className="font-normal text-muted-foreground">
+                {formatNumber(activeMembers.length, language)}
+              </span>
+            </h2>
+            {activeMembers.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-foreground/15 px-4 py-6 text-sm text-muted-foreground">
+                {t("noCoHostsDescription")}
+              </p>
+            ) : (
+              <ul className="divide-y divide-foreground/10 rounded-xl border border-foreground/10 bg-card">
+                {activeMembers.map((member) => (
+                  <CoHostRow
+                    key={member.userId}
+                    member={member}
+                    groups={groups.data}
+                    editing={editing === member.userId}
+                    busy={saveScopes.isPending || revokeMember.isPending}
+                    onEdit={() => setEditing(editing === member.userId ? null : member.userId)}
+                    onSave={(grants) => saveScopes.mutate({ userId: member.userId, grants })}
+                    onRevoke={() => revokeMember.mutate(member.userId)}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section aria-labelledby="co-host-invites" className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="co-host-invites" className="text-lg font-semibold">
+                {t("pendingInvites")}{" "}
+                <span className="font-normal text-muted-foreground">
+                  {formatNumber(openInvitations.length, language)}
+                </span>
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={invitations.isFetching}
+                onClick={() => void invitations.refetch()}
+              >
+                <RefreshCw aria-hidden="true" /> {t("refresh")}
+              </Button>
+            </div>
+            {!openInvitations.length ? (
+              <p className="rounded-xl border border-dashed border-foreground/15 px-4 py-6 text-sm text-muted-foreground">
+                {t("noPendingInvitesDescription")}
+              </p>
+            ) : (
+              <ul className="divide-y divide-foreground/10 rounded-xl border border-foreground/10 bg-card">
+                {openInvitations.map((invitation) => (
+                  <li
+                    key={invitation.id}
+                    className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate font-medium">{invitation.email}</span>
+                        <Chip tone={invitation.status === "SENT" ? "success" : "neutral"}>
+                          {invitation.status === "SENT" ? t("emailSent") : t("emailPending")}
+                        </Chip>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {t("expiresAt")}{" "}
+                        {formatDate(invitation.expiresAt, language, {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                      <GrantSummary grants={invitation.grants} groupNames={groupNames} />
+                    </div>
+                    <ConfirmDialog
+                      trigger={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 self-start"
+                        >
+                          {t("revokeInvite")}
+                        </Button>
+                      }
+                      title={t("revokeInviteConfirmTitle")}
+                      description={t("revokeInviteConfirmDescription", { email: invitation.email })}
+                      cancelLabel={t("keepInvite")}
+                      confirmLabel={revokeInvitation.isPending ? t("revoking") : t("revoke")}
+                      onConfirm={() => revokeInvitation.mutate(invitation.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <section
+          aria-labelledby="co-host-invite-form"
+          className="space-y-5 rounded-xl border border-foreground/10 bg-card p-5 lg:sticky lg:top-6"
+        >
           <div>
-            <h2 className="text-xl font-semibold">{t("sendInvite")}</h2>
+            <h2 id="co-host-invite-form" className="text-lg font-semibold">
+              {t("sendInvite")}
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">{t("inviteDescription")}</p>
           </div>
-        </div>
-        <div className="space-y-4">
           <FormField control={form.control} name="email" label={t("coHostEmail")}>
             {(field) => (
               <Input
@@ -209,7 +310,7 @@ export function CoHostManagement({ weddingId }: { weddingId: string }) {
                 value={String(field.value ?? "")}
                 type="email"
                 autoComplete="email"
-                placeholder="ten@example.com"
+                placeholder="linh.nguyen@gmail.com"
               />
             )}
           </FormField>
@@ -221,105 +322,31 @@ export function CoHostManagement({ weddingId }: { weddingId: string }) {
               void form.handleSubmit((values) => invite.mutate({ email: values.email, grants }))()
             }
           />
-        </div>
-        {invite.isPending && (
-          <p role="status" className="text-sm text-muted-foreground">
-            {t("sendingInvite")}
-          </p>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center gap-3">
-          <UsersRound className="size-5 text-primary" aria-hidden="true" />
-          <h2 className="text-xl font-semibold">{t("activeMembers")}</h2>
-          <Chip>{activeMembers.length}</Chip>
-        </div>
-        {activeMembers.length === 0 ? (
-          <EmptyState title={t("noCoHosts")} description={t("noCoHostsDescription")} />
-        ) : (
-          <div className="space-y-4">
-            {activeMembers.map((member) => (
-              <CoHostCard
-                key={member.userId}
-                member={member}
-                groups={groups.data}
-                editing={editing === member.userId}
-                busy={saveScopes.isPending || revokeMember.isPending}
-                onEdit={() => setEditing(editing === member.userId ? null : member.userId)}
-                onSave={(grants) => saveScopes.mutate({ userId: member.userId, grants })}
-                onRevoke={() => revokeMember.mutate(member.userId)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold">{t("pendingInvites")}</h2>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={invitations.isFetching}
-            onClick={() => void invitations.refetch()}
-          >
-            <RefreshCw aria-hidden="true" /> {t("refresh")}
-          </Button>
-        </div>
-        {!openInvitations.length ? (
-          <EmptyState
-            title={t("noPendingInvites")}
-            description={t("noPendingInvitesDescription")}
-          />
-        ) : (
-          <div className="space-y-3">
-            {openInvitations.map((invitation) => (
-              <article
-                key={invitation.id}
-                className="space-y-3 rounded-xl border bg-card p-4 md:flex md:items-start md:justify-between md:gap-6"
-              >
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-medium">{invitation.email}</h3>
-                    <Chip tone={invitation.status === "SENT" ? "success" : "neutral"}>
-                      {invitation.status === "SENT" ? t("emailSent") : t("emailPending")}
-                    </Chip>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {t("expiresAt")}{" "}
-                    {formatDate(invitation.expiresAt, language, {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                  <GrantList grants={invitation.grants} groupNames={groupNames} />
-                </div>
-                <ConfirmDialog
-                  trigger={
-                    <Button type="button" variant="outline" className="shrink-0">
-                      {t("revokeInvite")}
-                    </Button>
-                  }
-                  title={t("revokeInviteConfirmTitle")}
-                  description={t("revokeInviteConfirmDescription", { email: invitation.email })}
-                  cancelLabel={t("keepInvite")}
-                  confirmLabel={revokeInvitation.isPending ? t("revoking") : t("revoke")}
-                  onConfirm={() => revokeInvitation.mutate(invitation.id)}
-                />
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+          {invite.isPending && (
+            <p role="status" className="text-sm text-muted-foreground">
+              {t("sendingInvite")}
+            </p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
 
-function CoHostCard({
+// A stable pale tint per person, so the same co-host is recognised across lists.
+function personHue(id: string) {
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) % 360;
+  return hash;
+}
+
+function initials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const last = words.at(-1) ?? "?";
+  return last.charAt(0).toLocaleUpperCase("vi");
+}
+
+function CoHostRow({
   member,
   groups,
   editing,
@@ -338,59 +365,75 @@ function CoHostCard({
 }) {
   const { t } = useTranslation("cohost");
   const groupNames = new Map(groups.map((group) => [group.id, group.name]));
+  const grants =
+    member.scopes ??
+    member.permissions.flatMap((permission) => {
+      if (!Object.hasOwn(PERMISSION_LABELS, permission)) return [];
+      return [
+        {
+          permission: permission as keyof typeof PERMISSION_LABELS,
+          weddingWide: true,
+          groupIds: [],
+        },
+      ];
+    });
   return (
-    <article className="space-y-4 rounded-xl border bg-card p-4 md:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h3 className="font-semibold">{member.fullName}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{member.email}</p>
+    <li className="space-y-4 px-4 py-4">
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-foreground"
+          style={{ backgroundColor: `hsl(${personHue(member.userId)} 70% 92%)` }}
+        >
+          {initials(member.fullName)}
+        </span>
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="truncate font-medium">{member.fullName}</p>
+          <p className="truncate text-sm text-muted-foreground">{member.email}</p>
+          {!editing && <GrantSummary grants={member.scopes ?? []} groupNames={groupNames} />}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={onEdit}>
-            {editing ? t("closeEditor") : t("editScope")}
-          </Button>
-          <ConfirmDialog
-            trigger={
-              <Button type="button" variant="destructive">
-                {t("revokeAccess")}
-              </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          aria-expanded={editing}
+          onClick={onEdit}
+        >
+          {editing ? t("closeEditor") : t("editScope")}
+        </Button>
+      </div>
+      {editing && (
+        <div className="sm:pl-[3.25rem]">
+          <ScopeEditor
+            groups={groups}
+            initialGrants={grants}
+            submitLabel={t("saveScope")}
+            busy={busy}
+            onSubmit={onSave}
+            footerStart={
+              <ConfirmDialog
+                trigger={
+                  <Button type="button" variant="ghost" size="sm" className="text-destructive">
+                    {t("revokeAccess")}
+                  </Button>
+                }
+                title={t("revokeAccessConfirmTitle")}
+                description={t("revokeAccessConfirmDescription", { name: member.fullName })}
+                cancelLabel={t("cancel")}
+                confirmLabel={t("revokeAccess")}
+                onConfirm={onRevoke}
+              />
             }
-            title={t("revokeAccessConfirmTitle")}
-            description={t("revokeAccessConfirmDescription", { name: member.fullName })}
-            cancelLabel={t("cancel")}
-            confirmLabel={t("revokeAccess")}
-            onConfirm={onRevoke}
           />
         </div>
-      </div>
-      {editing ? (
-        <ScopeEditor
-          groups={groups}
-          initialGrants={
-            member.scopes ??
-            member.permissions.flatMap((permission) => {
-              if (!Object.hasOwn(PERMISSION_LABELS, permission)) return [];
-              return [
-                {
-                  permission: permission as keyof typeof PERMISSION_LABELS,
-                  weddingWide: true,
-                  groupIds: [],
-                },
-              ];
-            })
-          }
-          submitLabel={t("saveScope")}
-          busy={busy}
-          onSubmit={onSave}
-        />
-      ) : (
-        <GrantList grants={member.scopes ?? []} groupNames={groupNames} />
       )}
-    </article>
+    </li>
   );
 }
 
-function GrantList({
+/** What a co-host can do, one line per part of the wedding, in the editor's order. */
+function GrantSummary({
   grants,
   groupNames,
 }: {
@@ -399,15 +442,32 @@ function GrantList({
 }) {
   const { t } = useTranslation("cohost");
   if (!grants.length) return <p className="text-sm text-muted-foreground">{t("noPermissions")}</p>;
+  const byPermission = new Map(grants.map((grant) => [grant.permission, grant]));
   return (
-    <ul className="flex flex-wrap gap-2">
-      {grants.map((grant) => (
-        <li key={grant.permission}>
-          <Chip title={scopeDescription(grant, groupNames, t)}>
-            {t(`permissions.${grant.permission}`)} · {scopeDescription(grant, groupNames, t)}
-          </Chip>
-        </li>
-      ))}
-    </ul>
+    <dl className="grid gap-x-3 gap-y-1 pt-1 text-sm sm:grid-cols-[auto_minmax(0,1fr)]">
+      {PERMISSION_AREAS.map((area) => {
+        const areaGrants = area.permissions.flatMap((permission) => {
+          const grant = byPermission.get(permission);
+          return grant ? [grant] : [];
+        });
+        if (!areaGrants.length) return null;
+        return (
+          <div key={area.key} className="contents">
+            <dt className="text-muted-foreground">{t(`areas.${area.key}`)}</dt>
+            <dd className="flex min-w-0 flex-wrap gap-x-1">
+              {areaGrants.map((grant, index) => (
+                <span key={grant.permission} className="whitespace-nowrap">
+                  {index > 0 && <span className="text-muted-foreground"> · </span>}
+                  {t(`permissions.${grant.permission}`)}{" "}
+                  <span className="text-muted-foreground">
+                    ({scopeDescription(grant, groupNames, t)})
+                  </span>
+                </span>
+              ))}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -37,6 +38,8 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
   const { isOwner } = usePermission();
   const [selectedOrder, setSelectedOrder] = useState<PlanOrderDto | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+  // Arriving from the pricing page with ?plan=PREMIUM points at that plan.
+  const requestedPlan = useSearchParams().get("plan")?.toUpperCase() ?? null;
 
   // Fetch current wedding plan
   const planQuery = useQuery({
@@ -69,6 +72,12 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
       setOrderError(message);
     },
   });
+
+  const plansReady = planQuery.isSuccess && publicPlansQuery.isSuccess;
+  useEffect(() => {
+    if (!requestedPlan || !plansReady) return;
+    document.getElementById(`plan-${requestedPlan}`)?.scrollIntoView({ block: "center" });
+  }, [requestedPlan, plansReady]);
 
   if (planQuery.isPending) {
     return (
@@ -234,7 +243,9 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
                 return (
                   <div
                     key={plan.code}
-                    className={`rounded-3xl border p-6 sm:p-8 flex flex-col justify-between shadow-sm transition-all ${
+                    id={`plan-${plan.code}`}
+                    aria-current={requestedPlan === plan.code ? "true" : undefined}
+                    className={`rounded-3xl border p-6 sm:p-8 flex flex-col justify-between shadow-sm transition-all scroll-mt-24 ${requestedPlan === plan.code ? "ring-2 ring-primary " : ""}${
                       isPremium
                         ? "border-amber-400/80 bg-gradient-to-b from-card via-card to-amber-50/20 dark:to-amber-950/20 ring-1 ring-amber-400/30"
                         : "border-primary/50 bg-card ring-1 ring-primary/20"

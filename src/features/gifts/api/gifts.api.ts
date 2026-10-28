@@ -151,3 +151,92 @@ export function claimGuestGift(api: ApiClient, token: string, id: string) {
     schema: guestGift,
   });
 }
+
+// ---------- reception desk (owner or co-host with GIFT_RECORD) ----------
+
+export const receptionGiftSchema = z.object({
+  id: z.string(),
+  guestId: z.string().nullable(),
+  giverName: z.string(),
+  method: z.string(),
+  status: z.string(),
+  amountExpected: z.number().nullable(),
+  amountReceived: z.number().nullable(),
+  createdAt: z.string(),
+  paidAt: z.string().nullable(),
+  itemName: z.string().nullable().optional(),
+  itemQuantity: z.number().nullable().optional(),
+  itemValue: z.number().nullable().optional(),
+  hasProof: z.boolean().optional(),
+});
+export type ReceptionGift = z.infer<typeof receptionGiftSchema>;
+
+export type RecordGiftInput =
+  | { method: "CASH"; amount?: number; guestId?: string; giverName?: string }
+  | { method: "TRANSFER"; amount: number; proofId?: string; guestId?: string; giverName?: string }
+  | {
+      method: "ITEM";
+      itemName: string;
+      quantity?: number;
+      estimatedValue?: number;
+      guestId?: string;
+      giverName?: string;
+    };
+
+export function getReceptionGifts(api: ApiClient, weddingId: string, signal?: AbortSignal) {
+  return api.request(`${host(weddingId)}/reception`, {
+    signal,
+    schema: z.array(receptionGiftSchema),
+  });
+}
+
+/** Recorded on the desk screen: a transfer there waits for the couple to confirm, whoever records it. */
+export function recordGift(api: ApiClient, weddingId: string, body: RecordGiftInput, key: string) {
+  return api.request(host(weddingId), {
+    method: "POST",
+    body: { ...body, fromDesk: true },
+    headers: { "Idempotency-Key": key },
+    schema: receptionGiftSchema,
+  });
+}
+
+/** Photo of the guest's transfer screen; its id goes in RecordGiftInput.proofId. */
+export function uploadGiftProof(api: ApiClient, weddingId: string, image: File) {
+  const body = new FormData();
+  body.set("image", image);
+  return api.request(`${host(weddingId)}/proofs`, {
+    method: "POST",
+    body,
+    schema: z.object({ id: z.string() }),
+  });
+}
+
+export function cancelGift(api: ApiClient, weddingId: string, giftId: string) {
+  return api.request(`${host(weddingId)}/${encodeURIComponent(giftId)}/cancel`, {
+    method: "POST",
+    schema: receptionGiftSchema,
+  });
+}
+
+/** Invitations found at the desk (needs CHECKIN_MANAGE); contact details are never returned. */
+export function searchDeskGuests(
+  api: ApiClient,
+  weddingId: string,
+  query: string,
+  signal?: AbortSignal,
+) {
+  return api.request(
+    `/weddings/${encodeURIComponent(weddingId)}/guest-planning/reception/search?${new URLSearchParams({ q: query })}`,
+    {
+      signal,
+      schema: z.array(
+        z.object({
+          guestId: z.string(),
+          recipientName: z.string(),
+          honorific: z.string().nullable(),
+          side: z.string(),
+        }),
+      ),
+    },
+  );
+}

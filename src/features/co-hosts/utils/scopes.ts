@@ -1,5 +1,6 @@
 import {
   CO_HOST_PERMISSIONS,
+  isWeddingWideOnly,
   type CoHostPermission,
   type PermissionScope,
 } from "../api/co-host.api";
@@ -16,7 +17,30 @@ export const PERMISSION_LABELS: Record<CoHostPermission, string> = {
   SEATING_VIEW: "Xem sơ đồ chỗ ngồi",
   SEATING_EDIT: "Chỉnh sửa chỗ ngồi",
   CHECKIN_MANAGE: "Quản lý check-in",
+  GIFT_RECORD: "Ghi nhận quà tại quầy",
 };
+
+/** The editor shows permissions by the part of the wedding they open, in this order. */
+export const PERMISSION_AREAS: {
+  key: "guests" | "seating" | "reception";
+  permissions: CoHostPermission[];
+}[] = [
+  { key: "guests", permissions: ["GUEST_VIEW", "GUEST_EDIT", "RSVP_VIEW"] },
+  { key: "seating", permissions: ["SEATING_VIEW", "SEATING_EDIT"] },
+  { key: "reception", permissions: ["CHECKIN_MANAGE", "GIFT_RECORD"] },
+];
+
+/** What is wrong with one permission's scope, as a translation key; "" when it can be saved. */
+export function permissionScopeError(permission: CoHostPermission, draft: ScopeDraft) {
+  const scope = draft[permission];
+  if (!scope.enabled) return "";
+  if (isWeddingWideOnly(permission) && !scope.weddingWide)
+    return permission === "GIFT_RECORD"
+      ? "validation.giftRecordWeddingWide"
+      : "validation.checkInWeddingWide";
+  if (!scope.weddingWide && scope.groupIds.length === 0) return "validation.selectGroupOrWedding";
+  return "";
+}
 
 export function emptyScopeDraft(): ScopeDraft {
   const draft: Partial<ScopeDraft> = {};
@@ -73,6 +97,8 @@ export function grantsFromScopeDraft(draft: ScopeDraft): PermissionScope[] {
 const fallbackValidation = {
   "validation.checkInWeddingWide":
     "Quyền check-in chỉ được cấp cho toàn bộ wedding. Hãy xác nhận phạm vi này.",
+  "validation.giftRecordWeddingWide":
+    "Quyền ghi nhận quà chỉ được cấp cho toàn bộ wedding. Hãy xác nhận phạm vi này.",
   "validation.selectGroupOrWedding":
     "Chọn ít nhất một nhóm khách hoặc cấp quyền trên toàn bộ wedding.",
   "validation.seatingViewScope":
@@ -84,8 +110,15 @@ export function scopeValidationMessage(
   t: (key: string) => string = (key) =>
     fallbackValidation[key as keyof typeof fallbackValidation] ?? key,
 ) {
-  if (grants.some((grant) => grant.permission === "CHECKIN_MANAGE" && !grant.weddingWide)) {
-    return t("validation.checkInWeddingWide");
+  const narrowReception = grants.find(
+    (grant) => isWeddingWideOnly(grant.permission) && !grant.weddingWide,
+  );
+  if (narrowReception) {
+    return t(
+      narrowReception.permission === "GIFT_RECORD"
+        ? "validation.giftRecordWeddingWide"
+        : "validation.checkInWeddingWide",
+    );
   }
   if (grants.some((grant) => !grant.weddingWide && grant.groupIds.length === 0)) {
     return t("validation.selectGroupOrWedding");

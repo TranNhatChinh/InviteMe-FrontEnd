@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PricingTable } from "@/features/plans";
+import { PricingSection } from "@/app/_components/pricing-section";
 
 export const metadata: Metadata = {
   title: "Bảng giá & Gói dịch vụ — InviteMe",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function PricingPage() {
-  return <PricingTable />;
+  return <PricingSection />;
 }

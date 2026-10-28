@@ -57,5 +57,73 @@
   "transactionCount": "{{count}} giao dịch",
   "page": "Trang {{page}}",
   "previous": "Trước",
-  "next": "Tiếp"
+  "next": "Tiếp",
+  "desk": {
+    "title": "Quầy ghi quà",
+    "description": "Ghi lại phong bì, quà hiện vật và chuyển khoản khách đưa tại quầy.",
+    "summary": "Đã ghi {{cash}} phong bì · {{items}} món quà · {{transfers}} chuyển khoản tại quầy",
+    "formTitle": "Ghi một món mừng",
+    "method": "Khách mừng bằng",
+    "methods": {
+      "CASH": "Phong bì",
+      "ITEM": "Quà hiện vật",
+      "TRANSFER": "Chuyển khoản",
+      "QR": "QR online"
+    },
+    "giver": "Người mừng",
+    "giverSearchHint": "Gõ ít nhất 2 chữ để tìm trong danh sách khách; không có thì cứ ghi tên.",
+    "changeGiver": "Đổi người",
+    "sides": {
+      "GROOM": "Nhà trai",
+      "BRIDE": "Nhà gái",
+      "MUTUAL": "Chung",
+      "UNSPECIFIED": ""
+    },
+    "amount": "Số tiền",
+    "amountOptional": "Số tiền (nếu khách cho biết)",
+    "sealedHint": "Để trống nếu phong bì còn dán kín; cô dâu chú rể sẽ ghi số tiền khi mở.",
+    "transferHint": "Số tiền trên màn hình chuyển khoản của khách.",
+    "itemName": "Món quà",
+    "quantity": "Số lượng",
+    "itemValue": "Giá trị ước tính (tuỳ chọn)",
+    "proofOptional": "Ảnh màn hình chuyển khoản (tuỳ chọn)",
+    "proofHint": "Chụp màn hình điện thoại của khách; cô dâu chú rể sẽ đối chiếu với tài khoản.",
+    "submit": {
+      "CASH": "Ghi phong bì",
+      "ITEM": "Ghi món quà",
+      "TRANSFER": "Ghi chuyển khoản"
+    },
+    "saving": "Đang ghi…",
+    "recorded": {
+      "CASH": "Đã ghi phong bì của {{name}}.",
+      "ITEM": "Đã ghi quà của {{name}}.",
+      "TRANSFER": "Đã ghi chuyển khoản của {{name}}, chờ cô dâu chú rể xác nhận."
+    },
+    "listTitle": "Đã ghi tại quầy",
+    "loading": "Đang tải danh sách…",
+    "empty": "Chưa ghi món mừng nào tại quầy. Món đầu tiên sẽ hiện ở đây.",
+    "retry": "Thử lại",
+    "sealed": "Phong bì dán kín",
+    "status": {
+      "PENDING": "Chờ xác nhận",
+      "CLAIMED": "Chờ xác nhận",
+      "PAID": "Đã nhận",
+      "CANCELLED": "Đã huỷ",
+      "EXPIRED": "Hết hạn"
+    },
+    "cancel": "Huỷ ghi nhận",
+    "keep": "Giữ lại",
+    "cancelTitle": "Huỷ món mừng này?",
+    "cancelDescription": "Ghi nhận của {{name}} sẽ chuyển sang Đã huỷ và không tính vào sổ quà.",
+    "errors": {
+      "giver": "Chọn khách trong danh sách hoặc ghi tên người mừng.",
+      "itemName": "Ghi tên món quà.",
+      "quantity": "Số lượng từ 1 đến 1.000.",
+      "amount": "Số tiền từ {{min}} đến {{max}}.",
+      "proofUpload": "Chưa tải được ảnh, thử chụp lại hoặc chọn ảnh khác.",
+      "failed": "Chưa ghi được, vui lòng thử lại.",
+      "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+      "load": "Chưa tải được danh sách đã ghi."
+    }
+  }
 }

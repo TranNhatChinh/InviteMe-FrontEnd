@@ -115,7 +115,7 @@ function WeddingCover({
   );
 }
 
-export function WeddingList() {
+export function WeddingList({ requestedPlan }: { requestedPlan?: string } = {}) {
   const { t } = useTranslation("weddings");
   const { language } = useLocale();
   const [page, setPage] = useState(1);
@@ -150,6 +150,14 @@ export function WeddingList() {
             </Link>
           </Button>
         </div>
+        {requestedPlan && (
+          <p
+            role="status"
+            className="relative mt-5 rounded-xl bg-primary/10 px-4 py-3 text-sm text-foreground"
+          >
+            {t("choosePlanWedding")}
+          </p>
+        )}
         {weddings.data && (
           <div className="relative mt-6 flex items-center gap-2 border-t border-border pt-4 text-sm text-muted-foreground">
             <span className="flex size-7 items-center justify-center rounded-full bg-petal text-primary-hover">
@@ -330,10 +338,14 @@ export function WeddingList() {
                       )}
                     </div>
                     <Link
-                      href={`/weddings/${encodeURIComponent(wedding.id)}/overview`}
+                      href={
+                        requestedPlan
+                          ? `/weddings/${encodeURIComponent(wedding.id)}/plan?plan=${encodeURIComponent(requestedPlan)}`
+                          : `/weddings/${encodeURIComponent(wedding.id)}/overview`
+                      }
                       className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:border-primary hover:bg-petal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
-                      {t("openWorkspace")}
+                      {requestedPlan ? t("choosePlanForWedding") : t("openWorkspace")}
                       <ArrowUpRight className="size-4" aria-hidden="true" />
                     </Link>
                   </div>

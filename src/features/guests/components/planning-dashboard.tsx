@@ -7,6 +7,7 @@ import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
 import { ConfirmDialog } from "@/shared/feedback/confirm-dialog";
 import { CoupleImport } from "./couple-import";
+import { ImportCurrentGuests } from "./import-current-guests";
 import {
   archivePlanningGuest,
   createPlanningGuest,
@@ -73,10 +74,7 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
     queryFn: ({ signal }) => listPlanningGroups(api, weddingId, signal),
     enabled: can("GUEST_VIEW"),
   });
-  const groupNames = useMemo(
-    () => groups.data?.items.map((group) => group.name),
-    [groups.data],
-  );
+  const groupNames = useMemo(() => groups.data?.items.map((group) => group.name), [groups.data]);
   const createGuest = useMutation({
     mutationFn: ({ input, key }: { input: PlanningGuestCreate; key: string }) =>
       createPlanningGuest(api, weddingId, input, key),
@@ -243,6 +241,15 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
         onImport={save}
         onCheck={checkImport}
         groups={groupNames}
+        groupsState={
+          groups.isError
+            ? "error"
+            : groups.isPending && groups.fetchStatus !== "idle"
+              ? "loading"
+              : "ready"
+        }
+        onRetryGroups={() => void groups.refetch()}
+        currentGuests={<ImportCurrentGuests weddingId={weddingId} />}
       />
     );
   return (
@@ -251,7 +258,7 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
         <h1 className="font-serif text-3xl">{t("title")}</h1>
         {can("SEATING_VIEW") && (
           <Button variant="outline" asChild>
-            <Link href={`/weddings/${weddingId}/seating`}>{t("seating")}</Link>
+            <Link href={`/weddings/${weddingId}/seating`}>{t("seatingLink")}</Link>
           </Button>
         )}
         {can("GUEST_EDIT") && !archivedOnly && (

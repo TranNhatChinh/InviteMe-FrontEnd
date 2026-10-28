@@ -52,7 +52,8 @@
     "RSVP_VIEW": "Xem RSVP",
     "SEATING_VIEW": "Xem sơ đồ chỗ ngồi",
     "SEATING_EDIT": "Chỉnh sửa chỗ ngồi",
-    "CHECKIN_MANAGE": "Quản lý check-in"
+    "CHECKIN_MANAGE": "Quản lý check-in",
+    "GIFT_RECORD": "Ghi nhận quà tại quầy"
   },
   "actions": {
     "sendInvite": "gửi lời mời",
@@ -74,6 +75,7 @@
     "emailMax": "Email tối đa 256 ký tự.",
     "selectPermission": "Hãy chọn ít nhất một quyền.",
     "checkInWeddingWide": "Quyền check-in chỉ được cấp cho toàn bộ đám cưới. Hãy xác nhận phạm vi này.",
+    "giftRecordWeddingWide": "Quyền ghi nhận quà chỉ được cấp cho toàn bộ đám cưới. Hãy xác nhận phạm vi này.",
     "selectGroupOrWedding": "Chọn ít nhất một nhóm khách hoặc cấp quyền trên toàn bộ đám cưới.",
     "seatingViewScope": "Quyền chỉnh sửa chỗ ngồi cần quyền xem sơ đồ với phạm vi bao gồm các nhóm được sửa."
   },
@@ -113,5 +115,24 @@
       "emailMismatch": "Tài khoản này chưa xác nhận email hoặc email không khớp lời mời.",
       "invalidInvite": "Lời mời không hợp lệ, đã hết hạn, đã được sử dụng hoặc không dành cho tài khoản này."
     }
-  }
+  },
+  "areas": {
+    "guests": "Khách mời",
+    "seating": "Sơ đồ chỗ ngồi",
+    "reception": "Quầy đón khách"
+  },
+  "permissionHints": {
+    "GUEST_VIEW": "Xem tên, số người và nhóm của khách.",
+    "GUEST_EDIT": "Thêm, sửa và lưu trữ khách.",
+    "RSVP_VIEW": "Xem ai đã xác nhận, từ chối hoặc chưa trả lời.",
+    "SEATING_VIEW": "Xem sơ đồ bàn và chỗ của từng khách.",
+    "SEATING_EDIT": "Tạo bàn, xếp và đổi chỗ khách.",
+    "CHECKIN_MANAGE": "Check-in khách và thêm khách vãng lai. Luôn áp dụng cho toàn bộ đám cưới.",
+    "GIFT_RECORD": "Ghi phong bì và quà tại quầy, không xem được tổng tiền. Luôn áp dụng cho toàn bộ đám cưới."
+  },
+  "seatingViewLocked": "Bật sẵn vì co-host có quyền chỉnh sửa chỗ ngồi.",
+  "scopeFor": "Phạm vi của quyền {{permission}}",
+  "groupsFor": "Nhóm khách cho quyền {{permission}}",
+  "selectedCount": "Đã chọn {{count}} quyền",
+  "summaryLine": "{{members}} co-host đang giúp · {{invites}} lời mời chưa được chấp nhận"
 }
