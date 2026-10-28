@@ -20,6 +20,9 @@ const errors: Record<number, [ApiErrorCode, string]> = {
   422: ["business-rule", "This action cannot be completed with the current information."],
 };
 
+/** One spreadsheet-row problem from a guest import: the code is translated, the message is the BE fallback. */
+export type ApiRowIssue = { rowNumber: number; field: string; code: string; message: string };
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -27,6 +30,7 @@ export class ApiError extends Error {
     message: string,
     public readonly fieldErrors: Record<string, string[]> = {},
     public readonly backendCode?: string,
+    public readonly rowIssues: ApiRowIssue[] = [],
   ) {
     super(message);
     this.name = "ApiError";
@@ -66,7 +70,9 @@ export function normalizeHttpError(status: number, body: unknown): ApiError {
         "note",
         "rowNumber",
         "rows",
+        "row",
       ];
+      const rowIssues: ApiRowIssue[] = [];
       for (const issue of body.errors) {
         if (
           issue &&
@@ -74,10 +80,19 @@ export function normalizeHttpError(status: number, body: unknown): ApiError {
           Number.isSafeInteger(issue.rowNumber) &&
           issue.rowNumber >= 0 &&
           allowed.includes(issue.field)
-        )
+        ) {
           fieldErrors[`rows.${issue.rowNumber}.${issue.field}`] = ["Please check this value."];
+          // Import issues are written for the couple (codes + row-level text), unlike exception detail.
+          if (typeof issue.code === "string" && typeof issue.message === "string")
+            rowIssues.push({
+              rowNumber: issue.rowNumber,
+              field: issue.field,
+              code: issue.code,
+              message: issue.message.slice(0, 500),
+            });
+        }
       }
-      return new ApiError(status, code, message, fieldErrors, backendCode);
+      return new ApiError(status, code, message, fieldErrors, backendCode, rowIssues);
     }
     for (const key of Object.keys(body.errors)) fieldErrors[key] = ["Please check this value."];
   }

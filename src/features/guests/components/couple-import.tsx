@@ -32,6 +32,7 @@ import {
   unknownGroups,
 } from "../utils/group-catalog";
 import { readCoupleFile } from "../utils/read-couple-file";
+import { issuesByRow } from "../utils/import-issues";
 import { ApiError } from "@/core/api/api-error";
 import type { ImportCheckResult } from "../api/planning.api";
 
@@ -63,10 +64,13 @@ export function CoupleImport({
   onClose,
   onImport,
   onCheck,
+  groups,
 }: {
   onClose: () => void;
   onImport?: (rows: CoupleRow[]) => Promise<void>;
   onCheck?: (rows: CoupleRow[], signal?: AbortSignal) => Promise<ImportCheckResult>;
+  /** Group names already in the wedding, so rows naming them are not reported as unknown. */
+  groups?: readonly string[];
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "importPage" });
   const { language } = useLanguage();
@@ -78,15 +82,25 @@ export function CoupleImport({
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [seating, setSeating] = useState(false);
-  const [catalog, setCatalog] = useState<string[]>([...defaultGroups]);
+  const [addedGroups, setAddedGroups] = useState<string[]>([]);
+  const catalog = useMemo(
+    () =>
+      [...defaultGroups, ...(groups ?? []), ...addedGroups].reduce<string[]>(
+        (list, label) => (findGroup(label, list) ? list : [...list, label]),
+        [],
+      ),
+    [groups, addedGroups],
+  );
   const [saving, setSaving] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<number, string[]>>({});
   const [checkState, setCheckState] = useState<{
     key: string;
     result: ImportCheckResult | null;
+    failed: boolean;
   }>({
     key: "",
     result: null,
+    failed: false,
   });
 
   const normalizedRows = useMemo(() => {
@@ -109,6 +123,13 @@ export function CoupleImport({
     currentKey && currentKey === checkState.key && !normalizedRows?.some((r) => r.errors.length > 0)
       ? checkState.result
       : null;
+  // The dry run is what reports duplicates against the wedding; without it the import is not offered.
+  const checkFailed =
+    Boolean(onCheck) &&
+    currentKey !== "" &&
+    currentKey === checkState.key &&
+    checkState.failed &&
+    !normalizedRows?.some((r) => r.errors.length > 0);
 
   useEffect(() => {
     if (!onCheck || !normalizedRows || !normalizedRows.length) return;
@@ -121,12 +142,12 @@ export function CoupleImport({
     onCheck(normalizedRows, controller.signal)
       .then((res) => {
         if (!controller.signal.aborted) {
-          setCheckState({ key, result: res });
+          setCheckState({ key, result: res, failed: false });
         }
       })
       .catch(() => {
         if (!controller.signal.aborted) {
-          setCheckState({ key, result: null });
+          setCheckState({ key, result: null, failed: true });
         }
       });
     return () => {
@@ -134,30 +155,16 @@ export function CoupleImport({
     };
   }, [onCheck, normalizedRows, checkState.key]);
 
-  const skippedSet = useMemo(
-    () => new Set(checkResult?.skipped?.map((s) => s.rowNumber) ?? []),
-    [checkResult],
+  const skippedByRow = useMemo(() => issuesByRow(checkResult?.skipped, t), [checkResult, t]);
+  const checkErrorsByRow = useMemo(() => issuesByRow(checkResult?.errors, t), [checkResult, t]);
+  const checkWarningsByRow = useMemo(
+    () => issuesByRow(checkResult?.warnings, t),
+    [checkResult, t],
   );
-
-  const checkErrorsByRow = useMemo(() => {
-    const map: Record<number, string[]> = {};
-    if (checkResult?.errors) {
-      for (const issue of checkResult.errors) {
-        (map[issue.rowNumber] ??= []).push(issue.message);
-      }
-    }
-    return map;
-  }, [checkResult]);
-
-  const checkWarningsByRow = useMemo(() => {
-    const map: Record<number, string[]> = {};
-    if (checkResult?.warnings) {
-      for (const issue of checkResult.warnings) {
-        (map[issue.rowNumber] ??= []).push(issue.message);
-      }
-    }
-    return map;
-  }, [checkResult]);
+  const countRows = (map: Record<number, string[]>) =>
+    Object.keys(map).filter((row) => row !== "0").length;
+  // Row 0 = issues about the whole file (for example more than 500 rows), not about one line.
+  const fileIssues = [...new Set([...(checkErrorsByRow[0] ?? []), ...(serverErrors[0] ?? [])])];
 
   async function submit() {
     if (!onImport || !normalizedRows || saving) return;
@@ -167,8 +174,9 @@ export function CoupleImport({
     try {
       await onImport(normalizedRows);
     } catch (e) {
-      const issues: Record<number, string[]> = {};
-      if (e instanceof ApiError)
+      let issues: Record<number, string[]> = {};
+      if (e instanceof ApiError && e.rowIssues.length) issues = issuesByRow(e.rowIssues, t);
+      else if (e instanceof ApiError)
         for (const key of Object.keys(e.fieldErrors)) {
           const match = /^rows\.(\d+)\.(\w+)$/.exec(key);
           if (match)
@@ -182,9 +190,13 @@ export function CoupleImport({
       setError(
         Object.keys(issues).length
           ? t("errors.savedNone")
-          : e instanceof ApiError && e.status === 409
-            ? t("errors.conflict")
-            : t("errors.retry"),
+          : e instanceof ApiError && e.backendCode === "PLAN_LIMIT_REACHED"
+            ? t("errors.planLimit")
+            : e instanceof ApiError && e.status === 403
+              ? t("errors.forbidden")
+              : e instanceof ApiError && e.status === 409
+                ? t("errors.conflict")
+                : t("errors.retry"),
       );
     } finally {
       setSaving(false);
@@ -253,7 +265,7 @@ export function CoupleImport({
   function create(key: string, label: string) {
     if (!rows) return;
     const result = addGroup(catalog, label);
-    setCatalog(result.catalog);
+    setAddedGroups((list) => [...list, result.label]);
     setRows(validateCoupleRows(resolveGroupRows(rows, key, result.label, result.catalog)));
   }
 
@@ -439,46 +451,48 @@ export function CoupleImport({
               {t("previewResult")} · {filename}
             </h2>
             {checking && (
-              <span className="text-xs text-muted-foreground animate-pulse">
-                Đang đối chiếu danh sách…
-              </span>
+              <span className="text-xs text-muted-foreground animate-pulse">{t("checking")}</span>
             )}
           </div>
           <p role="status" className="text-sm">
             {checkResult ? (
-              <>
-                <span className="font-medium text-foreground">
-                  {formatNumber(checkResult.guestCount, language)} thiệp sẽ thêm mới (
-                  {formatNumber(checkResult.peopleCount, language)} khách)
-                </span>
-                {checkResult.skipped.length > 0 && (
-                  <>
-                    {" "}
-                    ·{" "}
-                    <span className="text-muted-foreground">
-                      {formatNumber(checkResult.skipped.length, language)} dòng bỏ qua do đã có sẵn
-                    </span>
-                  </>
-                )}
-                {checkResult.errors.length > 0 && (
-                  <>
-                    {" "}
-                    ·{" "}
-                    <span className="text-destructive font-medium">
-                      {formatNumber(checkResult.errors.length, language)} dòng cần sửa
-                    </span>
-                  </>
-                )}
-                {pendingGroups.length > 0 && (
-                  <>
-                    {" "}
-                    ·{" "}
-                    <span className="text-amber-800">
-                      {t("groupsPending", { count: formatNumber(pendingGroups.length, language) })}
-                    </span>
-                  </>
-                )}
-              </>
+              [
+                // With format errors the BE stops before counting, so 0 would be misleading.
+                !(checkResult.errors.length && !checkResult.guestCount) && (
+                  <span key="summary" className="font-medium text-foreground">
+                    {t("checkSummary", {
+                      recipients: formatNumber(checkResult.guestCount, language),
+                      guests: formatNumber(checkResult.peopleCount, language),
+                    })}
+                  </span>
+                ),
+                countRows(skippedByRow) > 0 && (
+                  <span key="skipped" className="text-muted-foreground">
+                    {t("checkSkipped", { count: formatNumber(countRows(skippedByRow), language) })}
+                  </span>
+                ),
+                countRows(checkErrorsByRow) > 0 && (
+                  <span key="errors" className="text-destructive font-medium">
+                    {t("checkErrorRows", {
+                      count: formatNumber(countRows(checkErrorsByRow), language),
+                    })}
+                  </span>
+                ),
+                countRows(checkWarningsByRow) > 0 && (
+                  <span key="warnings" className="text-amber-800">
+                    {t("checkWarningRows", {
+                      count: formatNumber(countRows(checkWarningsByRow), language),
+                    })}
+                  </span>
+                ),
+                pendingGroups.length > 0 && (
+                  <span key="groups" className="text-amber-800">
+                    {t("groupsPending", { count: formatNumber(pendingGroups.length, language) })}
+                  </span>
+                ),
+              ]
+                .filter(Boolean)
+                .flatMap((part, index) => (index ? [" · ", part] : [part]))
             ) : (
               <>
                 {t("validRows", { count: formatNumber(valid.length, language) })} ·{" "}
@@ -489,6 +503,17 @@ export function CoupleImport({
               </>
             )}
           </p>
+          {fileIssues.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/30 p-3 text-sm text-destructive"
+            >
+              <p className="font-medium">{t("fileIssues")}</p>
+              {fileIssues.map((message) => (
+                <p key={message}>{message}</p>
+              ))}
+            </div>
+          )}
           <div className="max-h-96 overflow-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="sticky top-0 bg-muted">
@@ -589,17 +614,24 @@ export function CoupleImport({
                       {row.values[4] && !findGroup(row.values[4], catalog) && (
                         <p className="text-amber-800">{t("unknownGroup")}</p>
                       )}
-                      {skippedSet.has(row.line) && (
-                        <span className="inline-block rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
-                          Đã có sẵn (sẽ bỏ qua khi thêm)
-                        </span>
+                      {skippedByRow[row.line] && (
+                        <>
+                          <span className="inline-block rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
+                            {t("skippedBadge")}
+                          </span>
+                          {skippedByRow[row.line]?.map((message) => (
+                            <p key={message} className="text-xs text-muted-foreground">
+                              {message}
+                            </p>
+                          ))}
+                        </>
                       )}
                       {!row.errors.length &&
                         !serverErrors[row.line]?.length &&
                         !checkErrorsByRow[row.line]?.length &&
                         !row.warnings.length &&
                         !checkWarningsByRow[row.line]?.length &&
-                        !skippedSet.has(row.line) &&
+                        !skippedByRow[row.line] &&
                         (!row.values[4] || !!findGroup(row.values[4], catalog)) && (
                           <span className="text-emerald-700">{t("valid")}</span>
                         )}
@@ -621,6 +653,7 @@ export function CoupleImport({
                 !valid.length ||
                 (onImport
                   ? valid.length !== rows.length ||
+                    checkFailed ||
                     (checkResult !== null &&
                       (checkResult.errors.length > 0 || checkResult.guestCount === 0))
                   : total > 500) ||
@@ -650,15 +683,23 @@ export function CoupleImport({
               )}
             </Button>
           </div>
+          {checkFailed && (
+            <div className="flex flex-wrap items-center gap-3 text-xs text-destructive" role="alert">
+              <p>{t("errors.checkFailed")}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCheckState({ key: "", result: null, failed: false })}
+              >
+                {t("recheck")}
+              </Button>
+            </div>
+          )}
           {checkResult && checkResult.errors.length > 0 && (
-            <p className="text-xs text-destructive">
-              Vui lòng sửa các dòng bị lỗi trước khi bấm lưu.
-            </p>
+            <p className="text-xs text-destructive">{t("fixErrorsFirst")}</p>
           )}
           {checkResult && checkResult.guestCount === 0 && checkResult.skipped.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Tất cả các dòng trong file đều đã có sẵn trong danh sách khách.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("allSkipped")}</p>
           )}
           {pendingGroups.length > 0 && (
             <p className="text-xs text-amber-900">

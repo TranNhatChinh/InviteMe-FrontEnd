@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/core/api/api-error";
 import { useRuntime } from "@/core/config/runtime";
@@ -35,7 +35,7 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
   const { t } = useTranslation("guestPlanning");
   const { language } = useLocale();
   const { api } = useRuntime();
-  const { can } = usePermission();
+  const { can, isWeddingWide } = usePermission();
   const cache = useQueryClient();
   const [importing, setImporting] = useState(false);
   const [creatingGuest, setCreatingGuest] = useState(false);
@@ -73,6 +73,10 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
     queryFn: ({ signal }) => listPlanningGroups(api, weddingId, signal),
     enabled: can("GUEST_VIEW"),
   });
+  const groupNames = useMemo(
+    () => groups.data?.items.map((group) => group.name),
+    [groups.data],
+  );
   const createGuest = useMutation({
     mutationFn: ({ input, key }: { input: PlanningGuestCreate; key: string }) =>
       createPlanningGuest(api, weddingId, input, key),
@@ -205,24 +209,28 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
     if (attempt.current?.serialized !== serialized)
       attempt.current = { serialized, key: crypto.randomUUID() };
     const result = await importGuests(api, weddingId, body, attempt.current.key);
-    const skippedCount = result.skipped?.length ?? 0;
-    const skippedText =
-      skippedCount > 0
-        ? " · Bỏ qua " + formatNumber(skippedCount, language) + " dòng đã có sẵn"
-        : "";
+    const skippedCount = new Set(result.skipped?.map((issue) => issue.rowNumber)).size;
+    const warningRows = new Set(result.warnings.map((issue) => issue.rowNumber)).size;
     setNotice(
-      "Đã thêm thành công " +
-        formatNumber(result.createdGuestCount, language) +
-        " thiệp (" +
-        formatNumber(result.createdPlaceCount, language) +
-        " khách)" +
-        skippedText +
-        "." +
-        (result.warnings.length
-          ? " Có " + formatNumber(result.warnings.length, language) + " dòng cần lưu ý trùng tên."
-          : "")
+      [
+        t("importPage.result.created", {
+          recipients: formatNumber(result.createdGuestCount, language),
+          guests: formatNumber(result.createdPlaceCount, language),
+        }),
+        skippedCount
+          ? t("importPage.result.skipped", { count: formatNumber(skippedCount, language) })
+          : "",
+        warningRows
+          ? t("importPage.result.warnings", { count: formatNumber(warningRows, language) })
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
     );
-    await cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] });
+    await Promise.all([
+      cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] }),
+      cache.invalidateQueries({ queryKey: ["guest-planning-groups", weddingId] }),
+    ]);
     setPage(1);
     setSearch("");
     setImporting(false);
@@ -234,6 +242,7 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
         onClose={() => setImporting(false)}
         onImport={save}
         onCheck={checkImport}
+        groups={groupNames}
       />
     );
   return (
@@ -257,14 +266,17 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
             >
               {creatingGuest ? t("closeForm") : t("addGuest")}
             </Button>
-            <Button
-              onClick={() => {
-                attempt.current = null;
-                setImporting(true);
-              }}
-            >
-              {t("import")}
-            </Button>
+            {/* The BE only imports for wedding-wide GUEST_EDIT, not for group-scoped co-hosts. */}
+            {isWeddingWide("GUEST_EDIT") && (
+              <Button
+                onClick={() => {
+                  attempt.current = null;
+                  setImporting(true);
+                }}
+              >
+                {t("import")}
+              </Button>
+            )}
           </div>
         )}
       </div>
