@@ -52,7 +52,8 @@
     "RSVP_VIEW": "View RSVP",
     "SEATING_VIEW": "View seating plan",
     "SEATING_EDIT": "Edit seating plan",
-    "CHECKIN_MANAGE": "Manage check-in"
+    "CHECKIN_MANAGE": "Manage check-in",
+    "GIFT_RECORD": "Record gifts at the desk"
   },
   "actions": {
     "sendInvite": "send the invitation",
@@ -74,6 +75,7 @@
     "emailMax": "Email must be 256 characters or fewer.",
     "selectPermission": "Select at least one permission.",
     "checkInWeddingWide": "Check-in access must apply to the entire wedding. Confirm this scope.",
+    "giftRecordWeddingWide": "Gift recording access must apply to the entire wedding. Confirm this scope.",
     "selectGroupOrWedding": "Select at least one guest group or grant access to the entire wedding.",
     "seatingViewScope": "Seating edit access requires view access covering every group that can be edited."
   },
@@ -113,5 +115,24 @@
       "emailMismatch": "This account's email isn't verified or doesn't match the invitation.",
       "invalidInvite": "This invitation is invalid, expired, already used, or intended for another account."
     }
-  }
+  },
+  "areas": {
+    "guests": "Guests",
+    "seating": "Seating plan",
+    "reception": "Reception desk"
+  },
+  "permissionHints": {
+    "GUEST_VIEW": "See guest names, party sizes and groups.",
+    "GUEST_EDIT": "Add, edit and archive guests.",
+    "RSVP_VIEW": "See who accepted, declined or has not replied.",
+    "SEATING_VIEW": "See the table plan and each guest’s seat.",
+    "SEATING_EDIT": "Create tables, seat and move guests.",
+    "CHECKIN_MANAGE": "Check guests in and add walk-ins. Always applies to the whole wedding.",
+    "GIFT_RECORD": "Record envelopes and presents at the desk, without seeing totals. Always applies to the whole wedding."
+  },
+  "seatingViewLocked": "On because this co-host can edit seating.",
+  "scopeFor": "Scope of {{permission}}",
+  "groupsFor": "Guest groups for {{permission}}",
+  "selectedCount": "Permissions selected: {{count}}",
+  "summaryLine": "{{members}} co-hosts helping · {{invites}} invitations not accepted yet"
 }

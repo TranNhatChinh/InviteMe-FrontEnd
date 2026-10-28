@@ -85,12 +85,7 @@ export const seatingPlanSchema = z.object({
 export type SeatingPlan = z.infer<typeof seatingPlanSchema>;
 
 export type SeatingStrategy =
-  | "KEEP_GROUPS"
-  | "FEWEST_TABLES"
-  | "SIMPLE"
-  | "AFFINITY"
-  | "PARTY"
-  | "COMPACT";
+  "KEEP_GROUPS" | "FEWEST_TABLES" | "SIMPLE" | "AFFINITY" | "PARTY" | "COMPACT";
 export type SuggestionMode = "UNASSIGNED" | "REPLACE_ALL";
 
 export const unassignedPlanningGroupSchema = z.object({
@@ -402,10 +397,11 @@ export function suggestSeatingPlan(
   strategy: SeatingStrategy,
   mode: SuggestionMode,
   signal?: AbortSignal,
+  placeTables = false,
 ) {
   return api.request(`/weddings/${encodeURIComponent(id)}/guest-planning/seating-suggestions`, {
     method: "POST",
-    body: { strategy, mode, plan: strategy },
+    body: { strategy, mode, plan: strategy, placeTables },
     signal,
     schema: seatingSuggestionSchema,
   });
@@ -421,13 +417,18 @@ export function applySeatingSuggestion(
     sourceFingerprint: string;
     confirmReplace?: boolean;
     plan?: string;
+    /** Also put tray tables on free hall cells; must match the preview the fingerprint came from. */
+    placeTables?: boolean;
   },
 ) {
-  return api.request(`/weddings/${encodeURIComponent(id)}/guest-planning/seating-suggestions/apply`, {
-    method: "POST",
-    body: { ...input, plan: input.strategy },
-    schema: seatingPlanSchema,
-  });
+  return api.request(
+    `/weddings/${encodeURIComponent(id)}/guest-planning/seating-suggestions/apply`,
+    {
+      method: "POST",
+      body: { ...input, plan: input.strategy },
+      schema: seatingPlanSchema,
+    },
+  );
 }
 
 export function autoPlaceTables(api: ApiClient, id: string, expectedVersion: number) {
@@ -460,13 +461,10 @@ export function getSeatingAuditLogs(api: ApiClient, weddingId: string, signal?: 
 }
 
 export function getSeatingSummary(api: ApiClient, weddingId: string, signal?: AbortSignal) {
-  return api.request(
-    `/weddings/${encodeURIComponent(weddingId)}/guest-planning/seating-summary`,
-    {
-      signal,
-      schema: seatingSummarySchema,
-    },
-  );
+  return api.request(`/weddings/${encodeURIComponent(weddingId)}/guest-planning/seating-summary`, {
+    signal,
+    schema: seatingSummarySchema,
+  });
 }
 
 export const tableEstimateSchema = z.object({

@@ -2,7 +2,8 @@ import { ApiError } from "@/core/api/api-error";
 
 // BE seating rule codes -> what the couple should read. ApiError never carries BE detail text.
 const messages: Record<string, string> = {
-  TABLE_NUMBER_TAKEN: "Số bàn này đang được một bàn khác dùng. Chọn số khác hoặc đổi số bàn kia trước.",
+  TABLE_NUMBER_TAKEN:
+    "Số bàn này đang được một bàn khác dùng. Chọn số khác hoặc đổi số bàn kia trước.",
   TABLE_LIMIT: "Tối đa 100 bàn. Giảm số bàn cần thêm.",
   TABLE_HAS_ASSIGNED_PLACES: "Không thể giảm số ghế xuống dưới số khách đang ngồi ở bàn.",
   INVALID_TABLE_CAPACITY: "Sức chứa bàn phải là 10 hoặc 12 ghế.",
@@ -24,7 +25,11 @@ const messages: Record<string, string> = {
     "Bàn đang có khách ngoài nhóm được giao; chủ đám cưới cần xử lý trước.",
   SEATING_SOURCE_CHANGED: "Sơ đồ vừa được người khác thay đổi. Đã tải lại, hãy thử lại.",
   NO_SEATING_CHANGES: "Phương án này không thay đổi vị trí nào so với sơ đồ hiện tại.",
-  SEATING_SUGGESTION_REQUIRES_WEDDING_SCOPE: "Xếp chỗ tự động yêu cầu quyền chỉnh sửa toàn bộ sơ đồ đám cưới.",
+  SEATING_SUGGESTION_REQUIRES_WEDDING_SCOPE:
+    "Xếp chỗ tự động yêu cầu quyền chỉnh sửa toàn bộ sơ đồ đám cưới.",
+  NO_TABLE_PLACEMENTS:
+    "Không còn bàn nào trong khay, hoặc sơ đồ sảnh đã hết ô trống. Mở rộng sảnh để đặt thêm bàn.",
+  SEAT_IN_USE: "Ghế số cao nhất đang có khách ngồi. Bỏ xếp khách đó trước khi giảm số ghế.",
   NO_TABLES: "Chưa có bàn nào trong sơ đồ. Hãy tạo bàn trước khi xếp chỗ.",
   NO_AVAILABLE_SEATS: "Không còn bàn nào đủ chỗ trống cho các khách chưa xếp.",
   EVENT_ALREADY_STARTED: "Tiệc đã được bắt đầu, không thể chỉnh sửa sơ đồ dự kiến.",

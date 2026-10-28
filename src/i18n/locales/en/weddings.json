@@ -107,6 +107,8 @@
   "people": "people",
   "capacityNotSet": "Capacity not set",
   "openWorkspace": "Open wedding workspace",
+  "choosePlanWedding": "Choose the wedding you want to upgrade.",
+  "choosePlanForWedding": "Upgrade this wedding’s plan",
   "weddingSettings": "Wedding settings",
   "weddingSetup": "Wedding setup",
   "weddingName": "Wedding name",

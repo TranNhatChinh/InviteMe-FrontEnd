@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "@/i18n/format";
 import { useLanguage } from "@/i18n/language-context";
@@ -65,12 +65,20 @@ export function CoupleImport({
   onImport,
   onCheck,
   groups,
+  groupsState = "ready",
+  onRetryGroups,
+  currentGuests,
 }: {
   onClose: () => void;
   onImport?: (rows: CoupleRow[]) => Promise<void>;
   onCheck?: (rows: CoupleRow[], signal?: AbortSignal) => Promise<ImportCheckResult>;
   /** Group names already in the wedding, so rows naming them are not reported as unknown. */
   groups?: readonly string[];
+  /** Until the wedding's groups are loaded, every existing group would look unknown, so nothing is asked or imported. */
+  groupsState?: "loading" | "error" | "ready";
+  onRetryGroups?: () => void;
+  /** The wedding's current guests, shown next to the file check to compare duplicates. */
+  currentGuests?: ReactNode;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "importPage" });
   const { language } = useLanguage();
@@ -127,8 +135,7 @@ export function CoupleImport({
   const checking = Boolean(
     onCheck && rowsWithoutFormatErrors.length > 0 && checkKey !== checkState.key,
   );
-  const checkResult =
-    checkKey && checkKey === checkState.key ? checkState.result : null;
+  const checkResult = checkKey && checkKey === checkState.key ? checkState.result : null;
 
   // The dry run is what reports duplicates against the wedding; without it the import is not offered.
   const checkFailed =
@@ -159,10 +166,7 @@ export function CoupleImport({
 
   const skippedByRow = useMemo(() => issuesByRow(checkResult?.skipped, t), [checkResult, t]);
   const checkErrorsByRow = useMemo(() => issuesByRow(checkResult?.errors, t), [checkResult, t]);
-  const checkWarningsByRow = useMemo(
-    () => issuesByRow(checkResult?.warnings, t),
-    [checkResult, t],
-  );
+  const checkWarningsByRow = useMemo(() => issuesByRow(checkResult?.warnings, t), [checkResult, t]);
   const countRows = (map: Record<number, string[]>) =>
     Object.keys(map).filter((row) => row !== "0").length;
   // Row 0 = issues about the whole file (for example more than 500 rows), not about one line.
@@ -287,12 +291,15 @@ export function CoupleImport({
   const valid = rows?.filter((row) => !row.errors.length) ?? [];
   // importableRows already leaves out rows whose group is not in the catalog yet, so the groups to confirm come from
   // every row that would otherwise be imported; until they are confirmed those rows stay out of the import.
-  const pendingGroups = unknownGroups(
-    rowsWithoutFormatErrors.filter(
-      (row) => !checkErrorsByRow[row.line]?.length && !serverErrors[row.line]?.length,
-    ),
-    catalog,
-  );
+  const pendingGroups =
+    groupsState !== "ready"
+      ? []
+      : unknownGroups(
+          rowsWithoutFormatErrors.filter(
+            (row) => !checkErrorsByRow[row.line]?.length && !serverErrors[row.line]?.length,
+          ),
+          catalog,
+        );
   const total = toCreateGuests;
 
   function resolve(key: string, label: string) {
@@ -475,9 +482,28 @@ export function CoupleImport({
           {error}
         </p>
       )}
-      {rows && (
+      {rows && groupsState === "loading" && (
+        <p role="status" className="rounded-2xl border bg-card p-5 text-sm text-muted-foreground">
+          {t("groupsLoading")}
+        </p>
+      )}
+      {rows && groupsState === "error" && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-5 text-sm"
+        >
+          <span className="text-destructive">{t("groupsLoadFailed")}</span>
+          {onRetryGroups && (
+            <Button type="button" variant="outline" size="sm" onClick={onRetryGroups}>
+              {t("groupsRetry")}
+            </Button>
+          )}
+        </div>
+      )}
+      {rows && groupsState === "ready" && (
         <ImportGroupReview rows={rows} catalog={catalog} onResolve={resolve} onCreate={create} />
       )}
+      {rows && currentGuests}
       {rows && (
         <section
           className="space-y-4 rounded-2xl border bg-card p-5"
@@ -686,6 +712,7 @@ export function CoupleImport({
                 saving ||
                 busy ||
                 checking ||
+                groupsState !== "ready" ||
                 (onImport
                   ? toCreateRecipients === 0 || checkFailed
                   : total > 500 || importableRows.length === 0) ||
@@ -710,7 +737,10 @@ export function CoupleImport({
             </Button>
           </div>
           {checkFailed && (
-            <div className="flex flex-wrap items-center gap-3 text-xs text-destructive" role="alert">
+            <div
+              className="flex flex-wrap items-center gap-3 text-xs text-destructive"
+              role="alert"
+            >
               <p>{t("errors.checkFailed")}</p>
               <Button
                 variant="outline"

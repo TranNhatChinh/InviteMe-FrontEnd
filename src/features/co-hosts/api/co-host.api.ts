@@ -13,10 +13,19 @@ export const CO_HOST_PERMISSIONS = [
   "SEATING_VIEW",
   "SEATING_EDIT",
   "CHECKIN_MANAGE",
+  "GIFT_RECORD",
 ] as const;
 
 export const coHostPermissionSchema = z.enum(CO_HOST_PERMISSIONS);
 export type CoHostPermission = z.infer<typeof coHostPermissionSchema>;
+
+/** Reception permissions: the backend only grants them for the whole wedding, never per guest group. */
+export const WEDDING_WIDE_ONLY_PERMISSIONS: readonly CoHostPermission[] = [
+  "CHECKIN_MANAGE",
+  "GIFT_RECORD",
+];
+export const isWeddingWideOnly = (permission: CoHostPermission) =>
+  WEDDING_WIDE_ONLY_PERMISSIONS.includes(permission);
 
 export const permissionScopeSchema = z.object({
   permission: coHostPermissionSchema,
@@ -24,6 +33,21 @@ export const permissionScopeSchema = z.object({
   groupIds: z.array(z.string()),
 });
 export type PermissionScope = z.infer<typeof permissionScopeSchema>;
+
+const isCoHostPermission = (value: string): value is CoHostPermission =>
+  (CO_HOST_PERMISSIONS as readonly string[]).includes(value);
+
+// Older co-hosts can hold permissions this screen does not manage (WEDDING_EDIT, GIFT_EDIT…); they are
+// left out of the list instead of failing the whole response.
+const receivedScopesSchema = z
+  .array(
+    z.object({ permission: z.string(), weddingWide: z.boolean(), groupIds: z.array(z.string()) }),
+  )
+  .transform((scopes) =>
+    scopes.flatMap((scope) =>
+      isCoHostPermission(scope.permission) ? [{ ...scope, permission: scope.permission }] : [],
+    ),
+  );
 
 const coHostSchema = z.object({
   id: z.string(),
@@ -34,7 +58,7 @@ const coHostSchema = z.object({
   permissions: z.array(z.string()),
   joinedAt: z.string().nullable(),
   createdAt: z.string(),
-  scopes: z.array(permissionScopeSchema).nullable().optional(),
+  scopes: receivedScopesSchema.nullable().optional(),
 });
 export type CoHost = z.infer<typeof coHostSchema>;
 
@@ -45,7 +69,7 @@ const invitationSchema = z.object({
   status: z.string(),
   expiresAt: z.string(),
   weddingTitle: z.string(),
-  grants: z.array(permissionScopeSchema),
+  grants: receivedScopesSchema,
 });
 export type CoHostInvitation = z.infer<typeof invitationSchema>;
 
