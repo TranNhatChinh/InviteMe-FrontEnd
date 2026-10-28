@@ -111,35 +111,37 @@ export function CoupleImport({
     });
   }, [rows, catalog]);
 
-  const currentKey = normalizedRows ? JSON.stringify(normalizedRows.map((r) => r.values)) : "";
+  const rowsWithoutFormatErrors = useMemo(
+    () => normalizedRows?.filter((r) => !r.errors.length) ?? [],
+    [normalizedRows],
+  );
+
+  const checkKey = useMemo(
+    () =>
+      rowsWithoutFormatErrors.length
+        ? JSON.stringify(rowsWithoutFormatErrors.map((r) => r.values))
+        : "",
+    [rowsWithoutFormatErrors],
+  );
+
   const checking = Boolean(
-    onCheck &&
-      normalizedRows &&
-      normalizedRows.length &&
-      !normalizedRows.some((r) => r.errors.length > 0) &&
-      currentKey !== checkState.key,
+    onCheck && rowsWithoutFormatErrors.length > 0 && checkKey !== checkState.key,
   );
   const checkResult =
-    currentKey && currentKey === checkState.key && !normalizedRows?.some((r) => r.errors.length > 0)
-      ? checkState.result
-      : null;
+    checkKey && checkKey === checkState.key ? checkState.result : null;
+
   // The dry run is what reports duplicates against the wedding; without it the import is not offered.
   const checkFailed =
-    Boolean(onCheck) &&
-    currentKey !== "" &&
-    currentKey === checkState.key &&
-    checkState.failed &&
-    !normalizedRows?.some((r) => r.errors.length > 0);
+    Boolean(onCheck) && checkKey !== "" && checkKey === checkState.key && checkState.failed;
 
   useEffect(() => {
-    if (!onCheck || !normalizedRows || !normalizedRows.length) return;
-    if (normalizedRows.some((r) => r.errors.length > 0)) return;
+    // No reset when every row has a format error: checkKey is then "", so an older result is never shown.
+    if (!onCheck || !rowsWithoutFormatErrors.length || checkKey === checkState.key) return;
 
-    const key = JSON.stringify(normalizedRows.map((r) => r.values));
-    if (key === checkState.key) return;
+    const key = checkKey;
 
     const controller = new AbortController();
-    onCheck(normalizedRows, controller.signal)
+    onCheck(rowsWithoutFormatErrors, controller.signal)
       .then((res) => {
         if (!controller.signal.aborted) {
           setCheckState({ key, result: res, failed: false });
@@ -153,7 +155,7 @@ export function CoupleImport({
     return () => {
       controller.abort();
     };
-  }, [onCheck, normalizedRows, checkState.key]);
+  }, [onCheck, rowsWithoutFormatErrors, checkKey, checkState.key]);
 
   const skippedByRow = useMemo(() => issuesByRow(checkResult?.skipped, t), [checkResult, t]);
   const checkErrorsByRow = useMemo(() => issuesByRow(checkResult?.errors, t), [checkResult, t]);
@@ -166,13 +168,41 @@ export function CoupleImport({
   // Row 0 = issues about the whole file (for example more than 500 rows), not about one line.
   const fileIssues = [...new Set([...(checkErrorsByRow[0] ?? []), ...(serverErrors[0] ?? [])])];
 
+  const importableRows = useMemo(() => {
+    if (!normalizedRows) return [];
+    return normalizedRows.filter((row) => {
+      if (row.errors.length > 0) return false;
+      if (checkErrorsByRow[row.line]?.length) return false;
+      if (serverErrors[row.line]?.length) return false;
+      if (row.values[4] && !findGroup(row.values[4], catalog)) return false;
+      return true;
+    });
+  }, [normalizedRows, checkErrorsByRow, serverErrors, catalog]);
+
+  const toCreateRows = useMemo(() => {
+    return importableRows.filter((r) => !skippedByRow[r.line]?.length);
+  }, [importableRows, skippedByRow]);
+
+  const toCreateRecipients = toCreateRows.length;
+  const toCreateGuests = toCreateRows.reduce((sum, r) => sum + (r.expected ?? 1), 0);
+
+  const errorRowCount = useMemo(() => {
+    if (!rows) return 0;
+    return rows.filter(
+      (r) =>
+        r.errors.length > 0 ||
+        Boolean(checkErrorsByRow[r.line]?.length) ||
+        Boolean(serverErrors[r.line]?.length),
+    ).length;
+  }, [rows, checkErrorsByRow, serverErrors]);
+
   async function submit() {
-    if (!onImport || !normalizedRows || saving) return;
+    if (!onImport || !importableRows.length || saving) return;
     setSaving(true);
     setError("");
     setServerErrors({});
     try {
-      await onImport(normalizedRows);
+      await onImport(importableRows);
     } catch (e) {
       let issues: Record<number, string[]> = {};
       if (e instanceof ApiError && e.rowIssues.length) issues = issuesByRow(e.rowIssues, t);
@@ -255,8 +285,15 @@ export function CoupleImport({
   }
 
   const valid = rows?.filter((row) => !row.errors.length) ?? [];
-  const pendingGroups = unknownGroups(rows ?? [], catalog);
-  const total = valid.reduce((sum, row) => sum + (row.expected ?? 0), 0);
+  // importableRows already leaves out rows whose group is not in the catalog yet, so the groups to confirm come from
+  // every row that would otherwise be imported; until they are confirmed those rows stay out of the import.
+  const pendingGroups = unknownGroups(
+    rowsWithoutFormatErrors.filter(
+      (row) => !checkErrorsByRow[row.line]?.length && !serverErrors[row.line]?.length,
+    ),
+    catalog,
+  );
+  const total = toCreateGuests;
 
   function resolve(key: string, label: string) {
     if (rows) setRows(validateCoupleRows(resolveGroupRows(rows, key, label, catalog)));
@@ -304,8 +341,8 @@ export function CoupleImport({
       value
     ] ?? value;
 
-  if (seating && normalizedRows)
-    return <CoupleSeatingPreview rows={normalizedRows} onBack={() => setSeating(false)} />;
+  if (seating && importableRows.length)
+    return <CoupleSeatingPreview rows={importableRows} onBack={() => setSeating(false)} />;
 
   return (
     <fieldset disabled={saving} className="min-w-0 space-y-6">
@@ -457,12 +494,11 @@ export function CoupleImport({
           <p role="status" className="text-sm">
             {checkResult ? (
               [
-                // With format errors the BE stops before counting, so 0 would be misleading.
-                !(checkResult.errors.length && !checkResult.guestCount) && (
+                toCreateRecipients > 0 && (
                   <span key="summary" className="font-medium text-foreground">
                     {t("checkSummary", {
-                      recipients: formatNumber(checkResult.guestCount, language),
-                      guests: formatNumber(checkResult.peopleCount, language),
+                      recipients: formatNumber(toCreateRecipients, language),
+                      guests: formatNumber(toCreateGuests, language),
                     })}
                   </span>
                 ),
@@ -471,10 +507,10 @@ export function CoupleImport({
                     {t("checkSkipped", { count: formatNumber(countRows(skippedByRow), language) })}
                   </span>
                 ),
-                countRows(checkErrorsByRow) > 0 && (
+                errorRowCount > 0 && (
                   <span key="errors" className="text-destructive font-medium">
                     {t("checkErrorRows", {
-                      count: formatNumber(countRows(checkErrorsByRow), language),
+                      count: formatNumber(errorRowCount, language),
                     })}
                   </span>
                 ),
@@ -650,13 +686,9 @@ export function CoupleImport({
                 saving ||
                 busy ||
                 checking ||
-                !valid.length ||
                 (onImport
-                  ? valid.length !== rows.length ||
-                    checkFailed ||
-                    (checkResult !== null &&
-                      (checkResult.errors.length > 0 || checkResult.guestCount === 0))
-                  : total > 500) ||
+                  ? toCreateRecipients === 0 || checkFailed
+                  : total > 500 || importableRows.length === 0) ||
                 pendingGroups.length > 0
               }
               onClick={() => (onImport ? void submit() : setSeating(true))}
@@ -666,14 +698,8 @@ export function CoupleImport({
                   t("importing")
                 ) : (
                   t("importButton", {
-                    recipients: formatNumber(
-                      checkResult ? checkResult.guestCount : valid.length,
-                      language,
-                    ),
-                    guests: formatNumber(
-                      checkResult ? checkResult.peopleCount : total,
-                      language,
-                    ),
+                    recipients: formatNumber(toCreateRecipients, language),
+                    guests: formatNumber(toCreateGuests, language),
                   })
                 )
               ) : (
@@ -695,11 +721,20 @@ export function CoupleImport({
               </Button>
             </div>
           )}
-          {checkResult && checkResult.errors.length > 0 && (
-            <p className="text-xs text-destructive">{t("fixErrorsFirst")}</p>
+          {errorRowCount > 0 && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              {errorRowCount === 1
+                ? "1 dòng có chữ đỏ (lỗi) sẽ tự động được bỏ qua và không thêm vào danh sách. Bạn có thể sửa trực tiếp trong bảng trước khi lưu."
+                : `${formatNumber(errorRowCount, language)} dòng có chữ đỏ (lỗi) sẽ tự động được bỏ qua và không thêm vào danh sách. Bạn có thể sửa trực tiếp trong bảng trước khi lưu.`}
+            </p>
           )}
-          {checkResult && checkResult.guestCount === 0 && checkResult.skipped.length > 0 && (
+          {rows && rows.length > 0 && toCreateRecipients === 0 && countRows(skippedByRow) > 0 && (
             <p className="text-xs text-muted-foreground">{t("allSkipped")}</p>
+          )}
+          {rows && rows.length > 0 && toCreateRecipients === 0 && countRows(skippedByRow) === 0 && (
+            <p className="text-xs text-destructive">
+              Tất cả các dòng đều có lỗi. Vui lòng sửa ít nhất một dòng hợp lệ trước khi lưu.
+            </p>
           )}
           {pendingGroups.length > 0 && (
             <p className="text-xs text-amber-900">
