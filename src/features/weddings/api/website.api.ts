@@ -4,6 +4,8 @@ import { env } from "@/core/config/env";
 import { resolveMediaUrl } from "@/core/config/media-url";
 // eslint-disable-next-line architecture/boundaries -- Website API contracts share the Studio JSON document schema
 import { studioDocumentSchema } from "@/features/template-studio/schemas/document";
+import { weddingStorySchema, isWeddingStoryDocument } from "../schemas/wedding-story.schema";
+import { storyDraftV3Schema, storySnapshotV3Schema } from "../schemas/story-v3.schema";
 
 export const websiteTemplates = [
   { id: "story-red-velvet", name: "Đỏ nhung", color: "#7d1929", background: "#fff7f2" },
@@ -30,8 +32,14 @@ export const legacyWebsiteDocumentSchema = z
     showStory: z.boolean().optional(),
     showEvent: z.boolean().optional(),
     contact: z.string().nullable().optional(),
-    timeline: z.array(z.object({ title: z.string(), description: z.string() })).nullable().optional(),
-    events: z.array(z.object({ name: z.string(), startsAt: z.string(), address: z.string() })).nullable().optional(),
+    timeline: z
+      .array(z.object({ title: z.string(), description: z.string() }))
+      .nullable()
+      .optional(),
+    events: z
+      .array(z.object({ name: z.string(), startsAt: z.string(), address: z.string() }))
+      .nullable()
+      .optional(),
     gallery: z.array(z.string()).nullable().optional(),
     timeZoneId: z.string().nullable().optional(),
   })
@@ -39,8 +47,15 @@ export const legacyWebsiteDocumentSchema = z
 
 export type LegacyWebsiteDocument = z.infer<typeof legacyWebsiteDocumentSchema>;
 
-export const websiteDocumentSchema = z.union([studioDocumentSchema, legacyWebsiteDocumentSchema]);
+export const websiteDocumentSchema = z.union([
+  storyDraftV3Schema,
+  storySnapshotV3Schema,
+  weddingStorySchema,
+  studioDocumentSchema,
+  legacyWebsiteDocumentSchema,
+]);
 export type WebsiteDocument = z.infer<typeof websiteDocumentSchema>;
+export { isWeddingStoryDocument };
 
 export const websiteSchema = z.object({
   version: z.number(),
@@ -56,6 +71,37 @@ export const publicWebsiteSchema = z.object({
 });
 
 export const uploadedMediaSchema = z.object({ id: z.string(), url: z.string() });
+export const storyWishSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  message: z.string(),
+  createdAt: z.string(),
+});
+export const storyTemplateConfigSchema = z.object({
+  key: z.string(), name: z.string(),
+  sections: z.array(z.object({ type: z.string(), variant: z.string() })),
+  theme: z.object({
+    colors: z.object({ primary: z.string(), background: z.string(), accent: z.string(), text: z.string() }),
+    fontHeading: z.string(), fontBody: z.string(),
+  }),
+  palettes: z.array(z.object({
+    id: z.string(), label: z.string(),
+    colors: z.object({ primary: z.string(), background: z.string(), accent: z.string(), text: z.string() }),
+  })),
+  allowedFonts: z.array(z.string()),
+  assets: z.record(z.string(), z.string()).nullable().optional(),
+});
+export const storyTemplateSummarySchema = z.object({
+  key: z.string(),
+  version: z.number(),
+  name: z.string(),
+  config: storyTemplateConfigSchema,
+});
+export type PublicStoryTemplate = z.infer<typeof storyTemplateSummarySchema>;
+export const listStoryTemplates = (api: ApiClient) =>
+  api.request("/story-templates", { schema: z.array(storyTemplateSummarySchema) });
+export const getStoryTemplate = (api: ApiClient, key: string) =>
+  api.request(`/story-templates/${encodeURIComponent(key)}`, { schema: storyTemplateSummarySchema });
 export type Website = z.infer<typeof websiteSchema>;
 
 export function isStudioDocument(doc: unknown): doc is StudioDocument {
@@ -79,7 +125,10 @@ export function isLegacyWebsiteDocument(doc: unknown): doc is LegacyWebsiteDocum
   );
 }
 
-export function mapStudioMedia(document: StudioDocument, mapper: (src: string) => string): StudioDocument {
+export function mapStudioMedia(
+  document: StudioDocument,
+  mapper: (src: string) => string,
+): StudioDocument {
   return {
     ...document,
     nodes: Object.fromEntries(
@@ -121,8 +170,8 @@ export function toStoredSource(src: string) {
 export const resolveWebsiteDocument = (document: StudioDocument) =>
   mapStudioMedia(document, (src) => resolveMediaUrl(toStoredSource(src)) ?? src);
 
-export const storedWebsiteDocument = (document: StudioDocument) =>
-  mapStudioMedia(document, toStoredSource);
+export const storedWebsiteDocument = (document: WebsiteDocument) =>
+  isStudioDocument(document) ? mapStudioMedia(document, toStoredSource) : document;
 
 function resolveDocumentMedia(doc: WebsiteDocument | null): WebsiteDocument | null {
   if (!doc) return null;
@@ -143,12 +192,12 @@ export const saveWebsite = (
   api: ApiClient,
   id: string,
   expectedVersion: number,
-  document: StudioDocument | string,
+  document: WebsiteDocument | string,
 ) => {
   const parsed =
     typeof document === "string"
-      ? studioDocumentSchema.parse(JSON.parse(document))
-      : studioDocumentSchema.parse(document);
+      ? websiteDocumentSchema.parse(JSON.parse(document))
+      : websiteDocumentSchema.parse(document);
 
   return api
     .request(path(id), {
@@ -184,10 +233,29 @@ export const getPublicWebsite = (api: ApiClient, slug: string, signal?: AbortSig
       signal,
       schema: publicWebsiteSchema,
     })
-    .then((res) => ({ ...res, document: (resolveDocumentMedia(res.document) ?? res.document) as WebsiteDocument }));
+    .then((res) => ({
+      ...res,
+      document: (resolveDocumentMedia(res.document) ?? res.document) as WebsiteDocument,
+    }));
+
+export const listStoryWishes = (api: ApiClient, slug: string) =>
+  api.request(`/public/weddings/${encodeURIComponent(slug)}/wishes`, {
+    auth: "none",
+    schema: z.array(storyWishSchema),
+  });
+
+export const sendStoryWish = (api: ApiClient, slug: string, name: string, message: string) =>
+  api.request(`/public/weddings/${encodeURIComponent(slug)}/wishes`, {
+    auth: "none",
+    method: "POST",
+    body: { name, message },
+    schema: storyWishSchema,
+  });
 
 export const listWeddingMedia = (api: ApiClient, id: string) =>
-  api.request(`/weddings/${encodeURIComponent(id)}/media`, { schema: z.array(uploadedMediaSchema) });
+  api.request(`/weddings/${encodeURIComponent(id)}/media`, {
+    schema: z.array(uploadedMediaSchema),
+  });
 
 export const uploadWeddingMedia = (api: ApiClient, id: string, file: File) => {
   const body = new FormData();

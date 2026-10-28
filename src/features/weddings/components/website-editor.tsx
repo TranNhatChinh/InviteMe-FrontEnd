@@ -22,6 +22,7 @@ import { ErrorState } from "@/shared/feedback/error-state";
 import {
   getWebsite,
   isStudioDocument,
+  isWeddingStoryDocument,
   listWeddingMedia,
   mediaUrl,
   publishWebsite,
@@ -41,6 +42,8 @@ import {
   WebsiteStoryRenderer,
   StudioModeContext,
 } from "@/features/template-studio";
+import { WeddingStoryEditor } from "./wedding-story-editor";
+import { isStoryV3 } from "../schemas/story-v3.schema";
 
 export function WebsiteEditor({ weddingId }: { weddingId: string }) {
   const { api } = useRuntime();
@@ -60,12 +63,7 @@ export function WebsiteEditor({ weddingId }: { weddingId: string }) {
   }
 
   if (websiteQuery.isError) {
-    return (
-      <ErrorState
-        error={websiteQuery.error}
-        retry={() => void websiteQuery.refetch()}
-      />
-    );
+    return <ErrorState error={websiteQuery.error} retry={() => void websiteQuery.refetch()} />;
   }
 
   const site = websiteQuery.data;
@@ -83,13 +81,14 @@ function WebsiteManager({
   site: Website;
   slug: string;
 }) {
-  const initialStudioDoc =
-    site.document && isStudioDocument(site.document) ? site.document : null;
+  const initialStudioDoc = site.document && isStudioDocument(site.document) ? site.document : null;
 
-  const [activeDocument, setActiveDocument] = useState<StudioDocument | null>(
-    initialStudioDoc,
-  );
+  const [activeDocument, setActiveDocument] = useState<StudioDocument | null>(initialStudioDoc);
   const [showPicker, setShowPicker] = useState<boolean>(!initialStudioDoc);
+
+  if (!site.document || isWeddingStoryDocument(site.document) || isStoryV3(site.document)) {
+    return <WeddingStoryEditor weddingId={weddingId} site={site} />;
+  }
 
   function handleSelectTemplate(template: (typeof storyTemplateCatalog)[number]) {
     // Copy the catalog template document as the wedding's draft
@@ -155,7 +154,8 @@ function StoryTemplatePicker({
             Chọn mẫu Wedding Story
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Khám phá các mẫu website đám cưới được thiết kế sẵn. Chọn một mẫu để bắt đầu tùy chỉnh cho ngày vui của bạn.
+            Khám phá các mẫu website đám cưới được thiết kế sẵn. Chọn một mẫu để bắt đầu tùy chỉnh
+            cho ngày vui của bạn.
           </p>
         </div>
         {hasActiveDraft && (
@@ -205,10 +205,7 @@ function StoryTemplatePicker({
                 <Eye className="mr-1.5 size-4" />
                 Xem trước
               </Button>
-              <Button
-                className="flex-1"
-                onClick={() => onSelect(template)}
-              >
+              <Button className="flex-1" onClick={() => onSelect(template)}>
                 <Check className="mr-1.5 size-4" />
                 Chọn mẫu
               </Button>
@@ -226,17 +223,11 @@ function StoryTemplatePicker({
         >
           <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setPreviewTemplate(null)}
-              >
+              <Button variant="ghost" size="sm" onClick={() => setPreviewTemplate(null)}>
                 <ArrowLeft className="mr-1.5 size-4" />
                 Đóng
               </Button>
-              <span className="font-semibold text-foreground">
-                {previewTemplate.name}
-              </span>
+              <span className="font-semibold text-foreground">{previewTemplate.name}</span>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -403,11 +394,7 @@ function WebsiteStudioSession({
             </span>
           )}
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onChangeTemplateRequest(isDirty)}
-          >
+          <Button variant="outline" size="sm" onClick={() => onChangeTemplateRequest(isDirty)}>
             <Palette className="mr-1.5 size-4" />
             Đổi mẫu Story
           </Button>

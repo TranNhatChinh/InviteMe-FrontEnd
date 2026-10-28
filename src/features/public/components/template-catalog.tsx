@@ -4,22 +4,13 @@ import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
-import { listPublicTemplateVisibility, listPublicTemplates } from "../api/templates.api";
-type Design = {
-  id: string;
-  name: string;
-  description: string;
-  preview: ReactNode;
-  story?: boolean;
-};
+import { listPublicTemplates } from "../api/templates.api";
 export function TemplateCatalog({
   category,
-  inviteTemplates = [],
-  storyTemplates = [],
+  renderPreview,
 }: {
   category?: "invite" | "story";
-  inviteTemplates?: Design[];
-  storyTemplates?: Design[];
+  renderPreview?: (configurationJson: string) => ReactNode;
 }) {
   const { api } = useRuntime();
   const publicTemplates = useQuery({
@@ -27,35 +18,24 @@ export function TemplateCatalog({
     queryFn: ({ signal }) => listPublicTemplates(api, signal),
     staleTime: 60_000,
   });
-  const visibility = useQuery({
-    queryKey: ["public-template-visibility"],
-    queryFn: ({ signal }) => listPublicTemplateVisibility(api, signal),
-    staleTime: 60_000,
-  });
-  const configured = visibility.data ?? [];
   const published = publicTemplates.data ?? [];
-  const knownIds = new Set([...inviteTemplates, ...storyTemplates].map((template) => template.id));
-  const configuredStatic = [...inviteTemplates, ...storyTemplates].filter((template) => {
-    const saved = configured.find((item) => item.slug === template.id);
-    return saved?.visible !== false;
-  });
-  const dynamic = published
-    .filter((template) => !knownIds.has(template.slug))
-    .map((template) => ({
-      id: template.slug,
-      name: template.name,
-      description: template.theme || "InviteMe wedding template",
-      story: template.theme?.toUpperCase().includes("STORY") ?? false,
-      preview: template.previewUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={template.previewUrl} alt="" className="size-full object-cover" />
-      ) : (
-        <div className="flex size-full items-center justify-center bg-primary/10 p-6 text-center font-display text-2xl text-primary">
-          {template.name}
-        </div>
-      ),
-    }));
-  const catalog = [...configuredStatic, ...dynamic];
+  const dynamic = published.map((template) => ({
+    id: template.slug,
+    name: template.name,
+    description: template.theme || "InviteMe wedding template",
+    story: template.theme?.toUpperCase().includes("STORY") ?? false,
+    preview: renderPreview ? (
+      renderPreview(template.configurationJson)
+    ) : template.previewUrl ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={template.previewUrl} alt="" className="size-full object-cover" />
+    ) : (
+      <div className="flex size-full items-center justify-center bg-primary/10 p-6 text-center font-display text-2xl text-primary">
+        {template.name}
+      </div>
+    ),
+  }));
+  const catalog = dynamic;
   const visible =
     category === "invite"
       ? catalog.filter((template) => !template.story)

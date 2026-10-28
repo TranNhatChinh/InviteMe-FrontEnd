@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
@@ -85,7 +86,9 @@ export function AdminTemplates() {
   });
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "INACTIVE" }) =>
-      adminApi.setTemplateStatus(api, id, status),
+      status === "ACTIVE"
+        ? adminApi.publishTemplate(api, id)
+        : adminApi.setTemplateStatus(api, id, status),
     onSuccess: invalidate,
     onError: () => setError(translate("templateVisibilityFailed")),
   });
@@ -224,6 +227,11 @@ export function AdminTemplates() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex gap-2">
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/admin/templates/${encodeURIComponent(t.id)}/studio`}>
+                              Studio
+                            </Link>
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"

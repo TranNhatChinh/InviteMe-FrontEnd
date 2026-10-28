@@ -1,7 +1,5 @@
-import { TemplateCatalog } from "@/features/public";
-
-import { inviteTemplates, storyTemplates } from "./invite-catalog";
+import { PublicTemplateCatalog } from "@/app/_components/public-template-catalog";
 
 export default function TemplatesPage() {
-  return <TemplateCatalog inviteTemplates={inviteTemplates} storyTemplates={storyTemplates} />;
+  return <PublicTemplateCatalog />;
 }

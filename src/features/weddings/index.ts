@@ -8,6 +8,10 @@ export { WeddingNavigation } from "./components/wedding-navigation";
 
 export { WebsiteEditor } from "./components/website-editor";
 export { WebsiteRenderer } from "./components/website-renderer";
+export { StoryClassic } from "./components/story-renderer";
+export { WeddingStoryEditor } from "./components/wedding-story-editor";
+export { starterWeddingStory } from "./schemas/wedding-story.schema";
+export { isStoryV3, fromStoryV3 } from "./schemas/story-v3.schema";
 export {
   getWebsite,
   saveWebsite,
@@ -18,6 +22,7 @@ export {
   websiteSchema,
   websiteDocumentSchema,
   isStudioDocument,
+  isWeddingStoryDocument,
   isLegacyWebsiteDocument,
   listWeddingMedia,
   mediaUrl,

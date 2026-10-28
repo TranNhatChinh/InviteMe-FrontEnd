@@ -31,7 +31,7 @@ function toStoredSource(src: string) {
 }
 export const resolveInvitationDocument = (document: StudioDocument) =>
   mapMedia(document, (src) => resolveMediaUrl(toStoredSource(src)) ?? src);
-const storedInvitationDocument = (document: StudioDocument) => mapMedia(document, toStoredSource);
+export const storedInvitationDocument = (document: StudioDocument) => mapMedia(document, toStoredSource);
 const resolveDesign = <T extends { document: StudioDocument | null }>(design: T): T =>
   ({ ...design, document: design.document ? resolveInvitationDocument(design.document) : null });
 

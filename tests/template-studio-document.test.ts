@@ -6,7 +6,6 @@ import burgundyTemplate from "../src/features/template-studio/templates/minimali
 import brownTemplate from "../src/features/template-studio/templates/minimalism-brown.json";
 import {
   templateCatalog,
-  storyTemplateCatalog,
   findTemplate,
 } from "../src/features/template-studio/templates/catalog";
 import { parseStudioDocument } from "../src/features/template-studio/schemas/document";
@@ -373,99 +372,4 @@ test("optional image shapes preserve older documents and reject unsupported shap
   );
   Object.assign(photo.props, { imageShape: "arbitrary-css" });
   assert.throws(() => parseStudioDocument(JSON.stringify(input)));
-});
-
-test("five new Story documents preserve distinct section order and use only original local photos", () => {
-  assert.equal(storyTemplateCatalog.length, 6);
-  const ids = [
-    "story-editorial-61",
-    "story-garden-02",
-    "story-seaside-01",
-    "story-scarlet-39",
-    "story-sage-53",
-  ];
-  for (const id of ids) {
-    const template = findTemplate(id);
-    assert.ok(template, id);
-    const doc = parseStudioDocument(JSON.stringify(template.document));
-    assert.deepEqual(doc, template.document);
-    assert.ok(doc.nodes.ROOT!.props.height! < 10000);
-    assert.ok(doc.nodes.ROOT!.nodes.length <= 100);
-    for (const node of Object.values(doc.nodes)) {
-      for (const src of [node.props.src, ...(node.props.images ?? [])].filter(
-        (value): value is string => !!value,
-      )) {
-        assert.ok(src.startsWith("/images/template-studio/story-collection/"));
-        assert.ok(existsSync(path.join(process.cwd(), "public", src)), `${id}: ${src}`);
-      }
-    }
-    const all = Object.values(doc.nodes);
-    const firstY = (kind: string) =>
-      Math.min(
-        ...all.filter((node) => node.type.resolvedName === kind).map((node) => node.props.y ?? 0),
-      );
-    const textY = (label: string) =>
-      all.find((node) => node.props.text === label)?.props.y ?? Infinity;
-    if (id === "story-editorial-61") assert.ok(firstY("StudioInterview") < firstY("StudioAlbum"));
-    if (id === "story-garden-02") assert.ok(textY("OUR LOVE STORY") < firstY("StudioCalendar"));
-    if (id === "story-seaside-01")
-      assert.ok(
-        textY("Đôi mình") < firstY("StudioCountdown") &&
-          firstY("StudioCountdown") < firstY("StudioCalendar"),
-      );
-    if (id === "story-scarlet-39")
-      assert.ok(
-        firstY("StudioCalendar") < textY("Đôi mình") &&
-          firstY("StudioTimeline") < firstY("StudioCountdown"),
-      );
-    if (id === "story-sage-53")
-      assert.ok(
-        firstY("StudioTimeline") < textY("Đôi mình") && textY("Dresscode") < textY("Đôi mình"),
-      );
-  }
-});
-
-test("Interview and Timeline support empty drafts, multiline content and bounded lists in JSON", () => {
-  const template = findTemplate("story-editorial-61")!;
-  const doc = structuredClone(template.document);
-  const interview = Object.values(doc.nodes).find(
-    (node) => node.type.resolvedName === "StudioInterview",
-  )!;
-  interview.props.questions = [{ question: "", answer: "A".repeat(600) }];
-  assert.deepEqual(parseStudioDocument(JSON.stringify(doc)).nodes, doc.nodes);
-  const timelineDoc = structuredClone(findTemplate("story-sage-53")!.document);
-  const timeline = Object.values(timelineDoc.nodes).find(
-    (node) => node.type.resolvedName === "StudioTimeline",
-  )!;
-  timeline.props.milestones = Array.from({ length: 8 }, () => ({
-    time: "18:00",
-    title: "",
-    description: Array(35).fill("dòng").join("\n"),
-  }));
-  assert.deepEqual(parseStudioDocument(JSON.stringify(timelineDoc)).nodes, timelineDoc.nodes);
-  timeline.props.milestones.push({ time: "19:00", title: "Ninth", description: "" });
-  assert.throws(() => parseStudioDocument(JSON.stringify(timelineDoc)));
-});
-
-test("Wedding Story uses shared widgets and preserves chapters across export/import", () => {
-  const template = storyTemplateCatalog[0];
-  assert.ok(template);
-  const saved = parseStudioDocument(JSON.stringify(template.document));
-  assert.equal(findTemplate("story-red-velvet")?.name, template.name);
-  const types = Object.values(saved.nodes).map((node) => node.type.resolvedName);
-  for (const name of [
-    "StudioCountdown",
-    "StudioCalendar",
-    "StudioAlbum",
-    "StudioMap",
-    "StudioAction",
-    "StudioWishes",
-  ])
-    assert.ok(types.includes(name as (typeof types)[number]));
-  assert.ok(
-    Object.values(saved.nodes).some((node) => node.props.text?.includes("LOVE, IN CHAPTERS")),
-  );
-  for (const node of Object.values(saved.nodes))
-    for (const src of [node.props.src, ...(node.props.images ?? [])])
-      if (src) assert.ok(existsSync(path.join(process.cwd(), "public", src)));
 });

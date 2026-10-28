@@ -3,5 +3,7 @@ export { AdminAuditLogs } from "./components/admin-audit-logs";
 export { AdminDashboard } from "./components/admin-dashboard";
 export { AdminPlans } from "./components/admin-plans";
 export { AdminTemplates } from "./components/admin-templates";
+export { adminApi } from "./api/admin.api";
+export { AdminStoryTemplates } from "./components/admin-story-templates";
 export { AdminUsers } from "./components/admin-users";
 export { AdminWeddings } from "./components/admin-weddings";

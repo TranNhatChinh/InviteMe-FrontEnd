@@ -1,5 +1,67 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
+const colors = z.object({
+  primary: z.string(),
+  background: z.string(),
+  accent: z.string(),
+  text: z.string(),
+});
+const storyTemplateConfigSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  sections: z.array(z.object({ type: z.string(), variant: z.string() })),
+  theme: z.object({ colors, fontHeading: z.string(), fontBody: z.string() }),
+  palettes: z.array(z.object({ id: z.string(), label: z.string(), colors })),
+  allowedFonts: z.array(z.string()),
+  assets: z.record(z.string(), z.string()).nullable().optional(),
+});
+
+export const adminStoryTemplateSchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  name: z.string(),
+  version: z.number(),
+  publishedVersion: z.number(),
+  draft: storyTemplateConfigSchema,
+  published: storyTemplateConfigSchema.nullable(),
+  isArchived: z.boolean(),
+  updatedAt: z.string(),
+  publishedAt: z.string().nullable(),
+});
+export type AdminStoryTemplate = z.infer<typeof adminStoryTemplateSchema>;
+export type StoryTemplateConfig = z.infer<typeof storyTemplateConfigSchema>;
+
+export const storyTemplateAdminApi = {
+  list: (api: ApiClient) =>
+    api.request("/admin/story-templates", { schema: z.array(adminStoryTemplateSchema) }),
+  create: (api: ApiClient, key: string, draft: StoryTemplateConfig) =>
+    api.request("/admin/story-templates", {
+      method: "POST",
+      body: { key, draft },
+      schema: adminStoryTemplateSchema,
+    }),
+  save: (api: ApiClient, id: string, expectedVersion: number, draft: StoryTemplateConfig) =>
+    api.request(`/admin/story-templates/${encodeURIComponent(id)}/draft`, {
+      method: "PUT",
+      body: { expectedVersion, draft },
+      schema: adminStoryTemplateSchema,
+    }),
+  publish: (api: ApiClient, id: string, expectedVersion: number) =>
+    api.request(`/admin/story-templates/${encodeURIComponent(id)}/publish`, {
+      method: "POST",
+      body: { expectedVersion },
+      schema: adminStoryTemplateSchema,
+    }),
+  archive: (api: ApiClient, id: string, expectedVersion: number, archived: boolean) =>
+    api.request(
+      `/admin/story-templates/${encodeURIComponent(id)}/${archived ? "archive" : "unarchive"}`,
+      {
+        method: "POST",
+        body: { expectedVersion },
+        schema: adminStoryTemplateSchema,
+      },
+    ),
+};
 
 const pageSchema = <T extends z.ZodType>(item: T) =>
   z.object({
@@ -222,6 +284,25 @@ export const adminApi = {
     signal?: AbortSignal,
   ) =>
     api.request(`/admin/templates?${queryString(input)}`, { signal, schema: adminTemplatesSchema }),
+  template: (api: ApiClient, id: string, signal?: AbortSignal) =>
+    api.request(`/admin/templates/${encodeURIComponent(id)}`, {
+      signal,
+      schema: adminTemplateSchema,
+    }),
+  publishTemplate: (api: ApiClient, id: string) =>
+    api.request(`/admin/templates/${encodeURIComponent(id)}/publish`, {
+      method: "POST",
+      schema: adminTemplateSchema,
+    }),
+  uploadTemplateAsset: (api: ApiClient, id: string, file: File) => {
+    const body = new FormData();
+    body.set("file", file);
+    return api.request(`/admin/templates/${encodeURIComponent(id)}/assets`, {
+      method: "POST",
+      body,
+      schema: z.object({ src: z.string(), name: z.string() }),
+    });
+  },
   createTemplate: (
     api: ApiClient,
     input: {

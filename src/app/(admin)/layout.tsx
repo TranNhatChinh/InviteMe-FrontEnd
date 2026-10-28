@@ -20,6 +20,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               { href: "/admin/users", label: "Users", icon: "users" },
               { href: "/admin/weddings", label: "Weddings", icon: "weddings" },
               { href: "/admin/templates", label: "Templates", icon: "templates" },
+              { href: "/admin/story-templates", label: "Story Templates", icon: "templates" },
               { href: "/admin/plans", label: "Plans", icon: "plans" },
             ],
           },

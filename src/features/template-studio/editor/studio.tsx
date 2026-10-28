@@ -56,6 +56,7 @@ import { TemplateThumbnail } from "../components/template-thumbnail";
 import { studioTemplates as templateCatalog, findTemplate } from "../templates/catalog";
 import { isValidEventDate } from "../components/date-utils";
 import { parseStudioDocument } from "../schemas/document";
+import { resolveInvitationDocument } from "../api/design.api";
 import { PhotoFocusContext, type PhotoFocus } from "../components/photo-focus";
 import styles from "./studio.module.css";
 import type { TemplateStudioProps } from "./studio.types";
@@ -347,7 +348,9 @@ function Workspace({
           if (cancelled) return;
           const selectedTemplate = templates.find((item) => item.slug === initialTemplate);
           if (!selectedTemplate) throw new Error("Template is hidden or unavailable.");
-          const parsed = parseStudioDocument(selectedTemplate.configurationJson);
+          const parsed = resolveInvitationDocument(
+            parseStudioDocument(selectedTemplate.configurationJson),
+          );
           actions.history.ignore().deserialize(JSON.stringify(parsed.nodes));
           setTemplateId(initialTemplate);
           setMessage(t("status.templateLoaded", { name: initialTemplate }));
@@ -817,7 +820,12 @@ function Workspace({
                       <button
                         disabled={preview}
                         onClick={() => {
-                          if (canUndo && !window.confirm("Bạn có thay đổi chưa lưu. Bạn có chắc chắn muốn đổi mẫu và hủy các thay đổi này không?")) {
+                          if (
+                            canUndo &&
+                            !window.confirm(
+                              "Bạn có thay đổi chưa lưu. Bạn có chắc chắn muốn đổi mẫu và hủy các thay đổi này không?",
+                            )
+                          ) {
                             return;
                           }
                           importJson(
