@@ -10,11 +10,25 @@ import {
   saveWebsite,
   unpublishWebsite,
 } from "../src/features/weddings/api/website.api";
-import { storyTemplateCatalog } from "../src/features/template-studio/templates/catalog";
+import { templateCatalog } from "../src/features/template-studio/templates/catalog";
 import { parseStudioDocument } from "../src/features/template-studio/schemas/document";
+import {
+  storyTemplates,
+  builtinStoryTemplateCatalog,
+} from "../src/features/weddings/templates/story-templates";
+import {
+  starterWeddingStory,
+  weddingStorySchema,
+  isWeddingStoryDocument,
+} from "../src/features/weddings/schemas/wedding-story.schema";
+import {
+  isStoryV3,
+  toStoryDraftV3,
+  fromStoryV3,
+} from "../src/features/weddings/schemas/story-v3.schema";
 
 test("identifies Studio JSON vs legacy website documents correctly", () => {
-  const storyDoc = structuredClone(storyTemplateCatalog[0]!.document);
+  const storyDoc = structuredClone(templateCatalog[0]!.document);
   assert.equal(isStudioDocument(storyDoc), true);
   assert.equal(isLegacyWebsiteDocument(storyDoc), false);
 
@@ -36,38 +50,41 @@ test("identifies Studio JSON vs legacy website documents correctly", () => {
   assert.equal(isLegacyWebsiteDocument({}), false);
 });
 
-test("storyTemplateCatalog provides 6 distinct wedding story templates using Studio JSON", () => {
-  assert.equal(storyTemplateCatalog.length, 6);
-  const ids = storyTemplateCatalog.map((t) => t.id);
-  assert.deepEqual(ids, [
-    "story-red-velvet",
-    "story-editorial-61",
-    "story-garden-02",
-    "story-seaside-01",
-    "story-scarlet-39",
-    "story-sage-53",
-  ]);
+test("new storyTemplates provides romantic and royal template definitions", () => {
+  const keys = Object.keys(storyTemplates);
+  assert.deepEqual(keys, ["romantic", "royal"]);
+  assert.equal(builtinStoryTemplateCatalog.length, 2);
 
-  for (const template of storyTemplateCatalog) {
+  for (const template of builtinStoryTemplateCatalog) {
     assert.ok(template.name.length > 0);
-    assert.ok(template.description.length > 0);
-    assert.equal(template.document.schemaVersion, 1);
-    const root = template.document.nodes.ROOT;
-    if (!root) throw new Error("Missing ROOT");
-    assert.equal(root.type.resolvedName, "StudioFrame");
-
-    // Wedding story document should be valid Studio JSON round-trip
-    const parsed = parseStudioDocument(JSON.stringify(template.document));
-    assert.equal(parsed.schemaVersion, 1);
+    assert.ok(template.config.sections.length > 0);
+    assert.ok(template.config.palettes.length > 0);
+    assert.ok(template.config.allowedFonts.length > 0);
   }
 });
 
-test("Website Story document stores personal story in the same Studio JSON format as Invitation", () => {
-  // Both Wedding Website and Invitation use Studio Document JSON (Craft.js nodes tree + schemaVersion 1)
-  const template = storyTemplateCatalog[0]!;
+test("new weddingStorySchema validates starter wedding story document", () => {
+  const parsed = weddingStorySchema.parse(starterWeddingStory);
+  assert.equal(parsed.schemaVersion, 2);
+  assert.equal(parsed.templateId, "romantic");
+  assert.equal(isWeddingStoryDocument(parsed), true);
+  assert.equal(isStudioDocument(parsed), false);
+
+  const draftV3 = toStoryDraftV3(parsed);
+  assert.equal(isStoryV3(draftV3), true);
+  assert.equal(draftV3.schemaVersion, 3);
+  assert.equal(draftV3.templateKey, "romantic");
+
+  const restored = fromStoryV3(draftV3);
+  assert.equal(restored.templateId, "romantic");
+  assert.equal(restored.couple.groom.name, parsed.couple.groom.name);
+  assert.equal(restored.couple.bride.name, parsed.couple.bride.name);
+});
+
+test("Website Studio document stores personal story in Studio JSON format", () => {
+  const template = templateCatalog[0]!;
   const storyDoc = structuredClone(template.document);
 
-  // Customize personal couple story text & photo
   const textEntry = Object.entries(storyDoc.nodes).find(
     ([, n]) => n.type.resolvedName === "StudioText",
   );
@@ -75,7 +92,6 @@ test("Website Story document stores personal story in the same Studio JSON forma
   const [textNodeId, textNode] = textEntry;
   textNode.props.text = "Câu chuyện tình yêu của chúng mình bắt đầu từ mùa thu 2020...";
 
-  // Confirm format matches Invitation document schema:
   assert.equal(storyDoc.schemaVersion, 1);
   const root = storyDoc.nodes.ROOT;
   if (!root) throw new Error("Missing ROOT");
@@ -83,7 +99,6 @@ test("Website Story document stores personal story in the same Studio JSON forma
   assert.ok(Array.isArray(root.nodes));
   assert.ok(root.nodes.length > 0);
 
-  // Validate that parseStudioDocument accepts it cleanly
   const validated = parseStudioDocument(JSON.stringify(storyDoc));
   assert.equal(
     validated.nodes[textNodeId]?.props.text,
@@ -92,7 +107,7 @@ test("Website Story document stores personal story in the same Studio JSON forma
 });
 
 test("saveWebsite sends Studio JSON document with portable media URLs and guards expectedVersion", async () => {
-  const document = structuredClone(storyTemplateCatalog[0]!.document);
+  const document = structuredClone(templateCatalog[0]!.document);
   const image = Object.values(document.nodes).find(
     (node) => node.type.resolvedName === "StudioImage",
   );
@@ -124,15 +139,41 @@ test("saveWebsite sends Studio JSON document with portable media URLs and guards
     document: typeof document;
   };
   assert.equal(body.expectedVersion, 1);
-  // Full URL must be normalized to portable relative path
   const savedImage = Object.values(body.document.nodes).find(
     (node) => node.type.resolvedName === "StudioImage",
   );
   assert.equal(savedImage?.props.src, mediaPath);
 });
 
+test("saveWebsite accepts storyDraftV3 documents", async () => {
+  const draft = toStoryDraftV3(starterWeddingStory);
+  const requests: { path: string; options: Record<string, unknown> }[] = [];
+  const api = {
+    request: async (path: string, options: Record<string, unknown>) => {
+      requests.push({ path, options });
+      return {
+        version: 2,
+        document: draft,
+        status: "DRAFT",
+        hasUnpublishedChanges: true,
+      };
+    },
+  } as unknown as ApiClient;
+
+  const result = await saveWebsite(api, "wedding-123", 1, draft);
+  assert.equal(result.version, 2);
+  assert.equal(requests[0]!.path, "/weddings/wedding-123/website");
+  const body = requests[0]!.options.body as {
+    expectedVersion: number;
+    document: typeof draft;
+  };
+  assert.equal(body.expectedVersion, 1);
+  assert.equal(body.document.schemaVersion, 3);
+  assert.equal(body.document.templateKey, "romantic");
+});
+
 test("getWebsite retrieves draft Studio JSON document and reports publication status", async () => {
-  const document = structuredClone(storyTemplateCatalog[0]!.document);
+  const document = structuredClone(templateCatalog[0]!.document);
   const api = {
     request: async () => ({
       version: 1,
@@ -156,7 +197,7 @@ test("publishWebsite and unpublishWebsite guard expectedVersion", async () => {
       requests.push({ path, options });
       return {
         version: 3,
-        document: storyTemplateCatalog[0]!.document,
+        document: templateCatalog[0]!.document,
         status: path.endsWith("/publish") ? "PUBLISHED" : "UNPUBLISHED",
         hasUnpublishedChanges: false,
       };
@@ -175,7 +216,7 @@ test("publishWebsite and unpublishWebsite guard expectedVersion", async () => {
 });
 
 test("getPublicWebsite requests slug anonymously and parses published Studio snapshot", async () => {
-  const document = structuredClone(storyTemplateCatalog[1]!.document);
+  const document = structuredClone(templateCatalog[1]!.document);
   const requests: { path: string; options: Record<string, unknown> }[] = [];
   const api = {
     request: async (path: string, options: Record<string, unknown>) => {
@@ -218,17 +259,4 @@ test("getPublicWebsite accepts legacy published website without throwing", async
   assert.equal(isStudioDocument(response.document), false);
 });
 
-test("Website Story templates preserve calendar widget settings and interactive links", () => {
-  // Calendar actions work across wedding websites:
-  for (const template of storyTemplateCatalog) {
-    const calendarNode = Object.values(template.document.nodes).find(
-      (n) => n.type.resolvedName === "StudioCalendar",
-    );
-    if (calendarNode) {
-      assert.ok(calendarNode.props);
-      // Calendar nodes have valid layout props
-      assert.equal(calendarNode.parent, "ROOT");
-    }
-  }
-});
 

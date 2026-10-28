@@ -1,8 +1,6 @@
 import type { ItemProps } from "../components/items";
 import { parseStudioDocument } from "../schemas/document";
 import brown from "./minimalism-brown.json";
-import redStory from "./story-red-velvet.json";
-import { newStoryTemplates } from "./stories";
 import burgundy from "./minimalism-burgundy.json";
 
 const base = "/images/template-studio/collection/";
@@ -727,17 +725,8 @@ export const templateCatalog = [
   })),
 ];
 
-export const storyTemplateCatalog = [
-  {
-    id: "story-red-velvet",
-    name: "Chuyện mình · Đỏ nhung",
-    description: "Ảnh lớn, các chương chuyện tình và collage đỏ/trắng.",
-    reference: "https://cinelove.me/template/thiep-cuoi-11",
-    document: parseStudioDocument(JSON.stringify(redStory)),
-  },
-  ...newStoryTemplates,
-];
-export const studioTemplates = [...templateCatalog, ...storyTemplateCatalog];
+export const storyTemplateCatalog: typeof templateCatalog = [];
+export const studioTemplates = [...templateCatalog];
 export function findTemplate(id: string | boolean | undefined) {
   return studioTemplates.find(
     (template) => template.id === (id === true ? "minimalism-brown" : id),
