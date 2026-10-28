@@ -7,6 +7,10 @@ import {
   getPublicWebsite,
   publicWebsiteSchema,
   isStudioDocument,
+  isWeddingStoryDocument,
+  StoryClassic,
+  isStoryV3,
+  fromStoryV3,
   WebsiteRenderer,
 } from "@/features/weddings";
 import { usePublicWeddingSignal } from "@/core/realtime/public-wedding-signal";
@@ -44,6 +48,12 @@ export function PublicWebsiteClient({
       </main>
     );
 
+  if (isStoryV3(site.data.document)) {
+    return <StoryClassic document={fromStoryV3(site.data.document)} slug={site.data.slug} />;
+  }
+  if (isWeddingStoryDocument(site.data.document)) {
+    return <StoryClassic document={site.data.document} slug={site.data.slug} />;
+  }
   if (isStudioDocument(site.data.document)) {
     return <WebsiteStoryRenderer document={site.data.document} />;
   }

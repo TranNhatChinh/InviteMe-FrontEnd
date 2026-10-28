@@ -1,0 +1,221 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Lora:wght@400;500&family=Montserrat:wght@400;500&family=Nunito:wght@400;500&family=Playfair+Display:wght@400;500&display=swap");
+
+.page {
+  --story-accent: #b65b70;
+  color: var(--story-text, #46383a);
+  background: var(--story-background, #fffaf8);
+  font-family: var(--story-body-font, Georgia), Georgia, serif;
+}
+.nav { display: flex; justify-content: center; gap: clamp(1rem, 4vw, 3rem); padding: 1.2rem; background: var(--story-background); font: 0.75rem Arial, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+.nav a:hover { color: var(--story-accent); }
+.countdown { display: flex; justify-content: center; gap: clamp(.5rem, 3vw, 2rem); padding: 3.5rem 1rem; background: var(--story-background); }
+.countdownBox { min-width: 75px; min-height: 75px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--story-accent); color: var(--story-accent); transform: rotate(45deg); margin: 1rem; }
+.countdownBox > * { transform: rotate(-45deg); }
+.countdownBox strong { font-size: clamp(1.3rem, 3vw, 2.3rem); font-weight: 400; }
+.countdownBox span { font: .65rem Arial, sans-serif; }
+.parents { font: .8rem Arial, sans-serif; line-height: 1.7; opacity: .75; margin-bottom: .7rem !important; }
+.social { display: flex; gap: .7rem; justify-content: center; padding: .7rem; font: .75rem Arial, sans-serif; text-transform: capitalize; }
+.social a { color: var(--story-accent); text-decoration: underline; }
+.hero h1, .sectionTitle, .person h3, .storyCopy h3 { font-family: var(--story-heading-font, Georgia), Georgia, serif; }
+.romantic .couple { grid-template-columns: 1fr; gap: 0; max-width: 920px; margin: auto; }
+.romantic .person { display: grid; grid-template-columns: 1fr 1fr; align-items: center; background: color-mix(in srgb, var(--story-primary) 35%, var(--story-background)); text-align: left; }
+.romantic .person:nth-child(even) { direction: rtl; }
+.romantic .person:nth-child(even) > * { direction: ltr; }
+.romantic .portrait { grid-row: span 3; width: 100%; max-width: none; height: 100%; border-radius: 0; }
+.romantic .person h3, .romantic .person p { margin-left: 2rem; margin-right: 2rem; }
+.heroDark { background-image: linear-gradient(180deg, #09080db0, #09080dd9), var(--cover); }
+.royal .section { border-bottom: 1px solid color-mix(in srgb, var(--story-text) 18%, transparent); }
+.countdownBanner { background: var(--story-primary); }
+.countdownBanner .countdownBox { transform: none; background: color-mix(in srgb, var(--story-background) 72%, transparent); border: none; }
+.countdownBanner .countdownBox > * { transform: none; }
+.royal .event, .royal .gift > div { background: color-mix(in srgb, var(--story-text) 7%, var(--story-background)); border-color: color-mix(in srgb, var(--story-text) 20%, transparent); }
+.royal .footer { background: var(--story-primary); }
+.hero {
+  position: relative;
+  isolation: isolate;
+  min-height: min(820px, 90svh);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 5rem 1.5rem;
+  background:
+    linear-gradient(180deg, #25191a77, #25191ab8), var(--cover),
+    linear-gradient(135deg, #876b70, #cfa9a4);
+  background-size: cover;
+  background-position: center;
+  color: white;
+}
+.slides { position: absolute; inset: 0; z-index: -1; overflow: hidden; }
+.slides::after { content: ""; position: absolute; inset: 0; background: #25191a85; }
+.slides img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; animation: storySlide 15s infinite; }
+@keyframes storySlide { 0%, 30% { opacity: 1; } 34%, 100% { opacity: 0; } }
+.heroInner {
+  max-width: 850px;
+}
+.eyebrow {
+  font-family: Arial, sans-serif;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+.hero h1 {
+  font-size: clamp(3.2rem, 8vw, 7rem);
+  font-weight: 400;
+  line-height: 1.08;
+  margin: 1.4rem 0;
+}
+.heroDate {
+  font-family: Arial, sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.18em;
+}
+.section {
+  max-width: 1100px;
+  margin: auto;
+  padding: 6rem 1.5rem;
+}
+.sectionTitle {
+  color: var(--story-accent);
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  font-weight: 400;
+  text-align: center;
+  margin: 0 0 3rem;
+}
+.couple {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3rem;
+  text-align: center;
+}
+.portrait {
+  width: min(100%, 320px);
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  margin: auto;
+  border-radius: 180px 180px 12px 12px;
+  background: #f1e8e6;
+}
+.person h3 {
+  color: var(--story-accent);
+  font-size: 2rem;
+  font-weight: 400;
+  margin: 1.3rem 0 0.6rem;
+}
+.person p {
+  max-width: 340px;
+  margin: auto;
+  line-height: 1.75;
+}
+.loveStorySection { max-width: 1180px; }
+.storyEyebrow { text-align: center; color: var(--story-accent); font: .76rem Arial, sans-serif; letter-spacing: .3em; text-transform: uppercase; margin-bottom: .8rem; }
+.storyIntroduction { max-width: 600px; margin: -1.5rem auto 4rem; text-align: center; line-height: 1.8; opacity: .8; }
+.storyList { position: relative; display: grid; gap: 5rem; }
+.storyList::before { content: ""; position: absolute; width: 1px; top: 0; bottom: 0; left: 50%; background: color-mix(in srgb, var(--story-accent) 55%, transparent); }
+.storyItem { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr); align-items: center; min-height: 320px; }
+.storyPhoto { grid-column: 1; grid-row: 1; padding-right: 2.3rem; }
+.storyImage, .storyImagePlaceholder { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: color-mix(in srgb, var(--story-primary) 60%, var(--story-background)); border: 8px solid var(--story-background); box-shadow: 0 12px 35px #0002; }
+.storyMarker { z-index: 1; grid-column: 2; grid-row: 1; display: grid; place-items: center; justify-self: center; width: 42px; height: 42px; border: 1px solid var(--story-accent); border-radius: 50%; background: var(--story-background); color: var(--story-accent); font-size: 1.1rem; }
+.storyCopy { grid-column: 3; grid-row: 1; padding: 1.5rem 0 1.5rem 2.3rem; }
+.storyNumber { display: block; margin-bottom: .8rem; color: var(--story-accent); font: .7rem Arial, sans-serif; letter-spacing: .24em; text-transform: uppercase; }
+.storyDate { color: var(--story-accent); font: .8rem Arial, sans-serif; letter-spacing: .12em; }
+.storyCopy h3 { font-size: clamp(1.8rem, 3vw, 2.8rem); font-weight: 400; margin: .65rem 0 1rem; }
+.storyCopy p { line-height: 1.85; white-space: pre-line; }
+.storyItem:nth-child(even) .storyPhoto { grid-column: 3; padding-right: 0; padding-left: 2.3rem; }
+.storyItem:nth-child(even) .storyCopy { grid-column: 1; padding-left: 0; padding-right: 2.3rem; text-align: right; }
+.storyEditorial { background: color-mix(in srgb, var(--story-primary) 18%, var(--story-background)); max-width: none; padding-left: max(1.5rem, calc((100% - 1100px) / 2)); padding-right: max(1.5rem, calc((100% - 1100px) / 2)); }
+.storyEditorial .storyMarker { border-radius: 4px; transform: rotate(45deg); }
+.storyEditorial .storyPhoto { filter: saturate(.78); }
+.storyEditorial .storyImage, .storyEditorial .storyImagePlaceholder { border-color: color-mix(in srgb, var(--story-primary) 25%, var(--story-background)); }
+.eventList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+.event {
+  padding: 2rem;
+  border: 1px solid #ead9d8;
+  background: white;
+  text-align: center;
+  border-radius: 8px;
+}
+.event h3 {
+  font-size: 1.6rem;
+  color: var(--story-accent);
+}
+.event a {
+  color: var(--story-accent);
+  text-decoration: underline;
+}
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+.gallery img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.gift {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+.gift > div {
+  padding: 1.5rem;
+  background: white;
+  border: 1px solid #ead9d8;
+  border-radius: 8px;
+}
+.footer {
+  text-align: center;
+  padding: 4rem 1rem;
+  background: #f5ebe8;
+  color: var(--story-accent);
+  font-size: 1.5rem;
+}
+.motion .heroInner,
+.motion .section {
+  animation: rise 0.7s both;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 700px) {
+  .nav { flex-wrap: wrap; font-size: .62rem; }
+  .countdown { gap: 0; flex-wrap: wrap; }
+  .countdownBox { min-width: 56px; min-height: 56px; margin: .65rem; }
+  .romantic .person, .romantic .person:nth-child(even) { display: flex; flex-direction: column; direction: ltr; text-align: center; padding-bottom: 1.5rem; }
+  .romantic .portrait { height: auto; aspect-ratio: 4 / 5; }
+  .couple,
+  .gift {
+    grid-template-columns: 1fr;
+  }
+  .storyList { gap: 2.75rem; padding-left: 1.3rem; }
+  .storyList::before { left: 0; }
+  .storyItem { display: flex; flex-direction: column; min-height: 0; align-items: stretch; }
+  .storyMarker { position: absolute; left: -2.3rem; top: 1rem; width: 32px; height: 32px; }
+  .storyPhoto, .storyItem:nth-child(even) .storyPhoto { padding: 0; }
+  .storyCopy, .storyItem:nth-child(even) .storyCopy { padding: 1.2rem 0 0; text-align: left; }
+  .storyIntroduction { margin-bottom: 2.5rem; }
+  .gallery {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .section {
+    padding: 4rem 1.2rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion .heroInner,
+  .motion .section {
+    animation: none;
+  }
+}
