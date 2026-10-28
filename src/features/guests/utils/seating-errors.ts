@@ -23,6 +23,11 @@ const messages: Record<string, string> = {
   SEATING_TABLE_HAS_OUT_OF_SCOPE_GUESTS:
     "Bàn đang có khách ngoài nhóm được giao; chủ đám cưới cần xử lý trước.",
   SEATING_SOURCE_CHANGED: "Sơ đồ vừa được người khác thay đổi. Đã tải lại, hãy thử lại.",
+  NO_SEATING_CHANGES: "Phương án này không thay đổi vị trí nào so với sơ đồ hiện tại.",
+  SEATING_SUGGESTION_REQUIRES_WEDDING_SCOPE: "Xếp chỗ tự động yêu cầu quyền chỉnh sửa toàn bộ sơ đồ đám cưới.",
+  NO_TABLES: "Chưa có bàn nào trong sơ đồ. Hãy tạo bàn trước khi xếp chỗ.",
+  NO_AVAILABLE_SEATS: "Không còn bàn nào đủ chỗ trống cho các khách chưa xếp.",
+  EVENT_ALREADY_STARTED: "Tiệc đã được bắt đầu, không thể chỉnh sửa sơ đồ dự kiến.",
   TABLE_NOT_FOUND: "Bàn không còn trên sơ đồ.",
   PLACE_NOT_FOUND: "Khách không còn trong danh sách.",
 };

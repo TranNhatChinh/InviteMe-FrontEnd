@@ -133,6 +133,14 @@ export const seatingScoreBreakdownSchema = z.object({
 });
 export type SeatingScoreBreakdown = z.infer<typeof seatingScoreBreakdownSchema>;
 
+export const suggestedTablePlacementSchema = z.object({
+  tableId: z.string(),
+  half: z.enum(["GROOM", "BRIDE"]),
+  row: z.number().int(),
+  column: z.number().int(),
+});
+export type SuggestedTablePlacement = z.infer<typeof suggestedTablePlacementSchema>;
+
 export const strategySuggestionDtoSchema = z.object({
   strategy: z.string(),
   strategyName: z.string(),
@@ -146,6 +154,7 @@ export const strategySuggestionDtoSchema = z.object({
   changedPlaceCount: z.number(),
   preservedCount: z.number(),
   usedTableCount: z.number(),
+  tablePlacements: z.array(suggestedTablePlacementSchema).nullable().optional(),
 });
 export type StrategySuggestionDto = z.infer<typeof strategySuggestionDtoSchema>;
 
@@ -167,6 +176,7 @@ export const seatingSuggestionSchema = z.object({
   keepGroups: strategySuggestionDtoSchema.optional(),
   fewestTables: strategySuggestionDtoSchema.optional(),
   simple: strategySuggestionDtoSchema.optional(),
+  tablePlacements: z.array(suggestedTablePlacementSchema).nullable().optional(),
 });
 export type SeatingSuggestion = z.infer<typeof seatingSuggestionSchema>;
 
@@ -297,6 +307,7 @@ export type SeatingChange =
       sourceFingerprint: string;
       confirmReplace: boolean;
     }
+  | { action: "AUTO_PLACE_TABLES" }
   | { action: "LOCK_PLAN" }
   | { action: "UNLOCK_PLAN" }
   | { action: "START_EVENT" }
@@ -417,6 +428,10 @@ export function applySeatingSuggestion(
     body: { ...input, plan: input.strategy },
     schema: seatingPlanSchema,
   });
+}
+
+export function autoPlaceTables(api: ApiClient, id: string, expectedVersion: number) {
+  return changeSeatingPlan(api, id, expectedVersion, { action: "AUTO_PLACE_TABLES" });
 }
 
 export function getUnattendedGuests(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { Crown, Layers, Plus, RotateCcw } from "lucide-react";
+import { Crown, Layers, Plus, RotateCcw, Wand2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import type { PlanningTable } from "../api/planning-seating.api";
 
@@ -11,7 +11,9 @@ interface SeatingTrayProps {
   onTableClick: (table: PlanningTable) => void;
   onAddTableClick: () => void;
   onRenumberClick: () => void;
+  onAutoPlaceClick?: () => void;
   renumbering?: boolean;
+  autoPlacing?: boolean;
   /** Tables here can be dragged onto the hall; hall tables dropped here leave the hall. */
   editable?: boolean;
 }
@@ -83,7 +85,9 @@ export function SeatingTray({
   onTableClick,
   onAddTableClick,
   onRenumberClick,
+  onAutoPlaceClick,
   renumbering = false,
+  autoPlacing = false,
   editable = false,
 }: SeatingTrayProps) {
   const { setNodeRef, isOver, active } = useDroppable({
@@ -108,6 +112,20 @@ export function SeatingTray({
         </div>
 
         <div className="flex items-center gap-2">
+          {unplacedTables.length > 0 && onAutoPlaceClick && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onAutoPlaceClick}
+              disabled={autoPlacing || !editable}
+              className="rounded-full text-xs gap-1.5 h-8 text-primary border-primary/30 hover:bg-primary/5"
+              title="Tự động xếp các bàn trong khay vào các ô trống tối ưu trên sơ đồ sảnh"
+            >
+              <Wand2 className="size-3.5" />
+              <span>Tự xếp lên sơ đồ</span>
+            </Button>
+          )}
+
           <Button
             size="sm"
             variant="outline"

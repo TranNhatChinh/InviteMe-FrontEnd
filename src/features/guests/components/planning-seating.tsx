@@ -728,6 +728,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               <Button
                 variant="outline"
                 size="sm"
+                disabled={!editable || plan.isLocked || plan.isEventStarted}
                 className="rounded-full gap-1.5 h-9 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
                 onClick={() => setIsSuggestionsModalOpen(true)}
               >
@@ -879,7 +880,9 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   setIsTableModalOpen(true);
                 }}
                 onRenumberClick={() => void change({ action: "RENUMBER_TABLES" })}
+                onAutoPlaceClick={() => void change({ action: "AUTO_PLACE_TABLES" })}
                 renumbering={saving}
+                autoPlacing={saving}
                 editable={editable && !plan.isLocked}
               />
             </div>
@@ -982,11 +985,12 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               <div className="w-full max-w-lg bg-card border-l border-border h-full flex flex-col shadow-2xl">
                 <SeatingTableDrawer
                   // Latest saved table; the key resets the edit form after a save.
-                  key={`${drawerTable.id}:${drawerTable.number}:${drawerTable.name}:${drawerTable.capacity}`}
+                  key={`${drawerTable.id}:${drawerTable.number}:${drawerTable.name}:${drawerTable.capacity}:${drawerTable.extraSeats}`}
                   table={drawerTable}
                   plan={plan}
                   editable={editable && !plan.isLocked}
                   saving={saving}
+                  selectedParty={selectedParty}
                   onClose={() => setActiveTableForDrawer(null)}
                   onView={() => {}}
                   onMove={(placeId) => {
@@ -1003,20 +1007,15 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       tableId: null,
                     });
                   }}
-                  onAssign={(seatNumber) => {
-                    if (selectedParty && selectedParty.placeIds.length > 0) {
-                      const firstPlaceId = selectedParty.placeIds[0];
-                      if (firstPlaceId) {
-                        void change({
-                          action: "MOVE_PLACES",
-                          placeIds: [firstPlaceId],
-                          tableId: drawerTable.id,
-                          seatNumber,
-                        });
-                      }
-                    }
+                  onAssignPlace={(placeId, seatNumber) => {
+                    void change({
+                      action: "MOVE_PLACES",
+                      placeIds: [placeId],
+                      tableId: drawerTable.id,
+                      seatNumber,
+                    });
                   }}
-                  onSave={(newName, newCap, newNumber) => {
+                  onSave={(newName, newCap, newNumber, newExtraSeats) => {
                     void change({
                       action: "UPDATE_TABLE",
                       tableId: drawerTable.id,
@@ -1027,6 +1026,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                           : newName,
                       capacity: newCap,
                       ...(newNumber !== undefined ? { number: newNumber } : {}),
+                      ...(newExtraSeats !== undefined ? { extraSeats: newExtraSeats } : {}),
                     });
                   }}
                   onDelete={() => {
