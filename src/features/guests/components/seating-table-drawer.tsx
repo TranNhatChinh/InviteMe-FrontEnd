@@ -196,11 +196,23 @@ export function SeatingTableDrawer({
   onMove: (placeId: string) => void;
   onUnassign: (placeId: string) => void;
   onAssign: (seatNumber: number) => void;
-  onSave: (name: string, capacity: number) => void;
+  onSave: (name: string, capacity: number, tableNumber?: number) => void;
   onDelete: () => void;
 }) {
   const [name, setName] = useState(table.name);
   const [capacity, setCapacity] = useState(String(table.capacity));
+  // Restaurants often number tables themselves; the BE renames a default "Bàn NN" to match.
+  const [tableNumber, setTableNumber] = useState(table.number ? String(table.number) : "");
+  const parsedNumber = Number(tableNumber);
+  const numberHolder = plan.tables.find((t) => t.id !== table.id && t.number === parsedNumber);
+  const numberError = !tableNumber
+    ? ""
+    : !Number.isInteger(parsedNumber) || parsedNumber < 1 || parsedNumber > 999
+      ? "Số bàn phải từ 1 đến 999."
+      : numberHolder
+        ? `Số ${parsedNumber} đang thuộc ${numberHolder.name}.`
+        : "";
+  const numberChanged = !!tableNumber && parsedNumber !== table.number;
   const confirmationRef = useRef<HTMLDialogElement>(null);
   const id = useId();
   const members = plan.assignments.filter((a) => a.tableId === table.id);
@@ -214,8 +226,8 @@ export function SeatingTableDrawer({
       : !capacity || !Number.isInteger(number) || number < 1 || number > 20
         ? "Số ghế phải từ 1 đến 20."
         : "";
-  const dirty = name.trim() !== table.name || number !== table.capacity;
-  const valid = !!name.trim() && !capacityError;
+  const dirty = name.trim() !== table.name || number !== table.capacity || numberChanged;
+  const valid = !!name.trim() && !capacityError && !numberError;
   const rows = Array.from({ length: table.capacity }, (_, index) => {
     const seatNumber = index + 1;
     const assignment = members.find((a) => a.seatNumber === seatNumber);
@@ -228,7 +240,8 @@ export function SeatingTableDrawer({
       className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault();
-        if (editable && !saving && dirty && valid) onSave(name.trim(), number);
+        if (editable && !saving && dirty && valid)
+          onSave(name.trim(), number, numberChanged ? parsedNumber : undefined);
       }}
     >
       <header className="shrink-0 border-b border-foreground/10 px-5 pb-4 pt-5">
@@ -353,7 +366,27 @@ export function SeatingTableDrawer({
           <h3 id={`${id}-edit`} className="mb-3 text-xs font-semibold">
             Chỉnh sửa bàn
           </h3>
-          <div className="grid grid-cols-[minmax(0,1fr)_8rem] items-start gap-3">
+          <div className="grid grid-cols-[5rem_minmax(0,1fr)_8rem] items-start gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor={`${id}-number`} className="text-[11px] text-muted-foreground">
+                Số bàn
+              </Label>
+              <Input
+                id={`${id}-number`}
+                name="number"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={999}
+                aria-label="Sửa số bàn"
+                aria-invalid={!!numberError}
+                aria-describedby={numberError ? `${id}-number-error` : undefined}
+                value={tableNumber}
+                onChange={(event) => setTableNumber(event.target.value)}
+                disabled={saving}
+                className="h-[46px] border-foreground/15 bg-white shadow-none tabular-nums"
+              />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor={`${id}-name`} className="text-[11px] text-muted-foreground">
                 Tên bàn
@@ -387,6 +420,11 @@ export function SeatingTableDrawer({
               />
             </div>
           </div>
+          {numberError && (
+            <p id={`${id}-number-error`} role="alert" className="mt-2 text-[11px] text-destructive">
+              {numberError}
+            </p>
+          )}
           {capacityError && (
             <p id={`${id}-error`} role="alert" className="mt-2 text-[11px] text-destructive">
               {capacityError}

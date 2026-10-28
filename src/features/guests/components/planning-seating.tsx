@@ -52,6 +52,7 @@ import {
   type PlanningTable,
 } from "../api/planning-seating.api";
 import { moveSeatingWithRetry } from "../utils/seating-conflict-retry";
+import { seatingErrorText } from "../utils/seating-errors";
 import { useSeatingCollaboration } from "../hooks/use-seating-collaboration";
 import { SeatingDragPresenceContext } from "./seating-drag-presence";
 import { offsetDragPreview, seatingDropFeedback, type SeatingDropPosition } from "../utils/seating-drag-preview";
@@ -59,7 +60,7 @@ import { SeatingDragPreview } from "./seating-drag-preview";
 import { SeatingTableDrawer } from "./seating-table-drawer";
 
 // Sub-components
-import { SeatingHallGrid } from "./seating-hall-grid";
+import { SeatingHallGrid, type SeatOccupant } from "./seating-hall-grid";
 import { SeatingTray } from "./seating-tray";
 import { SeatingGuestTray } from "./seating-guest-tray";
 import { SeatingLayoutModal } from "./seating-layout-modal";
@@ -167,6 +168,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
 
   // Drag & Drop
   const [dragIds, setDragIds] = useState<string[]>([]);
+  const [dragTableId, setDragTableId] = useState<string | null>(null);
   const [dragTarget, setDragTarget] = useState<DropPosition | null>(null);
 
   const abortDrag = useCallback(() => {
@@ -307,6 +309,24 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     return { placedTables: placed, unplacedTables: unplaced };
   }, [plan]);
 
+  // Who sits where, for the seats drawn around each table on the hall.
+  const occupantsByTable = useMemo(() => {
+    const map: Record<string, Record<number, SeatOccupant>> = {};
+    if (!plan) return map;
+    const places = new Map(plan.places.map((p) => [p.id, p]));
+    const guests = new Map(plan.guests.map((g) => [g.id, g]));
+    for (const a of plan.assignments) {
+      const place = places.get(a.placeId);
+      const guest = place ? guests.get(place.guestId) : undefined;
+      (map[a.tableId] ??= {})[a.seatNumber] = {
+        placeId: a.placeId,
+        name: place?.person?.fullName || guest?.recipientName || `Ghế ${a.seatNumber}`,
+        side: guest?.side,
+      };
+    }
+    return map;
+  }, [plan]);
+
   // Assigned place IDs set
   const assignedPlaceIds = useMemo(() => {
     const set = new Set<string>();
@@ -342,7 +362,11 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             ? await collaboration.run(input.placeIds, () =>
                 changeSeatingPlan(api, weddingId, source.version, input),
               )
-            : await changeSeatingPlan(api, weddingId, source.version, input);
+            : input.action === "SWAP_PLACES" && input.placeId && input.targetPlaceId
+              ? await collaboration.run([input.placeId, input.targetPlaceId], (token) =>
+                  changeSeatingPlan(api, weddingId, source.version, input, token),
+                )
+              : await changeSeatingPlan(api, weddingId, source.version, input);
 
       cache.setQueryData<SeatingPlan>(key, (current) =>
         current && current.version > latest.version ? current : latest,
@@ -364,6 +388,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         );
       } else if (input.action === "PLACE_TABLE" || input.action === "MOVE_TABLE") {
         setMessage("Đã cập nhật vị trí bàn trên sơ đồ sảnh.");
+      } else if (input.action === "SWAP_PLACES") {
+        setMessage("Đã đổi chỗ hai khách.");
       } else if (input.action === "SWAP_TABLES") {
         setMessage("Đã hoán đổi vị trí 2 bàn tiệc thành công.");
       } else if (input.action === "RENUMBER_TABLES") {
@@ -385,7 +411,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       }
     } catch (error) {
       setFailure(true);
-      const msg = error instanceof Error ? error.message : "Thao tác thất bại.";
+      const msg =
+        seatingErrorText(error) ?? (error instanceof Error ? error.message : "Thao tác thất bại.");
       setMessage(msg);
     } finally {
       savingRef.current = false;
@@ -497,6 +524,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     );
   }
 
+  const drawerTable = activeTableForDrawer
+    ? (plan.tables.find((t) => t.id === activeTableForDrawer.id) ?? activeTableForDrawer)
+    : null;
+
   return (
     <SeatingDragPresenceContext.Provider value={collaboration.leases}>
       <DndContext
@@ -516,6 +547,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           )
         }
         onDragStart={({ active }) => {
+          if (active.data.current?.kind === "table") {
+            setDragTableId(active.data.current.tableId as string);
+            return;
+          }
           if (savingRef.current || realtime.getStatus() !== "connected") return;
           const ids = (active.data.current?.ids as string[] | undefined) ?? [];
           setDragIds(ids);
@@ -524,23 +559,86 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             collaboration.begin(ids);
           }
         }}
-        onDragOver={({ over }) => {
-          const target = (over?.data.current as DropPosition | undefined) ?? null;
+        onDragOver={({ active, over }) => {
+          if (active.data.current?.kind === "table") return;
+          // Cells and the table tray only take tables; for people they are no target.
+          const data = over?.data.current;
+          const target = data && "tableId" in data ? (data as DropPosition) : null;
           setDragTarget(target);
           collaboration.hover(target);
         }}
         onDragCancel={() => {
           setDragIds([]);
           setDragTarget(null);
+          setDragTableId(null);
           collaboration.cancel();
         }}
         onDragEnd={({ active, over }) => {
           setDragIds([]);
           setDragTarget(null);
+          setDragTableId(null);
+          const drop = over?.data.current;
+          if (active.data.current?.kind === "table") {
+            const tableId = active.data.current.tableId as string;
+            if (!drop) return;
+            if (drop.kind === "cell") {
+              // Placed or still in the tray, MOVE_TABLE puts the table on that empty cell.
+              void change({
+                action: "MOVE_TABLE",
+                tableId,
+                half: drop.half as "GROOM" | "BRIDE",
+                row: drop.row as number,
+                column: drop.column as number,
+              });
+            } else if (drop.kind === "table-tray") {
+              // All coordinates empty sends it back to the tray without touching its family side.
+              if (placedTables.some((t) => t.id === tableId))
+                void change({ action: "MOVE_TABLE", tableId, half: null, row: null, column: null });
+            } else if (typeof drop.tableId === "string" && drop.tableId !== tableId) {
+              // Onto another table (its disc or one of its seats): the two trade places.
+              void change({ action: "SWAP_TABLES", tableId, targetTableId: drop.tableId });
+            }
+            return;
+          }
           const ids = active.data.current?.ids as string[] | undefined;
-          const target = over?.data.current as DropPosition | undefined;
-          if (ids && target) {
-            void change({ action: "MOVE_PLACES", placeIds: ids, tableId: target.tableId });
+          const target = drop && "tableId" in drop ? (drop as DropPosition) : undefined;
+          if (!ids?.length || !target) {
+            collaboration.cancel();
+            return;
+          }
+          const seatedHere = (id: string) =>
+            plan.assignments.find((a) => a.placeId === id && a.tableId === target.tableId);
+          // Dropped where they already sit: nothing to save.
+          if (
+            target.seatNumber === undefined
+              ? target.tableId !== null && ids.every(seatedHere)
+              : ids.length === 1 && seatedHere(ids[0] ?? "")?.seatNumber === target.seatNumber
+          ) {
+            collaboration.cancel();
+            return;
+          }
+          const occupant =
+            target.tableId && target.seatNumber !== undefined
+              ? plan.assignments.find(
+                  (a) => a.tableId === target.tableId && a.seatNumber === target.seatNumber,
+                )
+              : undefined;
+          // One person onto a taken seat swaps the two; otherwise seat them from that seat on.
+          if (occupant && ids.length === 1 && ids[0] && !ids.includes(occupant.placeId)) {
+            void change({
+              action: "SWAP_PLACES",
+              placeId: ids[0],
+              targetPlaceId: occupant.placeId,
+            });
+          } else {
+            void change({
+              action: "MOVE_PLACES",
+              placeIds: ids,
+              tableId: target.tableId,
+              ...(target.seatNumber !== undefined && !occupant
+                ? { seatNumber: target.seatNumber }
+                : {}),
+            });
           }
         }}
       >
@@ -751,12 +849,24 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 layout={layout}
                 tables={placedTables}
                 assignmentsCountByTable={assignmentsCountByTable}
+                occupantsByTable={occupantsByTable}
+                editable={editable && !plan.isLocked}
                 warnings={plan.warnings ?? []}
                 selectedTableIds={selectedTableIds}
                 isMultiSelectMode={isMultiSelectMode}
                 onSelectTable={toggleTableSelection}
                 onTableClick={handleTableClicked}
                 onEmptyCellClick={handleEmptyCellClicked}
+                onSeatClick={(tableId, seatNumber) => {
+                  if (!selectedParty) return;
+                  void change({
+                    action: "MOVE_PLACES",
+                    placeIds: selectedParty.placeIds,
+                    tableId,
+                    seatNumber,
+                  });
+                  setSelectedParty(null);
+                }}
               />
 
               {/* Unplaced Tables Tray */}
@@ -770,6 +880,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 }}
                 onRenumberClick={() => void change({ action: "RENUMBER_TABLES" })}
                 renumbering={saving}
+                editable={editable && !plan.isLocked}
               />
             </div>
 
@@ -781,6 +892,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 assignedPlaceIds={assignedPlaceIds}
                 selectedGuestId={selectedParty?.guestId}
                 groups={groups}
+                editable={editable && !plan.isLocked}
                 onSelectParty={(guestId, placeIds) => {
                   if (selectedParty?.guestId === guestId) {
                     setSelectedParty(null);
@@ -834,6 +946,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             saving={saving}
             targetCell={targetCellForNewTable}
             groups={groups}
+            weddingId={weddingId}
           />
 
           {/* Automatic Suggestions Modal v2 */}
@@ -860,7 +973,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           />
 
           {/* Table Details Drawer */}
-          {activeTableForDrawer && (
+          {drawerTable && (
             <div
               className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm animate-in fade-in"
               role="dialog"
@@ -868,7 +981,9 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             >
               <div className="w-full max-w-lg bg-card border-l border-border h-full flex flex-col shadow-2xl">
                 <SeatingTableDrawer
-                  table={activeTableForDrawer}
+                  // Latest saved table; the key resets the edit form after a save.
+                  key={`${drawerTable.id}:${drawerTable.number}:${drawerTable.name}:${drawerTable.capacity}`}
+                  table={drawerTable}
                   plan={plan}
                   editable={editable && !plan.isLocked}
                   saving={saving}
@@ -895,24 +1010,29 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                         void change({
                           action: "MOVE_PLACES",
                           placeIds: [firstPlaceId],
-                          tableId: activeTableForDrawer.id,
+                          tableId: drawerTable.id,
                           seatNumber,
                         });
                       }
                     }
                   }}
-                  onSave={(newName, newCap) => {
+                  onSave={(newName, newCap, newNumber) => {
                     void change({
                       action: "UPDATE_TABLE",
-                      tableId: activeTableForDrawer.id,
-                      name: newName,
+                      tableId: drawerTable.id,
+                      // A default "Bàn NN" name follows the new number on the BE; send the name only if edited.
+                      name:
+                        newNumber !== undefined && newName === drawerTable.name
+                          ? undefined
+                          : newName,
                       capacity: newCap,
+                      ...(newNumber !== undefined ? { number: newNumber } : {}),
                     });
                   }}
                   onDelete={() => {
                     void change({
                       action: "DELETE_TABLE",
-                      tableId: activeTableForDrawer.id,
+                      tableId: drawerTable.id,
                       confirmDeleteWithGuests: true,
                     });
                   }}
@@ -930,6 +1050,18 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             {dragIds.length > 0 && (
               <SeatingDragPreview plan={plan} ids={dragIds} feedback={dragFeedback} />
             )}
+            {dragTableId &&
+              (() => {
+                const table = plan.tables.find((t) => t.id === dragTableId);
+                return table ? (
+                  <div className="flex size-16 flex-col items-center justify-center rounded-full border-2 border-primary bg-card font-serif text-xs font-bold shadow-xl">
+                    {table.number ? `Bàn ${String(table.number).padStart(2, "0")}` : table.name}
+                    <span className="font-mono text-[10px] font-normal text-muted-foreground">
+                      {assignmentsCountByTable[table.id] ?? 0}/{table.capacity}
+                    </span>
+                  </div>
+                ) : null;
+              })()}
           </DragOverlay>
         </div>
       </DndContext>

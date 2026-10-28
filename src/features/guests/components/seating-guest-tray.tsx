@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, UserCheck, Users, X } from "lucide-react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { GripVertical, Search, UserCheck, Users, X } from "lucide-react";
 import { Input } from "@/shared/ui/input";
 import type { PlanningGuest } from "../api/planning.api";
 import type { PlanningSeatingPlace } from "../api/planning-seating.api";
@@ -14,6 +15,46 @@ interface SeatingGuestTrayProps {
   onSelectParty: (guestId: string, placeIds: string[]) => void;
   selectedGuestId?: string | null;
   groups?: { id: string; name: string }[];
+  /** Lets parties and single people be dragged onto tables or seats of the hall. */
+  editable?: boolean;
+}
+
+// One person of a party, dragged alone onto a specific seat.
+function SeatingPersonChip({
+  place,
+  label,
+  editable,
+}: {
+  place: PlanningSeatingPlace;
+  label: string;
+  editable: boolean;
+}) {
+  const lock = useSeatingDragLock([place.id]);
+  const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
+    id: `place:${place.id}`,
+    data: { ids: [place.id] },
+    disabled: !editable || Boolean(lock),
+  });
+  return (
+    <span
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      // The party card is draggable too; keep this press for the single person.
+      onPointerDown={(event) => {
+        listeners?.onPointerDown?.(event);
+        event.stopPropagation();
+      }}
+      onClick={(event) => event.stopPropagation()}
+      title={editable ? `Kéo ${label} vào một ghế` : label}
+      className={`inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 ${
+        editable && !lock ? "cursor-grab active:cursor-grabbing hover:border-primary" : ""
+      } ${isDragging ? "opacity-40" : ""}`}
+    >
+      {editable && <GripVertical className="size-2.5 text-muted-foreground" />}
+      {label}
+    </span>
+  );
 }
 
 function SeatingGuestPartyItem({
@@ -21,18 +62,33 @@ function SeatingGuestPartyItem({
   unseatedPlaces,
   isSelected,
   onSelectParty,
+  editable,
 }: {
   guest: PlanningGuest;
   unseatedPlaces: PlanningSeatingPlace[];
   isSelected: boolean;
   onSelectParty: (guestId: string, placeIds: string[]) => void;
+  editable: boolean;
 }) {
   const placeIds = useMemo(() => unseatedPlaces.map((p) => p.id), [unseatedPlaces]);
   const lock = useSeatingDragLock(placeIds);
   const isLockedByOther = Boolean(lock);
+  const {
+    setNodeRef: setPartyRef,
+    attributes: partyAttributes,
+    listeners: partyListeners,
+    isDragging: partyDragging,
+  } = useDraggable({
+    id: `party:${guest.id}`,
+    data: { ids: placeIds },
+    disabled: !editable || isLockedByOther,
+  });
 
   return (
     <div
+      ref={setPartyRef}
+      {...partyAttributes}
+      {...partyListeners}
       onClick={() => {
         if (!isLockedByOther) {
           onSelectParty(guest.id, placeIds);
@@ -44,7 +100,10 @@ function SeatingGuestPartyItem({
           : isSelected
             ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary cursor-pointer"
             : "border-border/80 bg-card hover:border-primary/40 hover:bg-muted/30 cursor-pointer"
+      } ${editable && !isLockedByOther ? "active:cursor-grabbing" : ""} ${
+        partyDragging ? "opacity-40" : ""
       }`}
+      title={editable && !isLockedByOther ? "Kéo cả thiệp vào một bàn hoặc ghế, hoặc bấm để chọn" : undefined}
       role="button"
       aria-disabled={isLockedByOther}
       tabIndex={isLockedByOther ? -1 : 0}
@@ -97,13 +156,18 @@ function SeatingGuestPartyItem({
         </span>
       </div>
 
-      {/* Sub-members preview if more than 1 place */}
+      {/* Members: each can be dragged alone onto a seat */}
       {unseatedPlaces.length > 1 && (
-        <div className="mt-2 text-[10px] text-muted-foreground border-t border-border/40 pt-1.5">
-          Gồm:{" "}
-          {unseatedPlaces
-            .map((p, idx) => p.person?.fullName || `Khách ${idx + 1}`)
-            .join(", ")}
+        <div className="mt-2 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground border-t border-border/40 pt-1.5">
+          <span>Gồm:</span>
+          {unseatedPlaces.map((p, idx) => (
+            <SeatingPersonChip
+              key={p.id}
+              place={p}
+              label={p.person?.fullName || `Khách ${idx + 1}`}
+              editable={editable}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -117,7 +181,14 @@ export function SeatingGuestTray({
   onSelectParty,
   selectedGuestId = null,
   groups = [],
+  editable = false,
 }: SeatingGuestTrayProps) {
+  // Dropping a seated person back here unseats them.
+  const { setNodeRef: setTrayRef, isOver: trayOver } = useDroppable({
+    id: "unassigned",
+    data: { tableId: null },
+    disabled: !editable,
+  });
   const [sideFilter, setSideFilter] = useState<"ALL" | "GROOM" | "BRIDE" | "MUTUAL">("ALL");
   const [groupFilter, setGroupFilter] = useState<string>("ALL");
   const [rsvpFilter, setRsvpFilter] = useState<"ALL" | "ATTENDING" | "PENDING">("ALL");
@@ -194,7 +265,12 @@ export function SeatingGuestTray({
   }, [unseatedParties]);
 
   return (
-    <div className="flex flex-col h-full rounded-3xl border border-border bg-card p-4 sm:p-5 shadow-sm space-y-4">
+    <div
+      ref={setTrayRef}
+      className={`flex flex-col h-full rounded-3xl border bg-card p-4 sm:p-5 shadow-sm space-y-4 transition-colors ${
+        trayOver ? "border-primary ring-2 ring-primary/40 bg-primary/5" : "border-border"
+      }`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border/60 pb-3">
         <div className="flex items-center gap-2">
@@ -309,6 +385,7 @@ export function SeatingGuestTray({
               unseatedPlaces={unseatedPlaces}
               isSelected={selectedGuestId === guest.id}
               onSelectParty={onSelectParty}
+              editable={editable}
             />
           ))
         )}

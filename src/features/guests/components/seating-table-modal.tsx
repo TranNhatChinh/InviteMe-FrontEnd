@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, Users, Crown, X, Layers } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Plus, Users, Crown, X, Layers, Calculator } from "lucide-react";
 import { gsap } from "gsap";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
-import type { SeatingChange } from "../api/planning-seating.api";
+import { useRuntime } from "@/core/config/runtime";
+import {
+  getTableEstimate,
+  tableEstimateKey,
+  type SeatingChange,
+} from "../api/planning-seating.api";
 
 interface SeatingTableModalProps {
   isOpen: boolean;
@@ -18,6 +24,8 @@ interface SeatingTableModalProps {
     column: number;
   } | null;
   groups?: { id: string; name: string }[];
+  /** Enables the "how many tables" estimate in the batch tab. */
+  weddingId?: string;
 }
 
 export function SeatingTableModal({
@@ -27,7 +35,9 @@ export function SeatingTableModal({
   saving = false,
   targetCell = null,
   groups = [],
+  weddingId,
 }: SeatingTableModalProps) {
+  const { api } = useRuntime();
   const [tab, setTab] = useState<"single" | "batch">(targetCell ? "single" : "single");
 
   // Single table state
@@ -43,8 +53,18 @@ export function SeatingTableModal({
   const [batchCount, setBatchCount] = useState<number>(5);
   const [batchCapacity, setBatchCapacity] = useState<number>(10);
   const [batchGroupId, setBatchGroupId] = useState<string>("");
+  const [batchSide, setBatchSide] = useState<"GROOM" | "BRIDE" | "MUTUAL" | "">("");
+  const [reservePercent, setReservePercent] = useState(0);
 
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // 60 guests -> 6 tables of 10 or 5 of 12; the total is what to book, sides are only a reference.
+  const estimate = useQuery({
+    queryKey: tableEstimateKey(weddingId ?? "", batchCapacity, reservePercent),
+    queryFn: ({ signal }) =>
+      getTableEstimate(api, weddingId ?? "", batchCapacity === 12 ? 12 : 10, reservePercent, signal),
+    enabled: isOpen && tab === "batch" && !!weddingId,
+  });
 
   const [prevTargetCell, setPrevTargetCell] = useState(targetCell);
   if (targetCell !== prevTargetCell) {
@@ -102,6 +122,7 @@ export function SeatingTableModal({
       tableCount: batchCount,
       capacity: batchCapacity,
       groupId: batchGroupId || null,
+      side: batchSide || null,
     });
     onClose();
   };
@@ -299,6 +320,91 @@ export function SeatingTableModal({
                   <option value={12}>12 Ghế</option>
                 </select>
               </div>
+            </div>
+
+            {weddingId && (
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                    <Calculator className="size-4 text-primary" aria-hidden="true" />
+                    Gợi ý số bàn
+                  </span>
+                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    Dự phòng
+                    <select
+                      value={reservePercent}
+                      onChange={(e) => setReservePercent(Number(e.target.value))}
+                      className="rounded-md border border-input bg-background px-1.5 py-1 text-[11px] text-foreground"
+                    >
+                      {[0, 5, 10, 15, 20].map((p) => (
+                        <option key={p} value={p}>
+                          {p}%
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {estimate.isPending ? (
+                  <p className="text-muted-foreground">Đang tính số bàn…</p>
+                ) : estimate.isError || !estimate.data ? (
+                  <p className="text-destructive">Chưa tính được số bàn. Đóng và mở lại để thử lại.</p>
+                ) : (
+                  <>
+                    <p className="text-foreground leading-relaxed">
+                      <strong>{estimate.data.seatsNeeded}</strong> khách dự kiến (
+                      {estimate.data.confirmedSeats} đã xác nhận, {estimate.data.pendingSeats} chưa trả lời) →{" "}
+                      <strong>
+                        {estimate.data.recommendedTables} bàn {estimate.data.capacity} chỗ
+                      </strong>
+                      {estimate.data.reserveTables > 0 && ` (gồm ${estimate.data.reserveTables} bàn dự phòng)`}.
+                    </p>
+                    <p className="text-muted-foreground">
+                      Đang có {estimate.data.currentTables} bàn ({estimate.data.currentSeats} ghế)
+                      {estimate.data.missingTables > 0
+                        ? ` · còn thiếu ${estimate.data.missingTables} bàn ${estimate.data.capacity} chỗ.`
+                        : " · đã đủ bàn."}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Tham khảo theo phía:{" "}
+                      {estimate.data.bySide
+                        .filter((s) => s.seats > 0)
+                        .map(
+                          (s) =>
+                            `${s.side === "GROOM" ? "Nhà trai" : s.side === "BRIDE" ? "Nhà gái" : "Chung"} ${s.seats} khách ≈ ${s.tables} bàn`,
+                        )
+                        .join(" · ")}
+                      . Hai họ có thể ngồi chung bàn.
+                    </p>
+                    {estimate.data.missingTables > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full h-8 text-xs"
+                        onClick={() => setBatchCount(Math.min(50, estimate.data.missingTables))}
+                      >
+                        Dùng gợi ý: tạo {Math.min(50, estimate.data.missingTables)} bàn
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="font-medium text-muted-foreground uppercase tracking-wider text-[11px]">
+                Phía của các bàn (Tuỳ chọn)
+              </label>
+              <select
+                value={batchSide}
+                onChange={(e) => setBatchSide(e.target.value as "GROOM" | "BRIDE" | "MUTUAL" | "")}
+                className="mt-1 w-full rounded-md border border-input bg-background p-2.5 text-sm"
+              >
+                <option value="">Chưa gán phía</option>
+                <option value="GROOM">Nhà trai</option>
+                <option value="BRIDE">Nhà gái</option>
+                <option value="MUTUAL">Bàn chung</option>
+              </select>
             </div>
 
             {groups.length > 0 && (

@@ -1,14 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, type ReactNode } from "react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Crown, AlertCircle, Plus, Sparkles, Check } from "lucide-react";
 import { gsap } from "gsap";
 import type { PlanningTable, SeatingLayout, SeatingWarning } from "../api/planning-seating.api";
+import { useSeatingDragLock } from "./seating-drag-presence";
+
+/** Who sits on one seat of a table, keyed by seat number. */
+export type SeatOccupant = { placeId: string; name: string; side?: string | null };
 
 interface SeatingHallGridProps {
   layout: SeatingLayout;
   tables: PlanningTable[];
   assignmentsCountByTable: Record<string, number>;
+  /** tableId -> seatNumber -> occupant; seats render around each table for drag and drop. */
+  occupantsByTable?: Record<string, Record<number, SeatOccupant>>;
+  /** False when the plan is locked or the user cannot edit seating: seats are shown but not draggable. */
+  editable?: boolean;
   checkedInCountByTable?: Record<string, number>;
   warnings?: SeatingWarning[];
   selectedTableIds: string[];
@@ -18,13 +27,187 @@ interface SeatingHallGridProps {
   onEmptyCellClick: (side: "GROOM" | "BRIDE", row: number, column: number) => void;
   onDragStartTable?: (table: PlanningTable) => void;
   onDropOnCell?: (side: "GROOM" | "BRIDE", row: number, column: number) => void;
+  /** Click on a seat; used to seat the party picked in the tray without dragging. */
+  onSeatClick?: (tableId: string, seatNumber: number) => void;
   highlightedTableId?: string | null;
+}
+
+// One hall cell holds the table in the middle and its seats on a ring around it.
+// 128px cell: 64px disc, 24px seats on a 52px ring leave an 8px gap to the disc.
+const CELL = "size-32";
+const RING_RADIUS = 52;
+
+// Vietnamese given names come last; companions ("… (Người đi cùng 2)") show as +2.
+function initials(name: string) {
+  const companion = /\(.*?(\d+)\)\s*$/.exec(name);
+  if (companion) return `+${companion[1]}`;
+  const words = name.replace(/\(.*?\)/g, "").trim().split(/\s+/);
+  return (words[words.length - 1] ?? "").charAt(0).toLocaleUpperCase("vi");
+}
+
+function HallSeat({
+  tableId,
+  seatNumber,
+  occupant,
+  angle,
+  small,
+  editable,
+  onSeatClick,
+}: {
+  tableId: string;
+  seatNumber: number;
+  occupant?: SeatOccupant;
+  angle: number;
+  small: boolean;
+  editable: boolean;
+  onSeatClick?: (tableId: string, seatNumber: number) => void;
+}) {
+  const lock = useSeatingDragLock(occupant ? [occupant.placeId] : []);
+  const drop = useDroppable({
+    id: `seat:${tableId}:${seatNumber}`,
+    data: { tableId, seatNumber },
+    disabled: !editable,
+  });
+  const drag = useDraggable({
+    id: `place:${occupant?.placeId ?? `${tableId}:${seatNumber}`}`,
+    data: { ids: occupant ? [occupant.placeId] : [] },
+    disabled: !editable || !occupant || Boolean(lock),
+  });
+  const x = Math.cos(angle) * RING_RADIUS;
+  const y = Math.sin(angle) * RING_RADIUS;
+  const tone = !occupant
+    ? "border-dashed border-muted-foreground/40 bg-card text-muted-foreground"
+    : lock
+      ? "border-amber-500 bg-amber-100 text-amber-900"
+      : occupant.side === "GROOM"
+        ? "border-blue-500 bg-blue-500 text-white"
+        : occupant.side === "BRIDE"
+          ? "border-rose-500 bg-rose-500 text-white"
+          : "border-amber-500 bg-amber-500 text-white";
+  return (
+    <button
+      type="button"
+      ref={(node) => {
+        drop.setNodeRef(node);
+        drag.setNodeRef(node);
+      }}
+      {...(occupant ? drag.attributes : {})}
+      {...(occupant ? drag.listeners : {})}
+      // Click alternative to dragging: with a party picked in the tray, a click seats it here.
+      onClick={(event) => {
+        event.stopPropagation();
+        onSeatClick?.(tableId, seatNumber);
+      }}
+      title={
+        occupant
+          ? `Ghế ${seatNumber}: ${occupant.name}${lock ? ` · đang được xử lí bởi ${lock.displayName}` : editable ? " · kéo sang ghế khác để đổi chỗ" : ""}`
+          : `Ghế ${seatNumber} trống${editable ? " · thả khách vào đây" : ""}`
+      }
+      aria-label={occupant ? `Ghế ${seatNumber}, ${occupant.name}` : `Ghế ${seatNumber} trống`}
+      className={`absolute z-10 flex items-center justify-center rounded-full border-2 font-bold leading-none shadow-sm transition-[scale,box-shadow,opacity] duration-150 motion-reduce:transition-none ${
+        small ? "size-5 text-[9px]" : "size-6 text-[10px]"
+      } ${tone} ${
+        drop.isOver
+          ? `scale-125 ring-2 ring-offset-1 ${occupant ? "ring-amber-500" : "ring-emerald-500"}`
+          : ""
+      } ${drag.isDragging ? "opacity-30" : ""} ${
+        occupant && editable && !lock ? "cursor-grab active:cursor-grabbing hover:scale-110" : "cursor-default"
+      }`}
+      style={{
+        left: `calc(50% + ${x}px)`,
+        top: `calc(50% + ${y}px)`,
+        transform: "translate(-50%, -50%)",
+      }}
+    >
+      {occupant ? initials(occupant.name) : seatNumber}
+    </button>
+  );
+}
+
+type TableDragHandle = {
+  setNodeRef: (node: HTMLElement | null) => void;
+  attributes: ReturnType<typeof useDraggable>["attributes"];
+  listeners: ReturnType<typeof useDraggable>["listeners"];
+  isDragging: boolean;
+};
+
+// The table disc takes people (drop) and can itself be dragged to another cell or table.
+function HallTableDropZone({
+  tableId,
+  side,
+  editable,
+  children,
+}: {
+  tableId: string;
+  side?: string | null;
+  editable: boolean;
+  children: (
+    isOver: boolean,
+    setNodeRef: (node: HTMLElement | null) => void,
+    drag: TableDragHandle,
+  ) => ReactNode;
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `table:${tableId}`,
+    data: { tableId },
+    disabled: !editable,
+  });
+  const { setNodeRef: setDragRef, attributes, listeners, isDragging } = useDraggable({
+    id: `tbl:${tableId}`,
+    data: { kind: "table", tableId, side },
+    disabled: !editable,
+  });
+  return <>{children(isOver, setNodeRef, { setNodeRef: setDragRef, attributes, listeners, isDragging })}</>;
+}
+
+// An empty hall cell: click to create a table, or drop a dragged table here.
+function HallEmptyCell({
+  side,
+  row,
+  column,
+  editable,
+  onClick,
+}: {
+  side: "GROOM" | "BRIDE";
+  row: number;
+  column: number;
+  editable: boolean;
+  onClick: () => void;
+}) {
+  const { isOver, setNodeRef, active } = useDroppable({
+    id: `cell:${side}:${row}:${column}`,
+    data: { kind: "cell", half: side, row, column },
+    disabled: !editable,
+  });
+  const tableDrag = active?.data.current?.kind === "table";
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      onClick={onClick}
+      className={`group relative flex ${CELL} flex-col items-center justify-center rounded-2xl border border-dashed transition-all hover:border-primary hover:bg-primary/5 ${
+        tableDrag && isOver
+          ? "border-2 border-emerald-500 bg-emerald-500/10"
+          : tableDrag
+            ? "border-primary/50 bg-primary/[0.03]"
+            : "border-border/70 bg-card/40"
+      }`}
+      title={`Ô trống Hàng ${row}, Cột ${column} - Bấm để thêm bàn, hoặc kéo một bàn vào đây`}
+    >
+      <span className="text-[10px] font-mono text-muted-foreground/60 group-hover:hidden">
+        {row}·{column}
+      </span>
+      <Plus className="hidden size-4 text-primary group-hover:block transition-transform group-hover:scale-125" />
+    </button>
+  );
 }
 
 export function SeatingHallGrid({
   layout,
   tables,
   assignmentsCountByTable,
+  occupantsByTable = {},
+  editable = false,
   checkedInCountByTable = {},
   warnings = [],
   selectedTableIds,
@@ -32,6 +215,7 @@ export function SeatingHallGrid({
   onSelectTable,
   onTableClick,
   onEmptyCellClick,
+  onSeatClick,
   highlightedTableId,
 }: SeatingHallGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -82,14 +266,21 @@ export function SeatingHallGrid({
         });
       }
 
-      // Staggered reveal for placed tables
-      gsap.from(".hall-table-token", {
-        scale: 0.8,
-        opacity: 0,
-        duration: 0.45,
-        stagger: 0.03,
-        ease: "back.out(1.4)",
-      });
+      // Staggered reveal for placed tables. fromTo + clearProps: an interrupted from() (Strict Mode,
+      // quick re-render) would otherwise leave tables stuck half transparent.
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+        gsap.fromTo(
+          ".hall-table-token",
+          { scale: 0.8, opacity: 0 },
+          {
+            scale: 1,
+            opacity: 1,
+            duration: 0.45,
+            stagger: 0.03,
+            ease: "back.out(1.4)",
+            clearProps: "scale,opacity,transform,translate,rotate",
+          },
+        );
     }, containerRef);
 
     return () => ctx.revert();
@@ -121,7 +312,7 @@ export function SeatingHallGrid({
     // Check if this row is valid for this side
     const maxRowForSide = side === "GROOM" ? layout.groomRows : layout.brideRows;
     if (row > maxRowForSide) {
-      return <div key={`${side}-${row}-${col}`} className="size-16 sm:size-20" aria-hidden="true" />;
+      return <div key={`${side}-${row}-${col}`} className={CELL} aria-hidden="true" />;
     }
 
     const table = tableMap.get(`${side}:${row}:${col}`);
@@ -130,18 +321,14 @@ export function SeatingHallGrid({
     if (!table) {
       // Empty cell
       return (
-        <button
+        <HallEmptyCell
           key={key}
-          type="button"
+          side={side}
+          row={row}
+          column={col}
+          editable={editable}
           onClick={() => onEmptyCellClick(side, row, col)}
-          className="group relative flex size-16 sm:size-20 flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-card/40 transition-all hover:border-primary hover:bg-primary/5 hover:scale-105"
-          title={`Ô trống Hàng ${row}, Cột ${col} - Bấm để thêm hoặc đặt bàn`}
-        >
-          <span className="text-[10px] font-mono text-muted-foreground/60 group-hover:hidden">
-            {row}·{col}
-          </span>
-          <Plus className="hidden size-4 text-primary group-hover:block transition-transform group-hover:scale-125" />
-        </button>
+        />
       );
     }
 
@@ -167,10 +354,39 @@ export function SeatingHallGrid({
         ? "ring-2 ring-amber-500 ring-offset-2 scale-105"
         : "";
 
+    const seatCount = table.capacity + (table.extraSeats ?? 0);
+    const occupants = occupantsByTable[table.id] ?? {};
+
     return (
+      <HallTableDropZone key={key} tableId={table.id} side={table.side} editable={editable}>
+        {(isOver, setNodeRef, drag) => (
+      <div className={`relative ${CELL}`}>
+        {Array.from({ length: seatCount }, (_, i) => (
+          <HallSeat
+            key={i + 1}
+            tableId={table.id}
+            seatNumber={i + 1}
+            occupant={occupants[i + 1]}
+            angle={-Math.PI / 2 + (i / seatCount) * 2 * Math.PI}
+            small={seatCount > 12}
+            editable={editable}
+            onSeatClick={onSeatClick}
+          />
+        ))}
       <div
-        key={key}
-        className={`hall-table-token relative flex size-16 sm:size-20 flex-col items-center justify-between rounded-full border-2 p-1.5 shadow-sm transition-all cursor-pointer ${sideTheme} ${ringStyle}`}
+        ref={(node) => {
+          setNodeRef(node);
+          drag.setNodeRef(node);
+        }}
+        {...drag.attributes}
+        {...drag.listeners}
+        // Centered with inset+margin, not translate: GSAP writes `translate: none` inline.
+        className={`hall-table-token absolute inset-0 m-auto flex size-16 flex-col items-center justify-between rounded-full border-2 p-1.5 shadow-sm transition-[box-shadow,border-color] ${
+          editable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+        } ${sideTheme} ${ringStyle} ${isOver ? "ring-2 ring-emerald-500 ring-offset-2" : ""} ${
+          drag.isDragging ? "opacity-40 border-dashed" : ""
+        }`}
+        title={editable ? "Bấm để xem bàn · kéo sang ô trống để di chuyển, thả lên bàn khác để đổi vị trí" : undefined}
         onClick={() => {
           if (isMultiSelectMode) {
             onSelectTable(table.id);
@@ -253,6 +469,9 @@ export function SeatingHallGrid({
           />
         </div>
       </div>
+      </div>
+        )}
+      </HallTableDropZone>
     );
   };
 
@@ -261,7 +480,7 @@ export function SeatingHallGrid({
       ref={containerRef}
       className="relative overflow-x-auto rounded-3xl border border-border bg-card/60 p-4 sm:p-8 shadow-sm backdrop-blur-sm"
     >
-      <div className="min-w-[700px] flex flex-col items-center space-y-6">
+      <div className="min-w-[960px] flex flex-col items-center space-y-6">
         {/* 1. GRAND CEREMONIAL STAGE */}
         <div
           ref={stageRef}

@@ -128,6 +128,8 @@ export const seatingScoreBreakdownSchema = z.object({
   usedTablesCount: z.number(),
   mixedGroupTablesCount: z.number(),
   splitPartiesCount: z.number(),
+  /** Tables seating both families; allowed, only lightly penalised. */
+  mixedSideTablesCount: z.number().optional(),
 });
 export type SeatingScoreBreakdown = z.infer<typeof seatingScoreBreakdownSchema>;
 
@@ -219,6 +221,7 @@ export type SeatingSummary = z.infer<typeof seatingSummarySchema>;
 export type SeatingChange =
   | {
       action: "CREATE_TABLE";
+      number?: number;
       name?: string;
       capacity: number;
       groupId?: string | null;
@@ -228,10 +231,18 @@ export type SeatingChange =
       column?: number | null;
       isVip?: boolean;
     }
-  | { action: "CREATE_TABLES"; capacity: number; tableCount: number; groupId?: string | null }
+  | {
+      action: "CREATE_TABLES";
+      capacity: number;
+      tableCount: number;
+      groupId?: string | null;
+      side?: "GROOM" | "BRIDE" | "MUTUAL" | null;
+    }
   | {
       action: "UPDATE_TABLE";
       tableId: string;
+      /** Manual table number, 1–999; a taken number is rejected with 409 TABLE_NUMBER_TAKEN. */
+      number?: number;
       name?: string;
       capacity?: number;
       isVip?: boolean;
@@ -440,5 +451,48 @@ export function getSeatingSummary(api: ApiClient, weddingId: string, signal?: Ab
       signal,
       schema: seatingSummarySchema,
     },
+  );
+}
+
+export const tableEstimateSchema = z.object({
+  capacity: z.number().int(),
+  reservePercent: z.number().int(),
+  seatsNeeded: z.number().int(),
+  confirmedSeats: z.number().int(),
+  pendingSeats: z.number().int(),
+  tablesNeeded: z.number().int(),
+  reserveTables: z.number().int(),
+  recommendedTables: z.number().int(),
+  currentTables: z.number().int(),
+  currentSeats: z.number().int(),
+  missingTables: z.number().int(),
+  bySide: z.array(
+    z.object({
+      side: z.string(),
+      seats: z.number().int(),
+      tables: z.number().int(),
+      currentTables: z.number().int(),
+    }),
+  ),
+});
+export type TableEstimate = z.infer<typeof tableEstimateSchema>;
+export const tableEstimateKey = (weddingId: string, capacity: number, reservePercent: number) =>
+  ["table-estimate", weddingId, capacity, reservePercent] as const;
+
+/** Tables to book from the guest count (60 people: 6 tables of 10 or 5 of 12), plus reserve. */
+export function getTableEstimate(
+  api: ApiClient,
+  weddingId: string,
+  capacity: 10 | 12,
+  reservePercent: number,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({
+    capacity: String(capacity),
+    reservePercent: String(reservePercent),
+  });
+  return api.request(
+    `/weddings/${encodeURIComponent(weddingId)}/guest-planning/table-estimate?${query}`,
+    { signal, schema: tableEstimateSchema },
   );
 }

@@ -442,6 +442,15 @@ export function SeatingSuggestionsModal({
                       {currentSuggestion.scoreBreakdown.splitPartiesCount} nhóm
                     </div>
                   </div>
+                  {/* Both families at one table is allowed; shown so the couple can review it. */}
+                  {(currentSuggestion.scoreBreakdown.mixedSideTablesCount ?? 0) > 0 && (
+                    <div className="col-span-2 sm:col-span-4 bg-card p-2 rounded-xl border border-border text-center shadow-xs">
+                      <div className="text-muted-foreground text-[10px]">Bàn có khách cả hai họ</div>
+                      <div className="font-semibold text-foreground">
+                        {currentSuggestion.scoreBreakdown.mixedSideTablesCount} bàn
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
