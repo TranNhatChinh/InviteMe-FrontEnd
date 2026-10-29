@@ -1,8 +1,8 @@
 import type { SeatingDragPointer } from "../../../core/realtime/seating-drag-events";
 
 // A critically damped spring follows the newest sample without building a queue.
-// At a steady speed this setting trails the target by roughly 40 ms.
-const SPRING_FREQUENCY = 50;
+// At a steady speed this setting trails the target by roughly 30 ms.
+const SPRING_FREQUENCY = 70;
 
 function advanceSpring(position: number, velocity: number, target: number, seconds: number) {
   const offset = position - target;

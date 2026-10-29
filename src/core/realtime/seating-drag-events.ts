@@ -28,7 +28,7 @@ export const seatingDragPointerSchema = z.object({
   weddingId: z.string(),
   connectionId: z.string(),
   dragId: z.string(),
-  anchor: z.string().regex(/^(queue|board|table:[a-f0-9-]{36})$/i),
+  anchor: z.string().regex(/^(queue|board|page|table:[a-f0-9-]{36})$/i),
   x: z.number().min(0).max(1),
   y: z.number().min(0).max(1),
   sequence: z.number().int().nonnegative(),
