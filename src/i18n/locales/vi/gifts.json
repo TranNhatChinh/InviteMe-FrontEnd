@@ -125,5 +125,23 @@
       "network": "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
       "load": "Chưa tải được danh sách đã ghi."
     }
+  },
+  "bankHub": {
+    "title": "Tự động xác nhận tiền mừng",
+    "description": "Liên kết tài khoản ngân hàng qua SePay: tiền khách chuyển vào được xác nhận ngay, không cần đối soát tay. Đăng nhập và OTP diễn ra trên trang của SePay, InviteMe không thấy mật khẩu ngân hàng.",
+    "link": "Liên kết ngân hàng",
+    "opening": "Đang mở…",
+    "syncing": "Đang cập nhật…",
+    "unlink": "Huỷ liên kết",
+    "autoConfirmed": "Tự xác nhận",
+    "linkTitle": "Liên kết tài khoản ngân hàng",
+    "unlinkTitle": "Huỷ liên kết tài khoản",
+    "dialogHint": "Làm theo hướng dẫn của SePay. Xong thì cửa sổ tự đóng.",
+    "frameTitle": "SePay Bank Hub",
+    "expired": "Phiên liên kết đã hết hạn. Đóng cửa sổ và bấm liên kết lại.",
+    "synced": "Đã cập nhật: {{count}} tài khoản đang tự xác nhận tiền mừng.",
+    "notAdded": "Đã liên kết nhưng chưa thêm được tài khoản {{accounts}} (tối đa hai tài khoản nhận). Xoá bớt một tài khoản rồi bấm liên kết lại.",
+    "notConfigured": "Tính năng liên kết ngân hàng chưa được bật trên hệ thống.",
+    "failed": "Chưa kết nối được SePay. Vui lòng thử lại sau."
   }
 }

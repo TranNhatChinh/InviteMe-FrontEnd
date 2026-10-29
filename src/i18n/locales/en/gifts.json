@@ -125,5 +125,23 @@
       "network": "Couldn’t reach the server. Check the connection and try again.",
       "load": "Couldn’t load what was recorded."
     }
+  },
+  "bankHub": {
+    "title": "Confirm gifts automatically",
+    "description": "Link your bank account through SePay: guests' transfers are confirmed at once, no manual matching. Login and OTP happen on SePay's page; InviteMe never sees your bank password.",
+    "link": "Link bank account",
+    "opening": "Opening…",
+    "syncing": "Updating…",
+    "unlink": "Unlink",
+    "autoConfirmed": "Auto-confirmed",
+    "linkTitle": "Link a bank account",
+    "unlinkTitle": "Unlink account",
+    "dialogHint": "Follow SePay's steps. The window closes when you are done.",
+    "frameTitle": "SePay Bank Hub",
+    "expired": "This linking session has expired. Close the window and link again.",
+    "synced": "Updated: {{count}} account(s) confirm gifts automatically.",
+    "notAdded": "Linked, but account {{accounts}} was not added (two receiving accounts at most). Remove one and link again.",
+    "notConfigured": "Bank linking is not enabled on this server.",
+    "failed": "Could not reach SePay. Please try again later."
   }
 }
