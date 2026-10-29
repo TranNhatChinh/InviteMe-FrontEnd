@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
 import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
+import { ApiError } from "@/core/api/api-error";
+import { BankHubLinkDialog } from "./bank-hub-link-dialog";
 import {
   addGiftAccount,
   confirmGift,
@@ -13,7 +15,10 @@ import {
   getGiftBanks,
   getGiftLedger,
   getGiftSummary,
+  linkGiftBankHub,
   removeGiftAccount,
+  syncGiftBankHub,
+  unlinkGiftBankHub,
 } from "../api/gifts.api";
 import { useLocale } from "@/i18n/language-context";
 import { formatCurrency, formatDate, formatNumber } from "@/i18n/format";
@@ -32,6 +37,8 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
   const [accountName, setAccountName] = useState("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [hub, setHub] = useState<{ url: string; mode: "link" | "unlink" } | null>(null);
   const accounts = useQuery({
     queryKey: ["gift-accounts", weddingId],
     queryFn: ({ signal }) => getGiftAccounts(api, weddingId, signal),
@@ -77,6 +84,44 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
     onSuccess: refresh,
     onError: () => setError(t("deleteAccountFailed")),
   });
+  const bankHubError = (cause: unknown) =>
+    setError(
+      cause instanceof ApiError && cause.backendCode === "BANK_HUB_NOT_CONFIGURED"
+        ? t("bankHub.notConfigured")
+        : t("bankHub.failed"),
+    );
+  const openHub = useMutation({
+    mutationFn: async (accountId: string | null) => {
+      const link = accountId
+        ? await unlinkGiftBankHub(api, weddingId, accountId)
+        : await linkGiftBankHub(api, weddingId);
+      return { url: link.hostedLinkUrl, mode: accountId ? ("unlink" as const) : ("link" as const) };
+    },
+    onSuccess: (opened) => {
+      setError("");
+      setNotice("");
+      setHub(opened);
+    },
+    onError: bankHubError,
+  });
+  const sync = useMutation({
+    mutationFn: () => syncGiftBankHub(api, weddingId),
+    onSuccess: async (result) => {
+      setNotice(
+        result.notAdded.length > 0
+          ? t("bankHub.notAdded", { accounts: result.notAdded.join(", ") })
+          : t("bankHub.synced", { count: result.accounts.filter((a) => a.bankHubLinked).length }),
+      );
+      await refresh();
+    },
+    onError: bankHubError,
+  });
+  const syncMutate = sync.mutate;
+  // SePay's page is done (or closed): read the linked accounts again either way.
+  const closeHub = useCallback(() => {
+    setHub(null);
+    syncMutate();
+  }, [syncMutate]);
   const confirm = useMutation({
     mutationFn: (id: string) => confirmGift(api, weddingId, id),
     onSuccess: refresh,
@@ -92,6 +137,14 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
       {error && (
         <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
           {error}
+        </p>
+      )}
+      {notice && (
+        <p
+          role="status"
+          className="rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300"
+        >
+          {notice}
         </p>
       )}
       {summary.isError && (
@@ -123,25 +176,64 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
           <h2 className="font-semibold">{t("accountsTitle")}</h2>
           <p className="text-sm text-muted-foreground">{t("accountLimit")}</p>
         </div>
+        {editable && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-3">
+            <div className="min-w-0 flex-1 text-sm">
+              <p className="font-medium">{t("bankHub.title")}</p>
+              <p className="text-muted-foreground">{t("bankHub.description")}</p>
+            </div>
+            <Button
+              type="button"
+              disabled={openHub.isPending || sync.isPending}
+              onClick={() => openHub.mutate(null)}
+            >
+              {openHub.isPending && openHub.variables === null
+                ? t("bankHub.opening")
+                : sync.isPending
+                  ? t("bankHub.syncing")
+                  : t("bankHub.link")}
+            </Button>
+          </div>
+        )}
         {accounts.data?.map((account) => (
           <div
             key={account.id}
             className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 p-3 text-sm"
           >
-            <span>
-              <strong>{account.label || account.bankName}</strong> · {account.accountName} ·{" "}
-              {account.accountNumber}
+            <span className="flex flex-wrap items-center gap-2">
+              <span>
+                <strong>{account.label || account.bankName}</strong> · {account.accountName} ·{" "}
+                {account.accountNumber}
+              </span>
+              {account.bankHubLinked && (
+                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                  {t("bankHub.autoConfirmed")}
+                </span>
+              )}
             </span>
             {editable && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(account.id)}
-              >
-                {t("delete")}
-              </Button>
+              <span className="flex gap-2">
+                {account.bankHubLinked && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={openHub.isPending || sync.isPending}
+                    onClick={() => openHub.mutate(account.id)}
+                  >
+                    {t("bankHub.unlink")}
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate(account.id)}
+                >
+                  {t("delete")}
+                </Button>
+              </span>
             )}
           </div>
         ))}
@@ -319,6 +411,12 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
           </div>
         )}
       </section>
+      <BankHubLinkDialog
+        url={hub?.url ?? null}
+        mode={hub?.mode ?? "link"}
+        onClose={closeHub}
+        onFinished={closeHub}
+      />
     </div>
   );
 }

@@ -8,6 +8,8 @@ const bank = z.object({
   accountNumber: z.string(),
   accountName: z.string(),
   label: z.string().nullable(),
+  /** Linked through SePay Bank Hub: transfers into it are confirmed automatically. */
+  bankHubLinked: z.boolean().optional().default(false),
 });
 const guestGift = z.object({
   id: z.string(),
@@ -99,6 +101,27 @@ export function removeGiftAccount(api: ApiClient, weddingId: string, accountId: 
   return api.request(`${host(weddingId)}/accounts/${encodeURIComponent(accountId)}`, {
     method: "DELETE",
     schema: z.undefined(),
+  });
+}
+const bankHubLink = z.object({ hostedLinkUrl: z.string(), expiresAt: z.string().nullable() });
+/** SePay Bank Hub page (iframe) where the couple links an account; the link works once. */
+export function linkGiftBankHub(api: ApiClient, weddingId: string) {
+  return api.request(`${host(weddingId)}/bank-hub/link`, { method: "POST", schema: bankHubLink });
+}
+export function unlinkGiftBankHub(api: ApiClient, weddingId: string, accountId: string) {
+  return api.request(
+    `${host(weddingId)}/accounts/${encodeURIComponent(accountId)}/bank-hub/unlink`,
+    {
+      method: "POST",
+      schema: bankHubLink,
+    },
+  );
+}
+/** After the Bank Hub page: linked accounts become receiving accounts; notAdded = linked but over the 2-account limit. */
+export function syncGiftBankHub(api: ApiClient, weddingId: string) {
+  return api.request(`${host(weddingId)}/bank-hub/sync`, {
+    method: "POST",
+    schema: z.object({ accounts: z.array(bank), notAdded: z.array(z.string()) }),
   });
 }
 export function getGiftSummary(api: ApiClient, weddingId: string, signal?: AbortSignal) {
