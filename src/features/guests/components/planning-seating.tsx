@@ -56,6 +56,8 @@ import { seatingErrorText } from "../utils/seating-errors";
 import { placeNeedsSeat } from "../utils/seating-places";
 import { useSeatingCollaboration } from "../hooks/use-seating-collaboration";
 import { SeatingDragPresenceContext } from "./seating-drag-presence";
+import { SeatingRemoteCursors } from "./seating-remote-cursors";
+import { staleForResync } from "@/core/realtime/resync";
 import { offsetDragPreview, seatingDropFeedback, type SeatingDropPosition } from "../utils/seating-drag-preview";
 import { SeatingDragPreview } from "./seating-drag-preview";
 import { SeatingTableDrawer } from "./seating-table-drawer";
@@ -206,14 +208,18 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
 
   // Real-time synchronization
   useEffect(() => {
-    const invalidate = () => {
-      void cache.invalidateQueries({ queryKey: key });
-      void cache.invalidateQueries({ queryKey: seatingLayoutKey(weddingId) });
+    const invalidate = (since: number | null = null) => {
+      const predicate = staleForResync(since);
+      void cache.invalidateQueries({ queryKey: key, predicate });
+      void cache.invalidateQueries({ queryKey: seatingLayoutKey(weddingId), predicate });
     };
-    const invalidatePublication = () => {
-      void cache.invalidateQueries({ queryKey: seatingPublicationKey(weddingId) });
+    const invalidatePublication = (since: number | null = null) => {
+      void cache.invalidateQueries({
+        queryKey: seatingPublicationKey(weddingId),
+        predicate: staleForResync(since),
+      });
     };
-    const stopEvent = realtime.on(REALTIME_EVENTS.seating, invalidate);
+    const stopEvent = realtime.on(REALTIME_EVENTS.seating, () => invalidate());
     const stopPublication = realtime.onPlanningChange((change) => {
       if (
         change.type === "PlanningSeatingPublished" ||
@@ -221,9 +227,9 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       )
         invalidatePublication();
     });
-    const stopResync = realtime.onResync(() => {
-      invalidate();
-      invalidatePublication();
+    const stopResync = realtime.onResync((since) => {
+      invalidate(since);
+      invalidatePublication(since);
     });
     return () => {
       stopEvent();
@@ -232,8 +238,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     };
   }, [realtime, cache, weddingId, key]);
 
-  // GSAP entrance animation
+  // GSAP entrance animation, once the board (and so the container) is rendered.
+  const boardReady = Boolean(planQuery.data);
   useEffect(() => {
+    if (!boardReady || !containerRef.current) return;
     const ctx = gsap.context(() => {
       gsap.from(".seating-header-anim", {
         opacity: 0,
@@ -251,7 +259,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       });
     }, containerRef);
     return () => ctx.revert();
-  }, [planQuery.isPending]);
+  }, [boardReady]);
 
   const plan = planQuery.data;
   const layout = layoutQuery.data ?? plan?.layout ?? {
@@ -533,12 +541,17 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     );
   }
 
+  // Other people's drags: their places show as locked and their cursor follows the board.
+  const remoteLeases = collaboration.leases.filter(
+    (lease) => lease.connectionId !== collaboration.connectionId,
+  );
   const drawerTable = activeTableForDrawer
     ? (plan.tables.find((t) => t.id === activeTableForDrawer.id) ?? activeTableForDrawer)
     : null;
 
   return (
-    <SeatingDragPresenceContext.Provider value={collaboration.leases}>
+    <SeatingDragPresenceContext.Provider value={remoteLeases}>
+      <SeatingRemoteCursors weddingId={weddingId} plan={plan} leases={remoteLeases} />
       <DndContext
         sensors={sensors}
         collisionDetection={(args) =>

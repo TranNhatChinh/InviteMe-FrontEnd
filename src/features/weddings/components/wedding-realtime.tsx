@@ -4,6 +4,7 @@ import { useRuntime } from "@/core/config/runtime";
 import { StatusBadge } from "@/shared/components/status-badge";
 import { weddingKeys } from "../api/wedding.keys";
 import { REALTIME_EVENTS } from "@/core/realtime/realtime-events";
+import { staleForResync } from "@/core/realtime/resync";
 export function WeddingRealtime({ weddingId }: { weddingId: string }) {
   const { realtime, queryClient } = useRuntime();
   const status = useSyncExternalStore(
@@ -12,41 +13,44 @@ export function WeddingRealtime({ weddingId }: { weddingId: string }) {
     realtime.getServerStatus,
   );
   useEffect(() => {
-    const invalidate = () => {
-      void queryClient.invalidateQueries({ queryKey: weddingKeys.detail(weddingId) });
-      void queryClient.invalidateQueries({ queryKey: weddingKeys.lists() });
+    // since: see staleForResync; realtime events always refetch.
+    const refresh = (queryKey: readonly unknown[], since: number | null) =>
+      void queryClient.invalidateQueries({ queryKey, predicate: staleForResync(since) });
+    const invalidate = (since: number | null = null) => {
+      refresh(weddingKeys.detail(weddingId), since);
+      refresh(weddingKeys.lists(), since);
     };
-    const invalidateGuests = () => {
-      void queryClient.invalidateQueries({ queryKey: ["host-rsvp", weddingId] });
-      void queryClient.invalidateQueries({ queryKey: ["guests", weddingId] });
-      void queryClient.invalidateQueries({ queryKey: ["guest-planning", weddingId] });
-      void queryClient.invalidateQueries({ queryKey: ["guest-planning-detail", weddingId] });
-      void queryClient.invalidateQueries({ queryKey: ["guest-planning-groups", weddingId] });
-      void queryClient.invalidateQueries({ queryKey: ["co-hosts", weddingId, "groups"] });
-      invalidate();
+    const invalidateGuests = (since: number | null = null) => {
+      refresh(["host-rsvp", weddingId], since);
+      refresh(["guests", weddingId], since);
+      refresh(["guest-planning", weddingId], since);
+      refresh(["guest-planning-detail", weddingId], since);
+      refresh(["guest-planning-groups", weddingId], since);
+      refresh(["co-hosts", weddingId, "groups"], since);
+      invalidate(since);
     };
-    const invalidateRsvp = () => {
-      void queryClient.invalidateQueries({ queryKey: ["host-rsvp", weddingId] });
-      invalidateGuests();
-      void queryClient.invalidateQueries({ queryKey: ["check-in-summary", weddingId] });
+    const invalidateRsvp = (since: number | null = null) => {
+      refresh(["host-rsvp", weddingId], since);
+      invalidateGuests(since);
+      refresh(["check-in-summary", weddingId], since);
     };
-    const invalidateSeating = () => {
-      void queryClient.invalidateQueries({ queryKey: ["planning-seating", weddingId] });
+    const invalidateSeating = (since: number | null = null) => {
+      refresh(["planning-seating", weddingId], since);
     };
-    const invalidatePublication = () => {
-      void queryClient.invalidateQueries({ queryKey: ["website", weddingId] });
-      void queryClient.invalidateQueries({ queryKey: ["invitation-design", weddingId] });
-      void queryClient.invalidateQueries({ queryKey: ["invitation-wording", weddingId] });
+    const invalidatePublication = (since: number | null = null) => {
+      refresh(["website", weddingId], since);
+      refresh(["invitation-design", weddingId], since);
+      refresh(["invitation-wording", weddingId], since);
     };
     const unsubscribers = [
-      realtime.onResync(() => {
-        invalidateRsvp();
-        invalidateSeating();
-        invalidatePublication();
+      realtime.onResync((since) => {
+        invalidateRsvp(since);
+        invalidateSeating(since);
+        invalidatePublication(since);
       }),
-      realtime.on(REALTIME_EVENTS.capacity, invalidate),
-      realtime.on(REALTIME_EVENTS.rsvp, invalidateRsvp),
-      realtime.on(REALTIME_EVENTS.waitlist, invalidateRsvp),
+      realtime.on(REALTIME_EVENTS.capacity, () => invalidate()),
+      realtime.on(REALTIME_EVENTS.rsvp, () => invalidateRsvp()),
+      realtime.on(REALTIME_EVENTS.waitlist, () => invalidateRsvp()),
       realtime.onPlanningChange((change) => {
         if (change.type === "WeddingSetupChanged") invalidate();
         if (change.type.startsWith("WeddingWebsite") || change.type.startsWith("Invitation"))
