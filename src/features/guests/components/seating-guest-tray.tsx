@@ -271,6 +271,7 @@ export function SeatingGuestTray({
   return (
     <div
       ref={setTrayRef}
+      data-seating-pointer-anchor="queue"
       className={`flex flex-col h-full rounded-3xl border bg-card p-4 sm:p-5 shadow-sm space-y-4 transition-colors ${
         trayOver ? "border-primary ring-2 ring-primary/40 bg-primary/5" : "border-border"
       }`}

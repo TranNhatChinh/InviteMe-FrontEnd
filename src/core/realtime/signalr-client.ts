@@ -30,7 +30,7 @@ export class RealtimeClient {
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private status: RealtimeStatus;
   private listeners = new Set<() => void>();
-  private resyncListeners = new Set<() => void>();
+  private resyncListeners = new Set<(since: number | null) => void>();
   private planningListeners = new Set<(change: PlanningChange) => void>();
   private handlers = new Map<RealtimeEvent, Set<(event: WeddingEvent) => void>>();
   private dragListeners = new Set<(snapshot: SeatingDragSnapshot) => void>();
@@ -101,7 +101,11 @@ export class RealtimeClient {
     this.status = status;
     this.listeners.forEach((listener) => listener());
   }
-  onResync(listener: () => void) {
+  /**
+   * Called after joining the wedding room. since = when the first connection started (data fetched from then on already
+   * covers every change, so only older data needs a refetch); null after a reconnect, when anything may have been missed.
+   */
+  onResync(listener: (since: number | null) => void) {
     this.resyncListeners.add(listener);
     return () => {
       this.resyncListeners.delete(listener);
@@ -194,7 +198,7 @@ export class RealtimeClient {
         await connection.invoke("JoinWedding", weddingId);
         if (isCurrent()) {
           this.setStatus("connected");
-          this.resyncListeners.forEach((listener) => listener());
+          this.resyncListeners.forEach((listener) => listener(null));
         }
       } catch {
         await connection.stop();
@@ -237,6 +241,7 @@ export class RealtimeClient {
         this.connection = connection;
         if (!connection) return;
         this.setStatus("connecting");
+        const since = Date.now();
         try {
           await connection.start();
           if (generation !== this.generation) return;
@@ -244,7 +249,7 @@ export class RealtimeClient {
           if (generation !== this.generation) return;
           this.setStatus("connected");
           clearTimeout(this.retryTimer);
-          this.resyncListeners.forEach((listener) => listener());
+          this.resyncListeners.forEach((listener) => listener(since));
         } catch {
           if (connection.state !== HubConnectionState.Disconnected) await connection.stop();
           if (generation !== this.generation) return;

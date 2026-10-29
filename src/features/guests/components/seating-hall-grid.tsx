@@ -284,7 +284,10 @@ export function SeatingHallGrid({
 
       // Staggered reveal for placed tables. fromTo + clearProps: an interrupted from() (Strict Mode,
       // quick re-render) would otherwise leave tables stuck half transparent.
-      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      if (
+        containerRef.current?.querySelector(".hall-table-token") &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      )
         gsap.fromTo(
           ".hall-table-token",
           { scale: 0.8, opacity: 0 },
@@ -390,6 +393,7 @@ export function SeatingHallGrid({
           />
         ))}
       <div
+        data-seating-pointer-anchor={`table:${table.id}`}
         ref={(node) => {
           setNodeRef(node);
           drag.setNodeRef(node);
@@ -500,6 +504,7 @@ export function SeatingHallGrid({
   return (
     <div
       ref={containerRef}
+      data-seating-pointer-anchor="board"
       className="relative overflow-x-auto rounded-3xl border border-border bg-card/60 p-4 sm:p-8 shadow-sm backdrop-blur-sm"
     >
       <div className="min-w-[960px] flex flex-col items-center space-y-6">
