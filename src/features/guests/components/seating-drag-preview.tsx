@@ -1,6 +1,6 @@
 import { Check, UserRound, UsersRound, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/shared/lib/utils";
-import { sideLabels } from "../api/planning.api";
 import type { SeatingPlan } from "../api/planning-seating.api";
 import type { seatingDropFeedback } from "../utils/seating-drag-preview";
 import { queuePlaceName } from "./seating-queue";
@@ -14,13 +14,19 @@ export function SeatingDragPreview({
   ids: string[];
   feedback: ReturnType<typeof seatingDropFeedback>;
 }) {
+  const { t } = useTranslation("seating");
+  const { t: tg } = useTranslation("guestPlanning");
   const place = plan.places.find((p) => p.id === ids[0]);
   const guest = plan.guests.find((g) => g.id === place?.guestId);
   if (!place || !guest) return null;
   const group = ids.length > 1;
   const title = group
-    ? `${guest.invitationKind === "FAMILY" ? "Gia đình" : "Nhóm"} ${guest.honorific ? guest.honorific.toLocaleLowerCase("vi") + " " : ""}${guest.recipientName}`
-    : queuePlaceName(place, guest);
+    ? t("tableDrawer.household", {
+        kind: t(guest.invitationKind === "FAMILY" ? "common.family" : "common.group"),
+        honorific: guest.honorific ? guest.honorific.toLocaleLowerCase("vi") + " " : "",
+        name: guest.recipientName,
+      })
+    : queuePlaceName(place, guest, (position) => tg("seating.queue.companion", { position }));
   const initial = title.trim().split(/\s+/).at(-1)?.slice(0, 1);
   const Icon = group ? UsersRound : UserRound;
   return (
@@ -49,7 +55,9 @@ export function SeatingDragPreview({
           </span>
           <div className="min-w-0 flex-1">
             <p className="line-clamp-2 text-xs font-semibold text-foreground">{title}</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{sideLabels[guest.side]}</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {tg(`sideValues.${guest.side}`, { defaultValue: guest.side })}
+            </p>
           </div>
           {group && (
             <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold">
@@ -69,7 +77,7 @@ export function SeatingDragPreview({
             ) : (
               <X className="size-3.5 shrink-0" />
             )}
-            {feedback.message}
+            {tg(feedback.messageKey, feedback.messageValues)}
           </p>
         )}
       </div>

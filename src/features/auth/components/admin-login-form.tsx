@@ -96,7 +96,7 @@ export function AdminLoginForm() {
 
   return (
     <section className="w-full max-w-md rounded-3xl border border-border bg-card p-7 shadow-sm sm:p-9">
-      <BrandLogo href="/" size="md" ariaLabel="InviteMe — Trang chủ" />
+      <BrandLogo href="/" size="md" ariaLabel={t("ui:auth.homeAria")} />
       <p className="mt-8 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {t("adminGate")}
       </p>

@@ -8,20 +8,20 @@ export async function POST(request: Request) {
   try {
     const file = (await request.formData()).get("file");
     if (!(file instanceof File) || file.size > 10 * 1024 * 1024)
-      return Response.json({ error: "Ảnh phải nhỏ hơn 10 MB." }, { status: 400 });
+      return Response.json({ error: "FILE_TOO_LARGE" }, { status: 400 });
     const bytes = Buffer.from(await file.arrayBuffer());
     const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
     const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
     const webp =
       bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
     if (!png && !jpeg && !webp)
-      return Response.json({ error: "Chỉ nhận PNG, JPG hoặc WebP." }, { status: 400 });
+      return Response.json({ error: "UNSUPPORTED_FILE_TYPE" }, { status: 400 });
     const id = randomUUID();
     await mkdir(directory, { recursive: true });
     await writeFile(join(directory, id), bytes);
     return Response.json({ src: `/api/template-studio/assets?id=${id}` });
   } catch {
-    return Response.json({ error: "Không tải được ảnh." }, { status: 400 });
+    return Response.json({ error: "UPLOAD_FAILED" }, { status: 400 });
   }
 }
 export async function GET(request: Request) {
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
         .slice(-150)
         .map((value) => ({
           src: `/api/template-studio/assets?id=${value}`,
-          name: `Ảnh ${value.slice(0, 8)}`,
+          name: `image-${value.slice(0, 8)}`,
         })),
     );
   }

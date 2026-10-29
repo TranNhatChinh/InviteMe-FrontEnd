@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { placeNeedsSeat } from "../utils/seating-places";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { GripVertical, Search, UserCheck, Users, X } from "lucide-react";
 import { Input } from "@/shared/ui/input";
@@ -29,6 +31,7 @@ function SeatingPersonChip({
   label: string;
   editable: boolean;
 }) {
+  const { t } = useTranslation("seating");
   const lock = useSeatingDragLock([place.id]);
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
     id: `place:${place.id}`,
@@ -46,7 +49,7 @@ function SeatingPersonChip({
         event.stopPropagation();
       }}
       onClick={(event) => event.stopPropagation()}
-      title={editable ? `Kéo ${label} vào một ghế` : label}
+      title={editable ? t("guestTray.dragPerson", { name: label }) : label}
       className={`inline-flex items-center gap-0.5 rounded-full border bg-background px-1.5 py-0.5 ${
         editable && !lock ? "cursor-grab active:cursor-grabbing hover:border-primary" : ""
       } ${isDragging ? "opacity-40" : ""}`}
@@ -70,6 +73,7 @@ function SeatingGuestPartyItem({
   onSelectParty: (guestId: string, placeIds: string[]) => void;
   editable: boolean;
 }) {
+  const { t } = useTranslation("seating");
   const placeIds = useMemo(() => unseatedPlaces.map((p) => p.id), [unseatedPlaces]);
   const lock = useSeatingDragLock(placeIds);
   const isLockedByOther = Boolean(lock);
@@ -103,7 +107,7 @@ function SeatingGuestPartyItem({
       } ${editable && !isLockedByOther ? "active:cursor-grabbing" : ""} ${
         partyDragging ? "opacity-40" : ""
       }`}
-      title={editable && !isLockedByOther ? "Kéo cả thiệp vào một bàn hoặc ghế, hoặc bấm để chọn" : undefined}
+      title={editable && !isLockedByOther ? t("guestTray.dragParty") : undefined}
       role="button"
       aria-disabled={isLockedByOther}
       tabIndex={isLockedByOther ? -1 : 0}
@@ -133,11 +137,9 @@ function SeatingGuestPartyItem({
                     : "text-amber-600 dark:text-amber-400"
               }`}
             >
-              {guest.side === "GROOM"
-                ? "Nhà trai"
-                : guest.side === "BRIDE"
-                  ? "Nhà gái"
-                  : "Khách chung"}
+              {guest.side === "GROOM" || guest.side === "BRIDE"
+                ? t(`common.side.${guest.side}`)
+                : t("guestTray.sharedGuest")}
             </span>
             {guest.group && <span>· {guest.group.name}</span>}
           </div>
@@ -146,25 +148,25 @@ function SeatingGuestPartyItem({
           {lock && (
             <div className="flex items-center gap-1.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full mt-1.5 w-fit">
               <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
-              <span>Đang được xử lý bởi {lock.displayName}</span>
+              <span>{t("common.processingBy", { name: lock.displayName })}</span>
             </div>
           )}
         </div>
 
         <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
-          {unseatedPlaces.length} chỗ
+          {t("guestTray.places", { count: unseatedPlaces.length })}
         </span>
       </div>
 
       {/* Members: each can be dragged alone onto a seat */}
       {unseatedPlaces.length > 1 && (
         <div className="mt-2 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground border-t border-border/40 pt-1.5">
-          <span>Gồm:</span>
+          <span>{t("guestTray.members")}</span>
           {unseatedPlaces.map((p, idx) => (
             <SeatingPersonChip
               key={p.id}
               place={p}
-              label={p.person?.fullName || `Khách ${idx + 1}`}
+              label={p.person?.fullName || t("guestTray.guestNumber", { number: idx + 1 })}
               editable={editable}
             />
           ))}
@@ -183,6 +185,7 @@ export function SeatingGuestTray({
   groups = [],
   editable = false,
 }: SeatingGuestTrayProps) {
+  const { t } = useTranslation("seating");
   // Dropping a seated person back here unseats them.
   const { setNodeRef: setTrayRef, isOver: trayOver } = useDroppable({
     id: "unassigned",
@@ -197,17 +200,18 @@ export function SeatingGuestTray({
   // Map places by guestId
   const placesByGuestId = useMemo(() => {
     const map = new Map<string, PlanningSeatingPlace[]>();
+    const guestById = new Map(guests.map((guest) => [guest.id, guest]));
     for (const place of places) {
-      // Exclude declined or waitlisted
-      const status = place.person?.attendanceStatus;
-      if (status === "DECLINED" || status === "WAITLISTED") continue;
+      // Leave out waitlisted people and places that need no seat (declined, or left empty by a firm answer)
+      if (place.person?.attendanceStatus === "WAITLISTED") continue;
+      if (!placeNeedsSeat(place, guestById.get(place.guestId))) continue;
 
       const list = map.get(place.guestId) ?? [];
       list.push(place);
       map.set(place.guestId, list);
     }
     return map;
-  }, [places]);
+  }, [places, guests]);
 
   // Compute unseated parties
   const unseatedParties = useMemo(() => {
@@ -276,11 +280,11 @@ export function SeatingGuestTray({
         <div className="flex items-center gap-2">
           <Users className="size-4 text-primary" />
           <h3 className="font-serif text-base font-semibold text-foreground">
-            Khách chưa xếp chỗ ({totalUnseatedGuests})
+            {t("guestTray.title", { count: totalUnseatedGuests })}
           </h3>
         </div>
         <span className="text-[11px] font-mono text-muted-foreground">
-          {unseatedParties.length} thiệp
+          {t("guestTray.invitations", { count: unseatedParties.length })}
         </span>
       </div>
 
@@ -288,7 +292,7 @@ export function SeatingGuestTray({
       <div className="relative">
         <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Tìm tên khách hoặc thiệp..."
+          placeholder={t("guestTray.search")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-8 text-xs h-8"
@@ -315,7 +319,7 @@ export function SeatingGuestTray({
               sideFilter === "ALL" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
             }`}
           >
-            Tất cả
+            {t("guestTray.all")}
           </button>
           <button
             type="button"
@@ -326,7 +330,7 @@ export function SeatingGuestTray({
                 : "text-muted-foreground hover:text-blue-600"
             }`}
           >
-            Nhà trai
+            {t("common.side.GROOM")}
           </button>
           <button
             type="button"
@@ -337,7 +341,7 @@ export function SeatingGuestTray({
                 : "text-muted-foreground hover:text-rose-600"
             }`}
           >
-            Nhà gái
+            {t("common.side.BRIDE")}
           </button>
         </div>
 
@@ -349,7 +353,7 @@ export function SeatingGuestTray({
               onChange={(e) => setGroupFilter(e.target.value)}
               className="flex-1 rounded-md border border-input bg-background p-1.5 text-[11px] text-foreground"
             >
-              <option value="ALL">Tất cả nhóm</option>
+              <option value="ALL">{t("guestTray.allGroups")}</option>
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.name}
@@ -363,9 +367,9 @@ export function SeatingGuestTray({
             onChange={(e) => setRsvpFilter(e.target.value as "ALL" | "ATTENDING" | "PENDING")}
             className="flex-1 rounded-md border border-input bg-background p-1.5 text-[11px] text-foreground"
           >
-            <option value="ALL">Mọi trạng thái</option>
-            <option value="ATTENDING">Đã xác nhận</option>
-            <option value="PENDING">Chưa trả lời</option>
+            <option value="ALL">{t("guestTray.allStatuses")}</option>
+            <option value="ATTENDING">{t("common.attendance.ATTENDING")}</option>
+            <option value="PENDING">{t("guestTray.notAnswered")}</option>
           </select>
         </div>
       </div>
@@ -375,7 +379,7 @@ export function SeatingGuestTray({
         {filteredParties.length === 0 ? (
           <div className="py-12 text-center text-xs text-muted-foreground space-y-1">
             <UserCheck className="size-6 mx-auto text-emerald-500/70" />
-            <p>Không có khách nào phù hợp bộ lọc.</p>
+            <p>{t("guestTray.noMatch")}</p>
           </div>
         ) : (
           filteredParties.map(({ guest, unseatedPlaces }) => (

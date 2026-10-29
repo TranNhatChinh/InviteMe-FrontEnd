@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { Trans, useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Loader2, Sparkles, X, AlertTriangle } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -28,6 +29,7 @@ export function VietQrPaymentModal({
   onSuccess,
 }: VietQrPaymentModalProps) {
   const { api } = useRuntime();
+  const { t } = useTranslation("plans");
   const queryClient = useQueryClient();
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export function VietQrPaymentModal({
       onClose();
     },
     onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : "Không thể hủy đơn hàng.";
+      const message = err instanceof Error ? err.message : t("payment.cancelError");
       setCancelError(message);
     },
   });
@@ -98,7 +100,7 @@ export function VietQrPaymentModal({
     const updateTime = () => {
       const diff = new Date(order.expiresAt).getTime() - Date.now();
       if (diff <= 0) {
-        setTimeLeft("Đã hết hạn");
+        setTimeLeft(t("payment.expired"));
         return;
       }
       const minutes = Math.floor(diff / 60000);
@@ -108,7 +110,7 @@ export function VietQrPaymentModal({
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [order.expiresAt]);
+  }, [order.expiresAt, t]);
 
   const isDev =
     process.env.NODE_ENV === "development" ||
@@ -127,17 +129,17 @@ export function VietQrPaymentModal({
         <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
           <div>
             <span className="text-xs font-semibold uppercase tracking-wider text-primary">
-              Thanh toán VietQR tự động
+              {t("payment.eyebrow")}
             </span>
             <h2 id="payment-modal-title" className="mt-1 font-serif text-2xl font-semibold">
-              Nâng cấp gói {order.planName}
+              {t("payment.title", { name: order.planName })}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            aria-label="Đóng"
+            aria-label={t("payment.close")}
           >
             <X className="size-5" />
           </button>
@@ -150,11 +152,10 @@ export function VietQrPaymentModal({
               <Check className="size-8" />
             </div>
             <h3 className="font-serif text-2xl font-semibold text-emerald-600">
-              Thanh toán thành công!
+              {t("payment.successTitle")}
             </h3>
             <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              Gói dịch vụ <strong>{order.planName}</strong> đã được kích hoạt cho đám cưới của bạn.
-              Đang chuyển hướng...
+              <Trans t={t} i18nKey="payment.successBody" values={{ name: order.planName }} components={{ strong: <strong /> }} />
             </p>
           </div>
         ) : isCancelled || isExpired ? (
@@ -163,13 +164,13 @@ export function VietQrPaymentModal({
               <AlertTriangle className="size-8" />
             </div>
             <h3 className="font-serif text-xl font-semibold">
-              {isCancelled ? "Đơn hàng đã hủy" : "Đơn hàng đã hết hạn"}
+              {isCancelled ? t("payment.orderCancelled") : t("payment.orderExpired")}
             </h3>
             <p className="text-sm text-muted-foreground">
-              Vui lòng tạo đơn hàng mới để tiếp tục nâng cấp gói.
+              {t("payment.createNewOrder")}
             </p>
             <Button onClick={onClose} variant="outline" className="mt-2">
-              Đóng
+              {t("payment.close")}
             </Button>
           </div>
         ) : (
@@ -180,7 +181,7 @@ export function VietQrPaymentModal({
                 <div className="relative size-60">
                   <Image
                     src={order.qrImageUrl}
-                    alt={`VietQR thanh toán ${order.code}`}
+                    alt={t("payment.qrAlt", { code: order.code })}
                     fill
                     sizes="240px"
                     className="object-contain"
@@ -194,18 +195,18 @@ export function VietQrPaymentModal({
               )}
               <div className="mt-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <span className="inline-block size-2 animate-ping rounded-full bg-emerald-500" />
-                <span>Quét mã bằng app ngân hàng (Hết hạn sau: {timeLeft})</span>
+                <span>{t("payment.scanHint", { time: timeLeft })}</span>
               </div>
             </div>
 
             {/* Bank details with copy buttons */}
             <div className="space-y-2 rounded-xl bg-muted/50 p-4 text-sm">
               <div className="flex items-center justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Ngân hàng</span>
+                <span className="text-muted-foreground">{t("payment.bank")}</span>
                 <span className="font-medium text-foreground">{order.bankName}</span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Số tài khoản</span>
+                <span className="text-muted-foreground">{t("payment.accountNumber")}</span>
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-semibold text-foreground">{order.accountNumber}</span>
                   <button
@@ -214,16 +215,16 @@ export function VietQrPaymentModal({
                     className="text-xs text-primary hover:underline flex items-center gap-1"
                   >
                     {copiedField === "account" ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
-                    <span>{copiedField === "account" ? "Đã chép" : "Chép"}</span>
+                    <span>{copiedField === "account" ? t("payment.copied") : t("payment.copy")}</span>
                   </button>
                 </div>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Chủ tài khoản</span>
+                <span className="text-muted-foreground">{t("payment.accountName")}</span>
                 <span className="font-medium text-foreground">{order.accountName}</span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Số tiền thanh toán</span>
+                <span className="text-muted-foreground">{t("payment.amount")}</span>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-primary text-base">
                     {formatCurrency(order.amount, "vi")}
@@ -234,12 +235,12 @@ export function VietQrPaymentModal({
                     className="text-xs text-primary hover:underline flex items-center gap-1"
                   >
                     {copiedField === "amount" ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
-                    <span>{copiedField === "amount" ? "Đã chép" : "Chép"}</span>
+                    <span>{copiedField === "amount" ? t("payment.copied") : t("payment.copy")}</span>
                   </button>
                 </div>
               </div>
               <div className="flex items-center justify-between py-1">
-                <span className="text-muted-foreground">Nội dung chuyển khoản</span>
+                <span className="text-muted-foreground">{t("payment.transferContent")}</span>
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-bold text-amber-800 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800">
                     {order.code}
@@ -250,7 +251,7 @@ export function VietQrPaymentModal({
                     className="text-xs text-primary hover:underline flex items-center gap-1 font-semibold"
                   >
                     {copiedField === "code" ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
-                    <span>{copiedField === "code" ? "Đã chép" : "Chép"}</span>
+                    <span>{copiedField === "code" ? t("payment.copied") : t("payment.copy")}</span>
                   </button>
                 </div>
               </div>
@@ -258,7 +259,7 @@ export function VietQrPaymentModal({
 
             {/* Note */}
             <p className="text-xs text-muted-foreground text-center">
-              Hệ thống sẽ tự động đối soát và kích hoạt gói ngay sau khi nhận được tiền (thường từ 5–30 giây).
+              {t("payment.autoNote")}
             </p>
 
             {cancelError && (
@@ -274,7 +275,7 @@ export function VietQrPaymentModal({
                 disabled={cancelMutation.isPending}
                 className="text-muted-foreground hover:text-destructive w-full sm:w-auto"
               >
-                {cancelMutation.isPending ? "Đang hủy..." : "Hủy đơn hàng"}
+                {cancelMutation.isPending ? t("payment.cancelling") : t("payment.cancelOrder")}
               </Button>
 
               {/* Dev mode simulation button */}
@@ -287,7 +288,7 @@ export function VietQrPaymentModal({
                   className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300 hover:bg-amber-500/20 w-full sm:w-auto gap-1 text-xs"
                 >
                   <Sparkles className="size-3" />
-                  {simulateMutation.isPending ? "Đang giả lập..." : "Giả lập Thanh toán (Dev)"}
+                  {simulateMutation.isPending ? t("payment.simulating") : t("payment.simulate")}
                 </Button>
               )}
 
@@ -299,7 +300,7 @@ export function VietQrPaymentModal({
                 className="w-full sm:w-auto gap-1.5"
               >
                 {orderQuery.isFetching && <Loader2 className="size-3.5 animate-spin" />}
-                <span>Kiểm tra lại</span>
+                <span>{t("payment.checkAgain")}</span>
               </Button>
             </div>
           </div>

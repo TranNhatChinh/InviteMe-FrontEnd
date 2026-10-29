@@ -81,10 +81,14 @@ export function CoupleImport({
   currentGuests?: ReactNode;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "importPage" });
+  const { t: tx } = useTranslation("guestTools", { keyPrefix: "importPage" });
   const { language } = useLanguage();
   const input = useRef<HTMLInputElement>(null);
   const request = useRef(0);
   const [rows, setRows] = useState<CoupleRow[] | null>(null);
+  // Attention level of each line when the file was read (0 = error, 1 = warning): keeps the list order stable while
+  // the couple fixes rows in place, so a row does not jump away mid-edit.
+  const [fileLevels, setFileLevels] = useState<Record<number, number>>({});
   const [filename, setFilename] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -200,6 +204,25 @@ export function CoupleImport({
     ).length;
   }, [rows, checkErrorsByRow, serverErrors]);
 
+  // Rows that need the couple's attention come first: errors, then warnings, then skipped rows, then valid ones,
+  // each level in spreadsheet order. Levels come from the file as read and from the server checks (duplicates against
+  // the current guest list), never from what is being typed, so the row being edited stays where it is.
+  const orderedRows = useMemo(() => {
+    if (!rows) return [];
+    const level = (row: CoupleRow) => {
+      if (checkErrorsByRow[row.line]?.length || serverErrors[row.line]?.length) return 0;
+      if (checkWarningsByRow[row.line]?.length) return Math.min(1, fileLevels[row.line] ?? 1);
+      const fromFile = fileLevels[row.line];
+      if (fromFile !== undefined) return fromFile;
+      if (skippedByRow[row.line]?.length) return 2;
+      return 3;
+    };
+    return rows
+      .map((row) => ({ row, level: level(row) }))
+      .sort((a, b) => a.level - b.level || a.row.line - b.row.line)
+      .map((item) => item.row);
+  }, [rows, fileLevels, checkErrorsByRow, checkWarningsByRow, serverErrors, skippedByRow]);
+
   async function submit() {
     if (!onImport || !importableRows.length || saving) return;
     setSaving(true);
@@ -281,6 +304,13 @@ export function CoupleImport({
       const data = await readCoupleFile(file);
       if (id !== request.current) return;
       setRows(data);
+      setFileLevels(
+        Object.fromEntries(
+          data.flatMap((row) =>
+            row.errors.length ? [[row.line, 0]] : row.warnings.length ? [[row.line, 1]] : [],
+          ),
+        ),
+      );
     } catch {
       if (id === request.current) setError(t("errors.readFile"));
     } finally {
@@ -592,7 +622,7 @@ export function CoupleImport({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {orderedRows.map((row) => (
                   <tr className="border-t align-top" key={row.line}>
                     <td className="p-3">{formatNumber(row.line, language)}</td>
                     {coupleHeaders.map((h, i) => (
@@ -753,18 +783,14 @@ export function CoupleImport({
           )}
           {errorRowCount > 0 && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
-              {errorRowCount === 1
-                ? "1 dòng có chữ đỏ (lỗi) sẽ tự động được bỏ qua và không thêm vào danh sách. Bạn có thể sửa trực tiếp trong bảng trước khi lưu."
-                : `${formatNumber(errorRowCount, language)} dòng có chữ đỏ (lỗi) sẽ tự động được bỏ qua và không thêm vào danh sách. Bạn có thể sửa trực tiếp trong bảng trước khi lưu.`}
+              {tx("errorRowsSkipped", { rows: formatNumber(errorRowCount, language) })}
             </p>
           )}
           {rows && rows.length > 0 && toCreateRecipients === 0 && countRows(skippedByRow) > 0 && (
             <p className="text-xs text-muted-foreground">{t("allSkipped")}</p>
           )}
           {rows && rows.length > 0 && toCreateRecipients === 0 && countRows(skippedByRow) === 0 && (
-            <p className="text-xs text-destructive">
-              Tất cả các dòng đều có lỗi. Vui lòng sửa ít nhất một dòng hợp lệ trước khi lưu.
-            </p>
+            <p className="text-xs text-destructive">{tx("allRowsInvalid")}</p>
           )}
           {pendingGroups.length > 0 && (
             <p className="text-xs text-amber-900">

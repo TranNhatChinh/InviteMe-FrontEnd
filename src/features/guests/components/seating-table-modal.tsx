@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Users, Crown, X, Layers, Calculator } from "lucide-react";
 import { gsap } from "gsap";
@@ -38,6 +39,7 @@ export function SeatingTableModal({
   weddingId,
 }: SeatingTableModalProps) {
   const { api } = useRuntime();
+  const { t } = useTranslation("seating");
   const [tab, setTab] = useState<"single" | "batch">(targetCell ? "single" : "single");
 
   // Single table state
@@ -143,11 +145,15 @@ export function SeatingTableModal({
             <div>
               <h2 className="font-serif text-xl font-semibold tracking-tight text-foreground">
                 {targetCell
-                  ? `Thêm bàn tại ${targetCell.side === "GROOM" ? "Nhà trai" : "Nhà gái"} (Hàng ${targetCell.row}, Cột ${targetCell.column})`
-                  : "Thêm Bàn tiệc mới"}
+                  ? t("tableModal.titleAtCell", {
+                      side: t(`common.side.${targetCell.side === "GROOM" ? "GROOM" : "BRIDE"}`),
+                      row: targetCell.row,
+                      column: targetCell.column,
+                    })
+                  : t("tableModal.title")}
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Bàn mới tạo sẽ tự động được đánh số thứ tự tiếp theo.
+                {t("tableModal.autoNumber")}
               </p>
             </div>
           </div>
@@ -173,7 +179,7 @@ export function SeatingTableModal({
               }`}
             >
               <Plus className="size-3.5" />
-              <span>Tạo 1 bàn cụ thể</span>
+              <span>{t("tableModal.single")}</span>
             </button>
             <button
               type="button"
@@ -185,7 +191,7 @@ export function SeatingTableModal({
               }`}
             >
               <Layers className="size-3.5" />
-              <span>Tạo nhanh nhiều bàn</span>
+              <span>{t("tableModal.batch")}</span>
             </button>
           </div>
         )}
@@ -195,10 +201,10 @@ export function SeatingTableModal({
           <form onSubmit={handleSingleSubmit} className="space-y-4 text-xs">
             <div>
               <label className="font-medium text-muted-foreground uppercase tracking-wider text-[11px]">
-                Tên bàn (Tuỳ chọn)
+                {t("tableModal.nameOptional")}
               </label>
               <Input
-                placeholder="Ví dụ: Bàn Gia Đình, Bàn VIP 01..."
+                placeholder={t("tableModal.namePlaceholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="mt-1 text-sm"
@@ -208,21 +214,21 @@ export function SeatingTableModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="font-medium text-muted-foreground uppercase tracking-wider text-[11px]">
-                  Sức chứa
+                  {t("tableModal.capacity")}
                 </label>
                 <select
                   value={capacity}
                   onChange={(e) => setCapacity(Number(e.target.value))}
                   className="mt-1 w-full rounded-md border border-input bg-background p-2.5 text-sm font-semibold"
                 >
-                  <option value={10}>10 Ghế (Tiêu chuẩn)</option>
-                  <option value={12}>12 Ghế (Bàn lớn)</option>
+                  <option value={10}>{t("tableModal.capacity10")}</option>
+                  <option value={12}>{t("tableModal.capacity12")}</option>
                 </select>
               </div>
 
               <div>
                 <label className="font-medium text-muted-foreground uppercase tracking-wider text-[11px]">
-                  Phía sảnh tiệc
+                  {t("tableModal.hallSide")}
                 </label>
                 <select
                   value={side}
@@ -231,10 +237,10 @@ export function SeatingTableModal({
                   }
                   className="mt-1 w-full rounded-md border border-input bg-background p-2.5 text-sm"
                 >
-                  <option value="">Chưa gán (Bàn trong khay)</option>
-                  <option value="GROOM">Nhà Trai (Bên trái)</option>
-                  <option value="BRIDE">Nhà Gái (Bên phải)</option>
-                  <option value="MUTUAL">Bàn Chung (Cả hai họ)</option>
+                  <option value="">{t("tableModal.sideTray")}</option>
+                  <option value="GROOM">{t("tableModal.sideGroom")}</option>
+                  <option value="BRIDE">{t("tableModal.sideBride")}</option>
+                  <option value="MUTUAL">{t("tableModal.sideMutual")}</option>
                 </select>
               </div>
             </div>
@@ -242,14 +248,14 @@ export function SeatingTableModal({
             {groups.length > 0 && (
               <div>
                 <label className="font-medium text-muted-foreground uppercase tracking-wider text-[11px]">
-                  Nhóm khách gán sẵn
+                  {t("tableModal.presetGroup")}
                 </label>
                 <select
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
                   className="mt-1 w-full rounded-md border border-input bg-background p-2.5 text-sm"
                 >
-                  <option value="">Không gán trước</option>
+                  <option value="">{t("tableModal.noPresetGroup")}</option>
                   {groups.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
@@ -268,16 +274,16 @@ export function SeatingTableModal({
               />
               <span className="font-medium text-foreground flex items-center gap-1.5">
                 <Crown className="size-4 text-amber-500" />
-                <span>Đánh dấu là Bàn VIP (Bậc trên &amp; Họ hàng thân thích)</span>
+                <span>{t("tableModal.vip")}</span>
               </span>
             </label>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
               <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-                Hủy
+                {t("tableModal.cancel")}
               </Button>
               <Button type="submit" disabled={saving} className="rounded-full px-6 py-5">
-                {saving ? "Đang tạo..." : "Xác nhận tạo bàn"}
+                {saving ? t("tableModal.creating") : t("tableModal.create")}
               </Button>
             </div>
           </form>
@@ -285,16 +291,18 @@ export function SeatingTableModal({
           /* FORM 2: BATCH CREATE */
           <form onSubmit={handleBatchSubmit} className="space-y-4 text-xs">
             <div className="rounded-2xl bg-muted/40 p-4 space-y-2">
-              <span className="font-medium text-foreground text-sm">Tạo hàng loạt bàn tiệc</span>
+              <span className="font-medium text-foreground text-sm">
+                {t("tableModal.batchTitle")}
+              </span>
               <p className="text-muted-foreground text-xs leading-relaxed">
-                Hệ thống sẽ tự động thêm N bàn vào Khay bàn chưa sắp và đánh số thứ tự liên tục. Bạn có thể kéo thả vào sơ đồ bất kỳ lúc nào.
+                {t("tableModal.batchHint")}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="font-medium text-muted-foreground uppercase tracking-wider text-[11px]">
-                  Số lượng bàn (1–50)
+                  {t("tableModal.batchCount")}
                 </label>
                 <Input
                   type="number"
@@ -309,15 +317,15 @@ export function SeatingTableModal({
 
               <div>
                 <label className="font-medium text-muted-foreground uppercase tracking-wider text-[11px]">
-                  Sức chứa mỗi bàn
+                  {t("tableModal.batchCapacity")}
                 </label>
                 <select
                   value={batchCapacity}
                   onChange={(e) => setBatchCapacity(Number(e.target.value))}
                   className="mt-1 w-full rounded-md border border-input bg-background p-2.5 text-sm font-semibold"
                 >
-                  <option value={10}>10 Ghế (Phổ biến)</option>
-                  <option value={12}>12 Ghế</option>
+                  <option value={10}>{t("tableModal.capacity10Common")}</option>
+                  <option value={12}>{t("tableModal.capacity12Plain")}</option>
                 </select>
               </div>
             </div>
@@ -327,10 +335,10 @@ export function SeatingTableModal({
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                     <Calculator className="size-4 text-primary" aria-hidden="true" />
-                    Gợi ý số bàn
+                    {t("tableModal.estimateTitle")}
                   </span>
                   <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    Dự phòng
+                    {t("tableModal.reserve")}
                     <select
                       value={reservePercent}
                       onChange={(e) => setReservePercent(Number(e.target.value))}
@@ -345,35 +353,55 @@ export function SeatingTableModal({
                   </label>
                 </div>
                 {estimate.isPending ? (
-                  <p className="text-muted-foreground">Đang tính số bàn…</p>
+                  <p className="text-muted-foreground">{t("tableModal.estimating")}</p>
                 ) : estimate.isError || !estimate.data ? (
-                  <p className="text-destructive">Chưa tính được số bàn. Đóng và mở lại để thử lại.</p>
+                  <p className="text-destructive">{t("tableModal.estimateFailed")}</p>
                 ) : (
                   <>
                     <p className="text-foreground leading-relaxed">
-                      <strong>{estimate.data.seatsNeeded}</strong> khách dự kiến (
-                      {estimate.data.confirmedSeats} đã xác nhận, {estimate.data.pendingSeats} chưa trả lời) →{" "}
+                      <strong>{estimate.data.seatsNeeded}</strong>{" "}
+                      {t("tableModal.estimateGuests", {
+                        confirmed: estimate.data.confirmedSeats,
+                        pending: estimate.data.pendingSeats,
+                      })}{" "}
                       <strong>
-                        {estimate.data.recommendedTables} bàn {estimate.data.capacity} chỗ
+                        {t("tableModal.estimateTables", {
+                          tables: estimate.data.recommendedTables,
+                          capacity: estimate.data.capacity,
+                        })}
                       </strong>
-                      {estimate.data.reserveTables > 0 && ` (gồm ${estimate.data.reserveTables} bàn dự phòng)`}.
+                      {estimate.data.reserveTables > 0 &&
+                        t("tableModal.estimateReserve", { count: estimate.data.reserveTables })}
+                      .
                     </p>
                     <p className="text-muted-foreground">
-                      Đang có {estimate.data.currentTables} bàn ({estimate.data.currentSeats} ghế)
+                      {t("tableModal.currentTables", {
+                        tables: estimate.data.currentTables,
+                        seats: estimate.data.currentSeats,
+                      })}
                       {estimate.data.missingTables > 0
-                        ? ` · còn thiếu ${estimate.data.missingTables} bàn ${estimate.data.capacity} chỗ.`
-                        : " · đã đủ bàn."}
+                        ? t("tableModal.missingTables", {
+                            count: estimate.data.missingTables,
+                            capacity: estimate.data.capacity,
+                          })
+                        : t("tableModal.enoughTables")}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      Tham khảo theo phía:{" "}
+                      {t("tableModal.bySide")}{" "}
                       {estimate.data.bySide
                         .filter((s) => s.seats > 0)
                         .map(
                           (s) =>
-                            `${s.side === "GROOM" ? "Nhà trai" : s.side === "BRIDE" ? "Nhà gái" : "Chung"} ${s.seats} khách ≈ ${s.tables} bàn`,
+                            t("tableModal.bySideItem", {
+                              side: t(
+                                `common.side.${s.side === "GROOM" || s.side === "BRIDE" ? s.side : "MUTUAL"}`,
+                              ),
+                              seats: s.seats,
+                              tables: s.tables,
+                            }),
                         )
                         .join(" · ")}
-                      . Hai họ có thể ngồi chung bàn.
+                      {t("tableModal.bothFamilies")}
                     </p>
                     {estimate.data.missingTables > 0 && (
                       <Button
@@ -383,7 +411,7 @@ export function SeatingTableModal({
                         className="rounded-full h-8 text-xs"
                         onClick={() => setBatchCount(Math.min(50, estimate.data.missingTables))}
                       >
-                        Dùng gợi ý: tạo {Math.min(50, estimate.data.missingTables)} bàn
+                        {t("tableModal.useSuggestion", { count: Math.min(50, estimate.data.missingTables) })}
                       </Button>
                     )}
                   </>
@@ -393,31 +421,31 @@ export function SeatingTableModal({
 
             <div>
               <label className="font-medium text-muted-foreground uppercase tracking-wider text-[11px]">
-                Phía của các bàn (Tuỳ chọn)
+                {t("tableModal.batchSide")}
               </label>
               <select
                 value={batchSide}
                 onChange={(e) => setBatchSide(e.target.value as "GROOM" | "BRIDE" | "MUTUAL" | "")}
                 className="mt-1 w-full rounded-md border border-input bg-background p-2.5 text-sm"
               >
-                <option value="">Chưa gán phía</option>
-                <option value="GROOM">Nhà trai</option>
-                <option value="BRIDE">Nhà gái</option>
-                <option value="MUTUAL">Bàn chung</option>
+                <option value="">{t("tableModal.noSide")}</option>
+                <option value="GROOM">{t("common.side.GROOM")}</option>
+                <option value="BRIDE">{t("common.side.BRIDE")}</option>
+                <option value="MUTUAL">{t("common.sharedTable")}</option>
               </select>
             </div>
 
             {groups.length > 0 && (
               <div>
                 <label className="font-medium text-muted-foreground uppercase tracking-wider text-[11px]">
-                  Gán cùng một nhóm khách (Tuỳ chọn)
+                  {t("tableModal.batchGroup")}
                 </label>
                 <select
                   value={batchGroupId}
                   onChange={(e) => setBatchGroupId(e.target.value)}
                   className="mt-1 w-full rounded-md border border-input bg-background p-2.5 text-sm"
                 >
-                  <option value="">Không gán nhóm</option>
+                  <option value="">{t("tableModal.noGroup")}</option>
                   {groups.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
@@ -429,10 +457,10 @@ export function SeatingTableModal({
 
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
               <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-                Hủy
+                {t("tableModal.cancel")}
               </Button>
               <Button type="submit" disabled={saving} className="rounded-full px-6 py-5">
-                {saving ? "Đang tạo..." : `Tạo ngay ${batchCount} bàn`}
+                {saving ? t("tableModal.creating") : t("tableModal.createNow", { count: batchCount })}
               </Button>
             </div>
           </form>

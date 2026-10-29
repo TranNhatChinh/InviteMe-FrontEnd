@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
@@ -42,6 +43,7 @@ export function InvitationWording({
   compact?: boolean;
   onPreview?: (content: string | null) => void;
 }) {
+  const { t } = useTranslation("guestTools", { keyPrefix: "wording" });
   const { api } = useRuntime();
   const [notice, setNotice] = useState("");
   const settings = useQuery({
@@ -49,21 +51,18 @@ export function InvitationWording({
     queryFn: ({ signal }) => wordingApi.get(api, weddingId, signal),
     staleTime: Infinity,
   });
-  if (settings.isPending) return <LoadingState label="Đang tải preset lời mời…" />;
+  if (settings.isPending) return <LoadingState label={t("loading")} />;
   if (settings.isError)
     return <ErrorState error={settings.error} retry={() => void settings.refetch()} />;
   return (
     <section className="space-y-5">
       <div>
         {compact ? (
-          <h3 className="font-medium">Preset lời mời</h3>
+          <h3 className="font-medium">{t("title")}</h3>
         ) : (
-          <h1 className="font-serif text-3xl">Preset lời mời</h1>
+          <h1 className="font-serif text-3xl">{t("title")}</h1>
         )}
-        <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-          Một preset dùng cho nhiều danh xưng. Danh xưng chưa được gán hoặc để trống sẽ dùng preset
-          mặc định. Tên người nhận lấy từ danh sách khách.
-        </p>
+        <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{t("intro")}</p>
       </div>
       {notice && (
         <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">
@@ -75,7 +74,7 @@ export function InvitationWording({
         settings={settings.data}
         compact={compact}
         onPreview={onPreview}
-        onSaved={() => setNotice("Đã lưu bản nháp lời mời. Publish thiệp để cập nhật cho khách.")}
+        onSaved={() => setNotice(t("saved"))}
       />
     </section>
   );
@@ -92,6 +91,7 @@ function WordingEditor({
   compact: boolean;
   onPreview?: (content: string | null) => void;
 }) {
+  const { t } = useTranslation("guestTools", { keyPrefix: "wording" });
   const { api } = useRuntime();
   const { can } = usePermission();
   const cache = useQueryClient();
@@ -162,9 +162,9 @@ function WordingEditor({
     : [
         ...new Set(
           validation.error.issues.map((issue) =>
-            issue.code === "custom" && !issue.message.startsWith("Invalid")
-              ? issue.message
-              : "Kiểm tra tên, nội dung và danh xưng. Lời mời phải có {{recipientLabel}} hoặc {{recipientName}}; chỉ dùng các biến được hỗ trợ.",
+            issue.code === "custom" && issue.message.startsWith("wording.validation.")
+              ? t(issue.message.slice("wording.".length), issue.params)
+              : t("invalid", { label: "{{recipientLabel}}", name: "{{recipientName}}" }),
           ),
         ),
       ];
@@ -177,11 +177,7 @@ function WordingEditor({
       }
     >
       <form onSubmit={submit} className={compact ? "order-2 min-w-0 space-y-4" : "space-y-4"}>
-        {!canEdit && (
-          <p className="text-sm text-muted-foreground">
-            Bạn có thể xem preset. Cần quyền chỉnh sửa wedding để thay đổi cấu hình.
-          </p>
-        )}
+        {!canEdit && <p className="text-sm text-muted-foreground">{t("readOnly")}</p>}
         <fieldset disabled={!canEdit || save.isPending} className="space-y-4">
           {presets.map((preset, index) => (
             <details
@@ -194,13 +190,13 @@ function WordingEditor({
               }
             >
               <summary className="cursor-pointer break-words text-sm font-medium">
-                {preset.name || `Preset ${index + 1}`}
-                {preset.isDefault ? " · Mặc định" : ""}
+                {preset.name || t("presetNumber", { number: index + 1 })}
+                {preset.isDefault ? t("defaultSuffix") : ""}
               </summary>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-medium">
-                  Preset {index + 1}
-                  {preset.isDefault ? " · Mặc định" : ""}
+                  {t("presetNumber", { number: index + 1 })}
+                  {preset.isDefault ? t("defaultSuffix") : ""}
                 </h2>
                 <Button
                   type="button"
@@ -209,11 +205,11 @@ function WordingEditor({
                   disabled={presets.length === 1}
                   onClick={() => remove(preset.id)}
                 >
-                  Xóa preset
+                  {t("remove")}
                 </Button>
               </div>
               <label className="block text-sm">
-                Tên preset
+                {t("name")}
                 <Input
                   className="mt-1"
                   value={preset.name}
@@ -224,22 +220,22 @@ function WordingEditor({
               </label>
               <div className={compact ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"}>
                 <label className="block text-sm">
-                  Áp dụng cho danh xưng
+                  {t("honorifics")}
                   <Input
                     className="mt-1"
-                    placeholder="Bác, Cô, Chú…"
+                    placeholder={t("honorificsPlaceholder")}
                     value={preset.honorificText}
                     onChange={(event) => update(preset.id, { honorificText: event.target.value })}
                   />
                   <span className="mt-1 block text-xs text-muted-foreground">
-                    Ngăn cách bằng dấu phẩy. Không phân biệt hoa thường.
+                    {t("honorificsHelp")}
                   </span>
                 </label>
                 <label className="block text-sm">
-                  Người mời tự xưng
+                  {t("senderPronoun")}
                   <Input
                     className="mt-1"
-                    placeholder="chúng cháu / chúng em / chúng mình"
+                    placeholder={t("senderPronounPlaceholder")}
                     value={preset.senderPronoun}
                     maxLength={50}
                     onChange={(event) => update(preset.id, { senderPronoun: event.target.value })}
@@ -247,7 +243,7 @@ function WordingEditor({
                 </label>
               </div>
               <label className="block text-sm">
-                Lời mời
+                {t("content")}
                 <textarea
                   className="mt-1 min-h-32 w-full rounded-lg border bg-background p-3"
                   value={preset.content}
@@ -277,7 +273,7 @@ function WordingEditor({
                     setPresets((rows) => rows.map((p) => ({ ...p, isDefault: p.id === preset.id })))
                   }
                 />
-                Dùng làm mặc định cho danh xưng chưa được gán
+                {t("makeDefault")}
               </label>
             </details>
           ))}
@@ -300,7 +296,7 @@ function WordingEditor({
               ])
             }
           >
-            Thêm preset
+            {t("add")}
           </Button>
         </fieldset>
         {issues.length > 0 && (
@@ -320,17 +316,17 @@ function WordingEditor({
           >
             <p>
               {save.error instanceof ApiError && save.error.status === 409
-                ? "Cấu hình đã được thay đổi ở nơi khác. Tải bản mới trước khi chỉnh sửa tiếp."
-                : "Chưa lưu được preset. Kiểm tra dữ liệu và thử lại."}
+                ? t("conflict")
+                : t("saveFailed")}
             </p>
             <Button type="button" size="sm" variant="outline" onClick={() => void reload()}>
-              Tải bản mới và bỏ các chỉnh sửa này
+              {t("reload")}
             </Button>
           </div>
         )}
         {reloadError && (
           <p role="alert" className="text-sm text-destructive">
-            Không tải được bản mới. Các chỉnh sửa vẫn được giữ.
+            {t("reloadFailed")}
           </p>
         )}
         {canEdit && (
@@ -339,14 +335,10 @@ function WordingEditor({
               type="submit"
               disabled={!validation.success || (!dirty && settings.version > 0) || save.isPending}
             >
-              {save.isPending ? "Đang lưu…" : "Lưu cấu hình"}
+              {save.isPending ? t("saving") : t("save")}
             </Button>
             <span className="text-sm text-muted-foreground">
-              {dirty
-                ? "Có thay đổi chưa lưu"
-                : settings.version === 0
-                  ? "Đang dùng preset gợi ý; bấm Lưu để áp dụng cho wedding."
-                  : "Đã lưu"}
+              {dirty ? t("unsaved") : settings.version === 0 ? t("suggested") : t("savedState")}
             </span>
           </div>
         )}
@@ -358,39 +350,37 @@ function WordingEditor({
             : "space-y-4 rounded-2xl border bg-card p-5 xl:sticky xl:top-5"
         }
       >
-        <h2 className="text-lg font-medium">Xem trước với khách mời</h2>
-        <p className="text-sm text-muted-foreground">
-          Dùng nội dung đang chỉnh sửa. Xem trước không lưu thay đổi.
-        </p>
+        <h2 className="text-lg font-medium">{t("previewTitle")}</h2>
+        <p className="text-sm text-muted-foreground">{t("previewHelp")}</p>
         <dl className="space-y-1 text-xs text-muted-foreground">
           <div>
             <dt className="inline font-medium">recipientLabel: </dt>
-            <dd className="inline">Kiểu lời mời + danh xưng + tên</dd>
+            <dd className="inline">{t("variables.recipientLabel")}</dd>
           </div>
           <div>
             <dt className="inline font-medium">recipientName: </dt>
-            <dd className="inline">Tên người nhận</dd>
+            <dd className="inline">{t("variables.recipientName")}</dd>
           </div>
           <div>
             <dt className="inline font-medium">honorific: </dt>
-            <dd className="inline">Danh xưng</dd>
+            <dd className="inline">{t("variables.honorific")}</dd>
           </div>
           <div>
             <dt className="inline font-medium">senderPronoun: </dt>
-            <dd className="inline">Người mời tự xưng</dd>
+            <dd className="inline">{t("variables.senderPronoun")}</dd>
           </div>
         </dl>
         {!canPreview ? (
-          <p className="text-sm">Cần quyền xem khách để xem trước lời mời.</p>
+          <p className="text-sm">{t("previewForbidden")}</p>
         ) : (
           <>
             <label className="block text-sm">
-              Tìm người nhận
+              {t("search")}
               <Input
                 className="mt-1"
                 value={search}
                 maxLength={200}
-                placeholder="Nhập tên…"
+                placeholder={t("searchPlaceholder")}
                 onChange={(event) => {
                   setSearch(event.target.value);
                   setPage(1);
@@ -400,7 +390,7 @@ function WordingEditor({
             </label>
             {guests.isPending && (
               <p role="status" className="text-sm">
-                Đang tải khách…
+                {t("loadingGuests")}
               </p>
             )}
             {guests.isError && (
@@ -409,31 +399,27 @@ function WordingEditor({
             {guests.data && (
               <>
                 <label className="block text-sm">
-                  Chọn khách
+                  {t("chooseGuest")}
                   <select
                     className="mt-1 w-full rounded-lg border bg-background p-2"
                     value={guestId}
                     onChange={(event) => setGuestId(event.target.value)}
                   >
-                    <option value="">Chọn người nhận</option>
+                    <option value="">{t("chooseRecipient")}</option>
                     {guests.data.items.map((guest) => (
                       <option key={guest.id} value={guest.id}>
                         {guest.honorific ? `${guest.honorific} ` : ""}
                         {guest.recipientName}
                         {guest.invitationKind === "FAMILY"
-                          ? " · Gia đình"
+                          ? t("familySuffix")
                           : guest.invitationKind === "GROUP"
-                            ? " · Nhóm"
+                            ? t("groupSuffix")
                             : ""}
                       </option>
                     ))}
                   </select>
                 </label>
-                {!guests.data.items.length && (
-                  <p className="text-sm">
-                    Chưa có khách phù hợp. Hãy nhập danh sách khách hoặc đổi từ khóa.
-                  </p>
-                )}
+                {!guests.data.items.length && <p className="text-sm">{t("noGuests")}</p>}
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <Button
                     type="button"
@@ -445,9 +431,9 @@ function WordingEditor({
                       setGuestId("");
                     }}
                   >
-                    Trước
+                    {t("pagePrevious")}
                   </Button>
-                  <span>Trang {page}</span>
+                  <span>{t("pageNumber", { page })}</span>
                   <Button
                     type="button"
                     size="sm"
@@ -458,7 +444,7 @@ function WordingEditor({
                       setGuestId("");
                     }}
                   >
-                    Sau
+                    {t("pageNext")}
                   </Button>
                 </div>
               </>
@@ -469,14 +455,14 @@ function WordingEditor({
               disabled={!guestId || !validation.success || preview.isPending}
               onClick={() => preview.mutate({ guestId, presets: draft })}
             >
-              {preview.isPending ? "Đang xem trước…" : "Xem lời mời"}
+              {preview.isPending ? t("previewing") : t("preview")}
             </Button>
             {previewCurrent && preview.isError && <ErrorState error={preview.error} />}
             {previewCurrent && preview.data && (
               <div aria-live="polite" className="space-y-3 border-t pt-4">
                 <p className="text-xs text-muted-foreground">
-                  Preset: {preview.data.presetName}
-                  {preview.data.usedDefault ? " · Dùng mặc định vì danh xưng chưa được gán" : ""}
+                  {t("previewPreset", { name: preview.data.presetName })}
+                  {preview.data.usedDefault ? t("usedDefault") : ""}
                 </p>
                 <p className="whitespace-pre-wrap break-words font-serif text-xl leading-relaxed">
                   {preview.data.content}

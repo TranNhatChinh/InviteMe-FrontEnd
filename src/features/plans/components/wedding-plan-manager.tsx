@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Trans, useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -34,6 +35,7 @@ interface WeddingPlanManagerProps {
 
 export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
   const { api } = useRuntime();
+  const { t } = useTranslation("plans");
   const queryClient = useQueryClient();
   const { isOwner } = usePermission();
   const [selectedOrder, setSelectedOrder] = useState<PlanOrderDto | null>(null);
@@ -68,7 +70,7 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
       setSelectedOrder(order);
     },
     onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : "Không thể khởi tạo đơn hàng. Vui lòng thử lại.";
+      const message = err instanceof Error ? err.message : t("manager.orderError");
       setOrderError(message);
     },
   });
@@ -91,10 +93,10 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
     return (
       <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-6 text-center text-destructive space-y-2">
         <AlertCircle className="size-8 mx-auto" />
-        <h3 className="font-semibold">Không thể tải thông tin gói cước</h3>
-        <p className="text-sm">Vui lòng tải lại trang hoặc liên hệ hỗ trợ.</p>
+        <h3 className="font-semibold">{t("manager.loadErrorTitle")}</h3>
+        <p className="text-sm">{t("manager.loadErrorHint")}</p>
         <Button variant="outline" size="sm" onClick={() => void planQuery.refetch()}>
-          Tải lại
+          {t("manager.reload")}
         </Button>
       </div>
     );
@@ -106,7 +108,7 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
   const publicPlans = publicPlansQuery.data ?? [];
 
   // Helper for quota progress bar
-  const renderQuota = (label: string, used: number, max: number | null | undefined, unit = "") => {
+  const renderQuota = (label: string, used: number, max: number | null | undefined, unit: string) => {
     const isUnlimited = max === null || max === undefined;
     const percentage = isUnlimited ? 0 : Math.min(100, Math.round((used / max) * 100));
     const isNearLimit = !isUnlimited && percentage >= 85;
@@ -116,7 +118,7 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">{label}</span>
           <span className="font-medium">
-            {used} / {isUnlimited ? "Không giới hạn" : `${max} ${unit}`}
+            {used} / {isUnlimited ? t("manager.unlimited") : t(`manager.quotaLimit.${unit}`, { count: max })}
           </span>
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -132,7 +134,7 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
           />
         </div>
         {!isUnlimited && isNearLimit && (
-          <p className="text-xs text-amber-600 font-medium">Sắp đạt hạn mức của gói</p>
+          <p className="text-xs text-amber-600 font-medium">{t("manager.nearLimit")}</p>
         )}
       </div>
     );
@@ -146,11 +148,11 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Gói hiện tại
+                {t("manager.currentPlan")}
               </span>
               {currentPlan.legacy && (
                 <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
-                  Legacy (Vĩnh viễn)
+                  {t("manager.legacy")}
                 </span>
               )}
             </div>
@@ -163,7 +165,7 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
           <div className="text-right">
             {currentPlan.publicLinkUntil ? (
               <p className="text-xs text-muted-foreground">
-                Website mở đến:{" "}
+                {t("manager.websiteOpenUntil")}{" "}
                 <strong className="text-foreground">
                   {formatDate(currentPlan.publicLinkUntil, "vi", { dateStyle: "medium" })}
                 </strong>
@@ -171,7 +173,7 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
             ) : (
               <p className="text-xs text-emerald-600 font-medium flex items-center gap-1">
                 <CheckCircle2 className="size-3.5" />
-                Website duy trì vĩnh viễn
+                {t("manager.websiteForever")}
               </p>
             )}
           </div>
@@ -179,41 +181,41 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
 
         {/* Quotas Grid */}
         <div className="mt-6 space-y-4">
-          <h3 className="font-semibold text-sm text-foreground">Hạn mức đã sử dụng</h3>
+          <h3 className="font-semibold text-sm text-foreground">{t("manager.usageTitle")}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {renderQuota("Khách mời & Chỗ ngồi", usage.guestPlaces, limits.guestPlaces, "khách")}
-            {renderQuota("Ảnh kỷ niệm đã tải", usage.mediaImages, limits.mediaImages, "ảnh")}
-            {renderQuota("Lượt gửi Email thiệp", usage.emailInvites, limits.emailInvites, "lượt")}
-            {renderQuota("Lượt gửi SMS thiệp", usage.smsInvites, limits.smsInvites, "SMS")}
-            {renderQuota("Sơ đồ bàn tiệc", usage.seatingTables, limits.seatingTables, "bàn")}
-            {renderQuota("Co-host cùng quản lý", usage.coHosts, limits.coHosts, "người")}
-            {renderQuota("Trợ lý AI viết lời cảm ơn", usage.aiThankYouRuns, limits.aiThankYouRuns, "lượt")}
+            {renderQuota(t("manager.quota.guestPlaces"), usage.guestPlaces, limits.guestPlaces, "guests")}
+            {renderQuota(t("manager.quota.mediaImages"), usage.mediaImages, limits.mediaImages, "photos")}
+            {renderQuota(t("manager.quota.emailInvites"), usage.emailInvites, limits.emailInvites, "sends")}
+            {renderQuota(t("manager.quota.smsInvites"), usage.smsInvites, limits.smsInvites, "sms")}
+            {renderQuota(t("manager.quota.seatingTables"), usage.seatingTables, limits.seatingTables, "tables")}
+            {renderQuota(t("manager.quota.coHosts"), usage.coHosts, limits.coHosts, "people")}
+            {renderQuota(t("manager.quota.aiThankYouRuns"), usage.aiThankYouRuns, limits.aiThankYouRuns, "runs")}
           </div>
         </div>
 
         {/* Feature Pills */}
         <div className="mt-6 border-t border-border pt-6">
-          <h3 className="font-semibold text-sm text-foreground mb-3">Tính năng đã mở khóa</h3>
+          <h3 className="font-semibold text-sm text-foreground mb-3">{t("manager.featuresTitle")}</h3>
           <div className="flex flex-wrap gap-2 text-xs">
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 border ${limits.checkin ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-border bg-muted text-muted-foreground line-through"}`}>
               {limits.checkin ? <Check className="size-3" /> : <Lock className="size-3" />}
-              Check-in QR tại sảnh tiệc
+              {t("manager.feature.checkin")}
             </span>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 border ${limits.giftQr ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-border bg-muted text-muted-foreground line-through"}`}>
               {limits.giftQr ? <Check className="size-3" /> : <Lock className="size-3" />}
-              Mừng cưới VietQR &amp; Sổ mừng
+              {t("manager.feature.giftQr")}
             </span>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 border ${limits.customSlug ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-border bg-muted text-muted-foreground line-through"}`}>
               {limits.customSlug ? <Check className="size-3" /> : <Lock className="size-3" />}
-              Tùy chỉnh link website riêng
+              {t("manager.feature.customSlug")}
             </span>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 border ${limits.publicSeatLookup ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-border bg-muted text-muted-foreground line-through"}`}>
               {limits.publicSeatLookup ? <Check className="size-3" /> : <Lock className="size-3" />}
-              Khách tự tra cứu bàn tiệc
+              {t("manager.feature.seatLookup")}
             </span>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 border ${!limits.brandingBadge ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-border bg-muted text-muted-foreground"}`}>
               {!limits.brandingBadge ? <Check className="size-3" /> : <Info className="size-3" />}
-              {!limits.brandingBadge ? "Đã xóa logo InviteMe" : "Hiển thị logo InviteMe"}
+              {!limits.brandingBadge ? t("manager.feature.brandingRemoved") : t("manager.feature.brandingShown")}
             </span>
           </div>
         </div>
@@ -223,9 +225,9 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
       {isOwner && currentPlan.planCode !== "PREMIUM" && !currentPlan.legacy && (
         <section className="space-y-6">
           <div>
-            <h2 className="font-serif text-2xl font-normal text-foreground">Nâng cấp gói dịch vụ</h2>
+            <h2 className="font-serif text-2xl font-normal text-foreground">{t("manager.upgradeTitle")}</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Mở rộng hạn mức khách mời, sơ đồ bàn tiệc không giới hạn và nhận toàn bộ tính năng cao cấp.
+              {t("manager.upgradeSubtitle")}
             </p>
           </div>
 
@@ -256,11 +258,11 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
                         <h3 className="font-serif text-2xl font-normal text-foreground">{plan.name}</h3>
                         {isPremium ? (
                           <span className="rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 px-3 py-0.5 text-xs font-semibold">
-                            VIP Không giới hạn
+                            {t("manager.vipUnlimited")}
                           </span>
                         ) : (
                           <span className="rounded-full bg-primary/20 text-primary px-3 py-0.5 text-xs font-semibold">
-                            Phổ biến
+                            {t("manager.popular")}
                           </span>
                         )}
                       </div>
@@ -269,33 +271,33 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
                         <span className="font-serif text-3xl font-bold text-foreground">
                           {formatCurrency(plan.price, "vi")}
                         </span>
-                        <span className="text-xs text-muted-foreground">/ trọn gói đám cưới</span>
+                        <span className="text-xs text-muted-foreground">{t("manager.perWedding")}</span>
                       </div>
 
                       <ul className="mt-6 space-y-2.5 text-sm">
                         <li className="flex items-center gap-2.5">
                           <Check className="size-4 text-emerald-600 shrink-0" />
                           <span>
-                            <strong>{plan.limits.guestPlaces}</strong> khách mời &amp; chỗ ngồi
+                            <Trans t={t} i18nKey="manager.perk.guestPlaces" values={{ value: plan.limits.guestPlaces }} components={{ strong: <strong /> }} />
                           </span>
                         </li>
                         <li className="flex items-center gap-2.5">
                           <Check className="size-4 text-emerald-600 shrink-0" />
                           <span>
-                            <strong>{plan.limits.mediaImages}</strong> ảnh kỷ niệm album
+                            <Trans t={t} i18nKey="manager.perk.mediaImages" values={{ value: plan.limits.mediaImages }} components={{ strong: <strong /> }} />
                           </span>
                         </li>
                         <li className="flex items-center gap-2.5">
                           <Check className="size-4 text-emerald-600 shrink-0" />
-                          <span>Không giới hạn bàn tiệc sơ đồ</span>
+                          <span>{t("manager.perk.unlimitedTables")}</span>
                         </li>
                         <li className="flex items-center gap-2.5">
                           <Check className="size-4 text-emerald-600 shrink-0" />
-                          <span>Check-in QR &amp; VietQR mừng cưới</span>
+                          <span>{t("manager.perk.checkinGifts")}</span>
                         </li>
                         <li className="flex items-center gap-2.5">
                           <Check className="size-4 text-emerald-600 shrink-0" />
-                          <span>Xóa hoàn toàn logo InviteMe</span>
+                          <span>{t("manager.perk.noBranding")}</span>
                         </li>
                       </ul>
                     </div>
@@ -313,7 +315,7 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
                         {createOrderMutation.isPending && (
                           <Loader2 className="size-4 animate-spin" />
                         )}
-                        <span>Nâng cấp lên {plan.name}</span>
+                        <span>{t("manager.upgradeTo", { name: plan.name })}</span>
                         <ArrowRight className="size-4" />
                       </Button>
                     </div>
@@ -329,19 +331,19 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
         <section className="space-y-4 rounded-3xl border border-border bg-card p-6 sm:p-8 shadow-sm">
           <div className="flex items-center gap-2 border-b border-border pb-4">
             <History className="size-5 text-muted-foreground" />
-            <h3 className="font-serif text-xl font-normal text-foreground">Lịch sử đơn hàng</h3>
+            <h3 className="font-serif text-xl font-normal text-foreground">{t("manager.historyTitle")}</h3>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm min-w-[600px]">
               <thead>
                 <tr className="border-b border-border/60 text-muted-foreground text-xs uppercase tracking-wider">
-                  <th className="py-3 px-3">Mã đơn</th>
-                  <th className="py-3 px-3">Gói dịch vụ</th>
-                  <th className="py-3 px-3">Số tiền</th>
-                  <th className="py-3 px-3">Trạng thái</th>
-                  <th className="py-3 px-3">Thời gian tạo</th>
-                  <th className="py-3 px-3 text-right">Thao tác</th>
+                  <th className="py-3 px-3">{t("manager.col.code")}</th>
+                  <th className="py-3 px-3">{t("manager.col.plan")}</th>
+                  <th className="py-3 px-3">{t("manager.col.amount")}</th>
+                  <th className="py-3 px-3">{t("manager.col.status")}</th>
+                  <th className="py-3 px-3">{t("manager.col.createdAt")}</th>
+                  <th className="py-3 px-3 text-right">{t("manager.col.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -363,7 +365,7 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
                                 : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {isPaid ? "Đã thanh toán" : isPending ? "Chờ chuyển khoản" : "Đã hủy"}
+                          {isPaid ? t("manager.status.paid") : isPending ? t("manager.status.pending") : t("manager.status.cancelled")}
                         </span>
                       </td>
                       <td className="py-3 px-3 text-muted-foreground text-xs">
@@ -378,7 +380,7 @@ export function WeddingPlanManager({ weddingId }: WeddingPlanManagerProps) {
                             onClick={() => setSelectedOrder(order)}
                           >
                             <QrCode className="size-3.5" />
-                            <span>Mã VietQR</span>
+                            <span>{t("manager.vietQr")}</span>
                           </Button>
                         )}
                       </td>

@@ -38,7 +38,7 @@ export function WebsiteStoryRenderer({
   return (
     <div
       ref={host}
-      className="min-h-screen w-full overflow-x-hidden overflow-y-auto bg-background"
+      className="template-canvas min-h-screen w-full overflow-x-hidden overflow-y-auto bg-background"
       aria-label="Website đám cưới"
     >
       <StudioModeContext.Provider value="website">

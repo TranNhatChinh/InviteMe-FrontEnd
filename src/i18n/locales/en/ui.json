@@ -1,0 +1,116 @@
+{
+  "meta": {
+    "root": {
+      "description": "Create a wedding website and online invitations made for your celebration."
+    },
+    "account": {
+      "title": "Account"
+    },
+    "dashboard": {
+      "title": "Planning overview — InviteMe",
+      "description": "Plan and manage your weddings on InviteMe."
+    },
+    "login": {
+      "title": "Log in",
+      "description": "Log in to your InviteMe account to plan your wedding."
+    },
+    "register": {
+      "title": "Create account"
+    },
+    "forgotPassword": {
+      "title": "Forgot password"
+    },
+    "resetPassword": {
+      "title": "Reset password"
+    },
+    "confirmEmail": {
+      "title": "Verify email"
+    },
+    "adminLogin": {
+      "title": "Admin log in",
+      "description": "Log in to the InviteMe admin portal."
+    },
+    "coHostAccept": {
+      "title": "Accept co-host invitation",
+      "description": "Review the access you've been given and confirm you'll help manage the wedding."
+    }
+  },
+  "layout": {
+    "skipToContent": "Skip to main content"
+  },
+  "auth": {
+    "openingConfirmLink": "Opening your verification link…",
+    "homeAria": "InviteMe — Home",
+    "namePlaceholder": "Alex Nguyen"
+  },
+  "logout": {
+    "serverFailed": "Couldn't log out on the server. Try again or log out on this device only."
+  },
+  "adminGuard": {
+    "title": "Administrators only",
+    "description": "This account can't access the InviteMe admin portal.",
+    "sessionFailed": "Couldn't load the admin session",
+    "sessionFailedHelp": "Check your connection, then try loading your account again."
+  },
+  "invitationStudio": {
+    "saved": "Design saved. Select Publish to update the public template.",
+    "published": "Invitation template published.",
+    "publishFailed": "Couldn't publish. Check the design and save the draft first.",
+    "back": "Invitation templates",
+    "help": "Edit the design, save a draft, then publish.",
+    "publishing": "Publishing…",
+    "publish": "Publish"
+  },
+  "studio": {
+    "confirmTemplateSwitch": "You have unsaved changes. Switch templates and discard them?"
+  },
+  "catalog": {
+    "backHome": "Back to home",
+    "eyebrow": "DESIGN COLLECTION",
+    "titleInvite": "Invitation templates",
+    "titleStory": "Wedding Story templates",
+    "titleAll": "Explore designs",
+    "subtitleStory": "Tell your story through photos and memorable chapters.",
+    "subtitle": "Preview designs and choose how to present your big day.",
+    "tabsAria": "Template categories",
+    "all": "All",
+    "note": "Fictional AI photos · Editable in the editor · Demos don't save responses.",
+    "viewTemplateAria": "View template {{name}}",
+    "customizable": "Customizable",
+    "viewDemo": "View demo",
+    "useTemplate": "Use template",
+    "count": "{{count}} templates you can edit in the editor. Saving designs to your account isn't connected yet."
+  },
+  "storyTemplates": {
+    "actionFailed": "Action failed.",
+    "draftSaved": "Draft saved.",
+    "title": "Wedding Story Templates",
+    "description": "Manage the Story structure: sections, variants, colors and fonts. Couples edit their content in the Story Editor.",
+    "create": "Create template",
+    "loading": "Loading Story Templates",
+    "status": {
+      "archived": "Archived",
+      "published": "Published",
+      "draft": "Draft"
+    },
+    "empty": "No Story Templates yet.",
+    "keyLabel": "Key (fixed after creation)",
+    "nameLabel": "Template name",
+    "sectionsTitle": "Sections and display order",
+    "hide": "Hide",
+    "addSection": "Add section…",
+    "themeTitle": "Default theme",
+    "palettesTitle": "Palettes and fonts for couples",
+    "palettesHelp": "Edit the advanced JSON configuration. Each palette needs enough contrast between text and background; the server checks this on save.",
+    "invalidJson": "Invalid palette/font JSON.",
+    "saveDraft": "Save draft",
+    "publishedMessage": "Template published.",
+    "publish": "Publish",
+    "restored": "Restored.",
+    "archivedMessage": "Archived.",
+    "restore": "Restore",
+    "archive": "Archive",
+    "saveBeforePublish": "Save the draft before publishing.",
+    "selectPrompt": "Select a Story Template to edit."
+  }
+}

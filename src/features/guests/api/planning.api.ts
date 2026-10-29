@@ -16,6 +16,8 @@ export const planningGuestSchema = z.object({
   email: z.string().nullable().optional(),
   archivedAt: z.iso.datetime({ offset: true }).nullable().optional(),
   possibleDuplicate: z.boolean().optional(),
+  // Invitation answer as the seating plan sees it: ATTENDING, DECLINED, WAITLISTED or PENDING (no answer / MAYBE).
+  rsvpStatus: z.string().nullable().optional(),
   note: z.string().nullable(),
   invitationPath: z
     .string()

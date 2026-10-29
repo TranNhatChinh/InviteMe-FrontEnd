@@ -1,0 +1,226 @@
+{
+  "story": {
+    "tabs": {
+      "appearance": "Appearance",
+      "couple": "Couple",
+      "story": "Love story",
+      "events": "Events",
+      "gallery": "Gallery",
+      "wishes": "Wishes & gifts"
+    },
+    "errors": {
+      "namesRequired": "Enter the bride's and groom's names.",
+      "mainEventRequired": "Choose a main event.",
+      "eventTimeZone": "Event date and time need a time zone, for example 2026-11-28T10:30:00+07:00.",
+      "saveFailed": "Couldn't save.",
+      "uploadFailed": "Couldn't upload the image."
+    },
+    "published": "Published.",
+    "draftSaved": "Draft saved.",
+    "templateSubtitle": "Template {{name}} · Layout and effects follow the template",
+    "edit": "Edit",
+    "preview": "Preview",
+    "demoBadge": "Demo · changes aren't saved",
+    "saveDraft": "Save draft",
+    "publish": "Publish",
+    "editSections": "Editor sections",
+    "templatesHeading": "Wedding Story templates",
+    "confirmTemplateChange": "Confirm template change",
+    "switchTo": "Switch to {{name}}?",
+    "hiddenSections": "The new template doesn't show: {{sections}}. That content stays in your draft.",
+    "contentKept": "Your existing content is kept.",
+    "templateChangeNote": "Colors and fonts reset to the new template's defaults. The published page only changes when you publish again.",
+    "sectionNames": {
+      "loveStory": "Love story"
+    },
+    "cancel": "Cancel",
+    "changeTemplate": "Change template",
+    "templateHint": "The template sets the layout and motion.",
+    "palette": "Color palette",
+    "headingFont": "Heading font",
+    "bodyFont": "Body font",
+    "motion": "Effects",
+    "motionTemplate": "Template default",
+    "motionOff": "Off",
+    "mainEventHint": "The date on the cover and the countdown come from the main event in the Events tab.",
+    "uploadCover": "Upload cover image",
+    "slideshow": "Slideshow images",
+    "slideshowHint": "Up to 3 images; the cover image is used until you add some.",
+    "slideAlt": "Slide {{number}}",
+    "remove": "Remove",
+    "addSlide": "Add slide image",
+    "groom": "Groom",
+    "bride": "Bride",
+    "name": "Name",
+    "shortName": "Short name",
+    "fatherName": "Father's name",
+    "motherName": "Mother's name",
+    "bio": "About",
+    "uploadPortrait": "Upload portrait",
+    "showStory": "Show love story",
+    "storyIntro": "Story introduction",
+    "milestone": "Milestone {{number}}",
+    "removeMilestone": "Remove milestone",
+    "milestoneFields": {
+      "date": "Date",
+      "title": "Title",
+      "body": "Content"
+    },
+    "uploadMilestoneImage": "Upload milestone image",
+    "addMilestone": "Add milestone",
+    "showEvents": "Show events",
+    "event": "Event {{number}}",
+    "mainEvent": "Main event",
+    "removeEvent": "Remove event",
+    "eventFields": {
+      "title": "Name",
+      "date": "ISO date and time with time zone (e.g. 2026-11-28T10:30:00+07:00)",
+      "venue": "Venue",
+      "address": "Address",
+      "mapUrl": "Map link"
+    },
+    "addEvent": "Add event",
+    "galleryHint": "You can save up to 30 images. This template shows the first 12; the rest are kept.",
+    "showGallery": "Show gallery",
+    "galleryImageAlt": "Wedding photo {{number}}",
+    "removeImage": "Remove image",
+    "addGalleryImage": "Add gallery image",
+    "showWishes": "Show wishes",
+    "showGift": "Show wedding gifts",
+    "bank": "Bank",
+    "accountHolder": "Account holder",
+    "accountNumber": "Account number"
+  },
+  "website": {
+    "confirmChangeTemplate": "You have unsaved changes. Change the template and discard them?",
+    "pickerTitle": "Choose a Wedding Story template",
+    "pickerDescription": "Browse ready-made wedding website templates. Pick one to start customizing it for your big day.",
+    "backToCurrent": "Back to current draft",
+    "previewTemplateAria": "Preview template: {{name}}",
+    "previewAria": "Preview: {{name}}",
+    "selectTemplate": "Choose template",
+    "close": "Close",
+    "selectThisTemplate": "Choose this template",
+    "closePreview": "Close preview",
+    "publishSuccess": "Website published.",
+    "publishFailed": "Couldn't publish the website. Please try again.",
+    "unpublishSuccess": "Website unpublished.",
+    "unpublishFailed": "Couldn't unpublish the website. Please try again.",
+    "remoteConflict": "The website was updated in another session (version {{version}}).",
+    "reloadDiscard": "Reload and discard unsaved changes",
+    "changeStoryTemplate": "Change Story template",
+    "galleryImageName": "Wedding photo {{id}}",
+    "draftSaved": "Website draft saved."
+  },
+  "cover": {
+    "validation": {
+      "unsupported": "Only JPEG, PNG, or WebP images are supported.",
+      "tooLarge": "The image exceeds the 5 MB limit.",
+      "empty": "The image file is empty. Please choose another image."
+    },
+    "updated": "Cover image updated.",
+    "uploadFailed": "Couldn't upload the image. Please try again.",
+    "removed": "Cover image removed.",
+    "removeFailed": "Couldn't remove the cover image. Please try again.",
+    "selected": "Selected image",
+    "current": "Current cover image",
+    "addForWorkspace": "Add a cover image for the workspace",
+    "dropHint": "Drag an image here or choose one from your device · JPEG, PNG, WebP · up to 5 MB",
+    "chooseAnother": "Choose another image",
+    "choose": "Choose image",
+    "chooseAria": "Choose a JPEG, PNG, or WebP cover image",
+    "uploading": "Uploading image…",
+    "upload": "Upload image",
+    "remove": "Remove cover image",
+    "removeTitle": "Remove cover image?",
+    "removeDescription": "The current image will be removed from the wedding setup.",
+    "keep": "Keep image",
+    "confirmRemove": "Remove image",
+    "cancelReplace": "Cancel replacement",
+    "previewAlt": "Wedding cover image preview",
+    "preview": "Cover image preview",
+    "previewFailed": "Couldn't load the current image. You can choose a new one to replace it."
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening",
+      "hello": "Hello"
+    },
+    "eyebrow": "Wedding command center",
+    "greetingLine": "{{greeting}}, {{name}}",
+    "you": "friend",
+    "welcome": "Welcome back to InviteMe. Here's your planning progress and what needs attention before the big day.",
+    "createWedding": "Create a new wedding",
+    "plan": "Plan",
+    "ongoing": "Current wedding",
+    "openHub": "Open management hub",
+    "dateNotSet": "Official wedding date not set yet",
+    "confirmedGuests": "Confirmed guests",
+    "websiteStatus": "Website status",
+    "ready": "Ready",
+    "sendInvitations": "Send invitations",
+    "countdown": "Wedding countdown",
+    "countdownTitle": "The big moment",
+    "pastTitle": "Your wedding day has come and gone!",
+    "pastDescription": "Keep sending thank-you notes and treasuring the memories.",
+    "daysLeft": "Days to go",
+    "hours": "Hours",
+    "noDateHint": "Set the wedding date in Settings to start the countdown.",
+    "viewGuests": "View guest list",
+    "emptyTitle": "You don't have any weddings yet",
+    "emptyDescription": "Create your first digital space for your big day, with e-invitations, a seating plan, and VietQR gift codes.",
+    "createNow": "Create a wedding now",
+    "roadmapTitle": "Wedding planning roadmap",
+    "roadmapDescription": "The essentials to finish before the ceremony.",
+    "keySteps": "Key steps",
+    "steps": {
+      "website": {
+        "title": "1. Design your wedding website",
+        "description": "Customize your message, love story, photo gallery, and venue.",
+        "action": "Set up"
+      },
+      "guests": {
+        "title": "2. Guest list",
+        "description": "Import your list from Excel, group guests by the groom's or bride's side, and create personal invitation codes.",
+        "action": "Manage"
+      },
+      "seating": {
+        "title": "3. Seating plan",
+        "description": "Seat guests table by table, avoid group conflicts, and make the most of empty seats.",
+        "action": "Arrange tables"
+      },
+      "invitations": {
+        "title": "4. Invitations & RSVP",
+        "description": "Send invitations automatically by email or SMS and track RSVPs in real time.",
+        "action": "Send now"
+      }
+    },
+    "otherWeddings": "Your other weddings ({{count}})",
+    "viewAll": "View all",
+    "noDate": "No date selected",
+    "guestCount": "{{count}} guests",
+    "guestCount_one": "{{count}} guest",
+    "details": "Details"
+  },
+  "validation": {
+    "dateTimeNotInTimeZone": "This date and time doesn't exist in the wedding's time zone."
+  },
+  "pages": {
+    "settings": {
+      "noAccessTitle": "No access",
+      "noAccessDescription": "You don't have permission to view this wedding's settings."
+    },
+    "accessRestrictedTitle": "Access restricted",
+    "accessRestrictedDescription": "You do not have permission to view this section.",
+    "invitations": {
+      "title": "Invitations",
+      "description": "Manage the design and wording of your invitations, and send them to guests by email or SMS."
+    },
+    "giftDesk": {
+      "noAccessTitle": "No permission to record gifts",
+      "noAccessDescription": "The wedding host needs to give your account permission to record gifts at the desk."
+    }
+  }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
@@ -81,6 +82,7 @@ function WebsiteManager({
   site: Website;
   slug: string;
 }) {
+  const { t } = useTranslation("weddingEditor");
   const initialStudioDoc = site.document && isStudioDocument(site.document) ? site.document : null;
 
   const [activeDocument, setActiveDocument] = useState<StudioDocument | null>(initialStudioDoc);
@@ -100,12 +102,7 @@ function WebsiteManager({
   }
 
   function handleRequestChangeTemplate(hasUnsavedChanges: boolean) {
-    if (
-      hasUnsavedChanges &&
-      !window.confirm(
-        "Bạn có thay đổi chưa lưu. Bạn có chắc muốn đổi mẫu và hủy các thay đổi này không?",
-      )
-    ) {
+    if (hasUnsavedChanges && !window.confirm(t("website.confirmChangeTemplate"))) {
       return;
     }
     setShowPicker(true);
@@ -142,6 +139,7 @@ function StoryTemplatePicker({
   onCancel: () => void;
   onSelect: (template: (typeof storyTemplateCatalog)[number]) => void;
 }) {
+  const { t } = useTranslation("weddingEditor");
   const [previewTemplate, setPreviewTemplate] = useState<
     (typeof storyTemplateCatalog)[number] | null
   >(null);
@@ -151,17 +149,14 @@ function StoryTemplatePicker({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Chọn mẫu Wedding Story
+            {t("website.pickerTitle")}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Khám phá các mẫu website đám cưới được thiết kế sẵn. Chọn một mẫu để bắt đầu tùy chỉnh
-            cho ngày vui của bạn.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("website.pickerDescription")}</p>
         </div>
         {hasActiveDraft && (
           <Button variant="outline" onClick={onCancel}>
             <ArrowLeft className="mr-2 size-4" />
-            Quay lại bản chỉnh sửa hiện tại
+            {t("website.backToCurrent")}
           </Button>
         )}
       </div>
@@ -177,13 +172,13 @@ function StoryTemplatePicker({
                 type="button"
                 className="group relative block w-full overflow-hidden rounded-xl bg-muted focus-visible:outline-2 focus-visible:outline-primary"
                 onClick={() => setPreviewTemplate(template)}
-                aria-label={`Xem trước mẫu: ${template.name}`}
+                aria-label={t("website.previewTemplateAria", { name: template.name })}
               >
                 <TemplateThumbnail document={template.document} fluid />
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-900 shadow">
                     <Eye className="size-3.5" />
-                    Xem trước
+                    {t("weddings:preview")}
                   </span>
                 </div>
               </button>
@@ -203,11 +198,11 @@ function StoryTemplatePicker({
                 onClick={() => setPreviewTemplate(template)}
               >
                 <Eye className="mr-1.5 size-4" />
-                Xem trước
+                {t("weddings:preview")}
               </Button>
               <Button className="flex-1" onClick={() => onSelect(template)}>
                 <Check className="mr-1.5 size-4" />
-                Chọn mẫu
+                {t("website.selectTemplate")}
               </Button>
             </div>
           </article>
@@ -218,14 +213,14 @@ function StoryTemplatePicker({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={`Xem trước: ${previewTemplate.name}`}
+          aria-label={t("website.previewAria", { name: previewTemplate.name })}
           className="fixed inset-0 z-[120] flex flex-col bg-background/95 backdrop-blur-sm"
         >
           <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={() => setPreviewTemplate(null)}>
                 <ArrowLeft className="mr-1.5 size-4" />
-                Đóng
+                {t("website.close")}
               </Button>
               <span className="font-semibold text-foreground">{previewTemplate.name}</span>
             </div>
@@ -238,13 +233,13 @@ function StoryTemplatePicker({
                 }}
               >
                 <Check className="mr-1.5 size-4" />
-                Chọn mẫu này
+                {t("website.selectThisTemplate")}
               </Button>
               <button
                 type="button"
                 onClick={() => setPreviewTemplate(null)}
                 className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Đóng xem trước"
+                aria-label={t("website.closePreview")}
               >
                 <X className="size-5" />
               </button>
@@ -272,6 +267,7 @@ function WebsiteStudioSession({
   document: StudioDocument;
   onChangeTemplateRequest: (hasUnsavedChanges: boolean) => void;
 }) {
+  const { t } = useTranslation("weddingEditor");
   const { api } = useRuntime();
   const { isOwner } = usePermission();
   const cache = useQueryClient();
@@ -296,9 +292,9 @@ function WebsiteStudioSession({
       setStatus(updated.status);
       setHasUnpublished(updated.hasUnpublishedChanges);
       cache.setQueryData(["website", weddingId], updated);
-      setActionMessage("Đã xuất bản website thành công!");
+      setActionMessage(t("website.publishSuccess"));
     } catch {
-      setActionMessage("Xuất bản website thất bại. Vui lòng thử lại.");
+      setActionMessage(t("website.publishFailed"));
       void cache.invalidateQueries({ queryKey: ["website", weddingId] });
     } finally {
       setBusy(false);
@@ -315,9 +311,9 @@ function WebsiteStudioSession({
       setStatus(updated.status);
       setHasUnpublished(updated.hasUnpublishedChanges);
       cache.setQueryData(["website", weddingId], updated);
-      setActionMessage("Đã gỡ xuất bản website.");
+      setActionMessage(t("website.unpublishSuccess"));
     } catch {
-      setActionMessage("Gỡ website thất bại. Vui lòng thử lại.");
+      setActionMessage(t("website.unpublishFailed"));
       void cache.invalidateQueries({ queryKey: ["website", weddingId] });
     } finally {
       setBusy(false);
@@ -331,9 +327,7 @@ function WebsiteStudioSession({
           role="alert"
           className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500 bg-amber-50 p-4 text-sm text-amber-950 shadow-sm"
         >
-          <span>
-            Website đã được cập nhật từ một phiên làm việc khác (phiên bản {site.version}).
-          </span>
+          <span>{t("website.remoteConflict", { version: site.version })}</span>
           <Button
             size="sm"
             variant="outline"
@@ -347,7 +341,7 @@ function WebsiteStudioSession({
             }}
           >
             <RefreshCw className="mr-1.5 size-3.5" />
-            Tải lại và hủy thay đổi chưa lưu
+            {t("website.reloadDiscard")}
           </Button>
         </div>
       )}
@@ -373,15 +367,15 @@ function WebsiteStudioSession({
               }`}
             >
               {status === "PUBLISHED"
-                ? "Đã xuất bản"
+                ? t("weddings:websiteEditor.published")
                 : status === "UNPUBLISHED"
-                  ? "Đã gỡ xuất bản"
-                  : "Bản nháp"}
+                  ? t("weddings:websiteEditor.unpublished")
+                  : t("weddings:websiteEditor.draft")}
             </span>
 
             {hasUnpublished && (
               <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                Chưa xuất bản thay đổi
+                {t("weddings:websiteEditor.unsavedChanges")}
               </span>
             )}
           </div>
@@ -396,14 +390,14 @@ function WebsiteStudioSession({
 
           <Button variant="outline" size="sm" onClick={() => onChangeTemplateRequest(isDirty)}>
             <Palette className="mr-1.5 size-4" />
-            Đổi mẫu Story
+            {t("website.changeStoryTemplate")}
           </Button>
 
           {status === "PUBLISHED" && slug && (
             <Button variant="outline" size="sm" asChild>
               <Link href={`/wedding/${encodeURIComponent(slug)}`} target="_blank">
                 <ExternalLink className="mr-1.5 size-4" />
-                Xem trang web
+                {t("weddings:websiteEditor.openWebsite")}
               </Link>
             </Button>
           )}
@@ -416,7 +410,7 @@ function WebsiteStudioSession({
               onClick={() => void handleUnpublish()}
             >
               {busy ? <LoaderCircle className="mr-1.5 size-4 animate-spin" /> : null}
-              Gỡ xuất bản
+              {t("weddings:websiteEditor.unpublish")}
             </Button>
           )}
 
@@ -427,7 +421,7 @@ function WebsiteStudioSession({
               onClick={() => void handlePublish()}
             >
               {busy ? <LoaderCircle className="mr-1.5 size-4 animate-spin" /> : null}
-              Xuất bản
+              {t("weddings:websiteEditor.publish")}
             </Button>
           )}
         </div>
@@ -443,7 +437,7 @@ function WebsiteStudioSession({
             loadImages={async () =>
               (await listWeddingMedia(api, weddingId)).map((item) => ({
                 src: mediaUrl(item.url) ?? item.url,
-                name: `Ảnh cưới ${item.id.slice(0, 8)}`,
+                name: t("website.galleryImageName", { id: item.id.slice(0, 8) }),
               }))
             }
             onUploadImage={async (file) => {
@@ -459,7 +453,7 @@ function WebsiteStudioSession({
               setVersion(saved.version);
               setHasUnpublished(saved.hasUnpublishedChanges);
               cache.setQueryData(["website", weddingId], saved);
-              setActionMessage("Đã lưu bản nháp website.");
+              setActionMessage(t("website.draftSaved"));
             }}
           />
         </StudioModeContext.Provider>

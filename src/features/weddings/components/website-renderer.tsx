@@ -34,7 +34,7 @@ export function WebsiteRenderer({
   return (
     <article
       style={{ background: theme.background, color: theme.color }}
-      className="min-h-screen overflow-hidden"
+      className="template-canvas min-h-screen overflow-hidden"
     >
       {preview && (
         <div className="bg-amber-100 px-4 py-2 text-center text-sm text-amber-900">

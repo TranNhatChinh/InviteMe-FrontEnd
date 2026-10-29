@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, Check, Grid, X } from "lucide-react";
 import { gsap } from "gsap";
 import { Button } from "@/shared/ui/button";
@@ -30,6 +31,7 @@ export function SeatingLayoutModal({
   saving = false,
   saveError = null,
 }: SeatingLayoutModalProps) {
+  const { t } = useTranslation("seating");
   const [groomRows, setGroomRows] = useState(layout?.groomRows ?? 6);
   const [groomColumns, setGroomColumns] = useState(layout?.groomColumns ?? 3);
   const [brideRows, setBrideRows] = useState(layout?.brideRows ?? 6);
@@ -99,10 +101,10 @@ export function SeatingLayoutModal({
                 id="layout-modal-title"
                 className="font-serif text-xl font-semibold tracking-tight text-foreground sm:text-2xl"
               >
-                Thiết lập Sơ đồ Sảnh cưới
+                {t("layoutModal.title")}
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Cấu hình số hàng, cột và cách đánh số bàn theo mặt bằng sảnh tiệc.
+                {t("layoutModal.subtitle")}
               </p>
             </div>
           </div>
@@ -110,7 +112,7 @@ export function SeatingLayoutModal({
             type="button"
             onClick={onClose}
             className="rounded-full p-2 text-muted-foreground hover:bg-muted transition-colors"
-            aria-label="Đóng"
+            aria-label={t("common.close")}
           >
             <X className="size-5" />
           </button>
@@ -120,7 +122,7 @@ export function SeatingLayoutModal({
           <div className="flex items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-xs text-destructive">
             <AlertTriangle className="size-4 shrink-0 mt-0.5" />
             <div>
-              <div className="font-semibold">Không thể lưu sơ đồ sảnh</div>
+              <div className="font-semibold">{t("layoutModal.saveFailed")}</div>
               <p className="mt-0.5 opacity-90">{saveError}</p>
             </div>
           </div>
@@ -133,16 +135,16 @@ export function SeatingLayoutModal({
             <div className="rounded-2xl border border-blue-500/20 bg-blue-50/50 p-4 dark:bg-blue-950/20 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="font-serif font-semibold text-sm text-blue-900 dark:text-blue-300">
-                  Phía Nhà Trai (Bên Trái)
+                  {t("layoutModal.groomSide")}
                 </span>
                 <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:text-blue-300">
-                  Nhà trai
+                  {t("common.side.GROOM")}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="font-medium text-muted-foreground">Số hàng (1–20)</label>
+                  <label className="font-medium text-muted-foreground">{t("layoutModal.rows")}</label>
                   <Input
                     type="number"
                     min={1}
@@ -154,7 +156,7 @@ export function SeatingLayoutModal({
                   />
                 </div>
                 <div>
-                  <label className="font-medium text-muted-foreground">Số cột (1–6)</label>
+                  <label className="font-medium text-muted-foreground">{t("layoutModal.columns")}</label>
                   <Input
                     type="number"
                     min={1}
@@ -172,16 +174,16 @@ export function SeatingLayoutModal({
             <div className="rounded-2xl border border-rose-500/20 bg-rose-50/50 p-4 dark:bg-rose-950/20 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="font-serif font-semibold text-sm text-rose-900 dark:text-rose-300">
-                  Phía Nhà Gái (Bên Phải)
+                  {t("layoutModal.brideSide")}
                 </span>
                 <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
-                  Nhà gái
+                  {t("common.side.BRIDE")}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="font-medium text-muted-foreground">Số hàng (1–20)</label>
+                  <label className="font-medium text-muted-foreground">{t("layoutModal.rows")}</label>
                   <Input
                     type="number"
                     min={1}
@@ -193,7 +195,7 @@ export function SeatingLayoutModal({
                   />
                 </div>
                 <div>
-                  <label className="font-medium text-muted-foreground">Số cột (1–6)</label>
+                  <label className="font-medium text-muted-foreground">{t("layoutModal.columns")}</label>
                   <Input
                     type="number"
                     min={1}
@@ -211,7 +213,7 @@ export function SeatingLayoutModal({
           {/* Numbering strategy */}
           <div className="space-y-3">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Quy tắc Đánh số bàn
+              {t("layoutModal.numbering")}
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label
@@ -224,10 +226,10 @@ export function SeatingLayoutModal({
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <span className="font-semibold text-sm text-foreground">
-                      Theo hàng (Mặc định)
+                      {t("layoutModal.byRow")}
                     </span>
                     <p className="text-xs text-muted-foreground">
-                      Đánh số tăng dần theo từng hàng từ lối đi ra ngoài (Bàn 01, 02, 03...).
+                      {t("layoutModal.byRowHint")}
                     </p>
                   </div>
                   <input
@@ -251,10 +253,10 @@ export function SeatingLayoutModal({
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <span className="font-semibold text-sm text-foreground">
-                      Trai số Lẻ – Gái số Chẵn
+                      {t("layoutModal.oddEven")}
                     </span>
                     <p className="text-xs text-muted-foreground">
-                      Nhà trai số 01, 03, 05... Nhà gái số 02, 04, 06...
+                      {t("layoutModal.oddEvenHint")}
                     </p>
                   </div>
                   <input
@@ -273,22 +275,28 @@ export function SeatingLayoutModal({
           {/* Mini schematic preview */}
           <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
             <div className="text-center font-serif text-[11px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-widest pb-2 border-b border-border/40">
-              [ SÂN KHẤU CHÍNH ]
+              {t("layoutModal.stage")}
             </div>
             <div className="mt-3 flex items-center justify-center gap-4 text-[10px] text-muted-foreground">
               <div className="text-center">
-                <span className="font-semibold text-blue-600 dark:text-blue-400">Nhà Trai</span>
+                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                  {t("layoutModal.groomShort")}
+                </span>
                 <div>
-                  {groomRows} hàng × {groomColumns} cột
+                  {t("layoutModal.grid", { rows: groomRows, columns: groomColumns })}
                 </div>
               </div>
               <div className="h-8 w-px bg-primary/30" />
-              <div className="text-center font-mono font-medium text-primary">LỐI ĐI HOA</div>
+              <div className="text-center font-mono font-medium text-primary">
+                {t("layoutModal.aisle")}
+              </div>
               <div className="h-8 w-px bg-primary/30" />
               <div className="text-center">
-                <span className="font-semibold text-rose-600 dark:text-rose-400">Nhà Gái</span>
+                <span className="font-semibold text-rose-600 dark:text-rose-400">
+                  {t("layoutModal.brideShort")}
+                </span>
                 <div>
-                  {brideRows} hàng × {brideColumns} cột
+                  {t("layoutModal.grid", { rows: brideRows, columns: brideColumns })}
                 </div>
               </div>
             </div>
@@ -297,7 +305,7 @@ export function SeatingLayoutModal({
           {/* Action buttons */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-              Hủy
+              {t("tableModal.cancel")}
             </Button>
             <Button
               type="submit"
@@ -305,7 +313,7 @@ export function SeatingLayoutModal({
               className="rounded-full px-6 py-5 font-semibold gap-2 shadow-md"
             >
               <Check className="size-4" />
-              <span>{saving ? "Đang lưu thiết lập..." : "Lưu Sơ đồ Sảnh"}</span>
+              <span>{saving ? t("layoutModal.saving") : t("layoutModal.save")}</span>
             </Button>
           </div>
         </form>

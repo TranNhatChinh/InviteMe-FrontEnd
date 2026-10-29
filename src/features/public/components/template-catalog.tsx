@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
@@ -13,6 +14,7 @@ export function TemplateCatalog({
   renderPreview?: (configurationJson: string) => ReactNode;
 }) {
   const { api } = useRuntime();
+  const { t } = useTranslation("ui");
   const publicTemplates = useQuery({
     queryKey: ["public-templates"],
     queryFn: ({ signal }) => listPublicTemplates(api, signal),
@@ -45,26 +47,26 @@ export function TemplateCatalog({
   return (
     <div className="template-catalog template-catalog--invite">
       <Link href="/#templates" className="template-catalog__back">
-        ← Về trang chủ
+        ← {t("catalog.backHome")}
       </Link>
       <div className="landing-heading">
-        <p className="landing-eyebrow">BỘ SƯU TẬP THIẾT KẾ</p>
+        <p className="landing-eyebrow">{t("catalog.eyebrow")}</p>
         <h1>
           {category === "invite"
-            ? "Các mẫu thiệp mời"
+            ? t("catalog.titleInvite")
             : category === "story"
-              ? "Các mẫu Wedding Story"
-              : "Khám phá mẫu thiết kế"}
+              ? t("catalog.titleStory")
+              : t("catalog.titleAll")}
         </h1>
         <p>
           {category === "story"
-            ? "Kể chuyện của hai bạn qua ảnh và những chương kỷ niệm."
-            : "Xem trước thiết kế, chọn cách thể hiện ngày vui của hai bạn."}
+            ? t("catalog.subtitleStory")
+            : t("catalog.subtitle")}
         </p>
       </div>
-      <nav className="template-catalog__tabs" aria-label="Nhóm mẫu thiết kế">
+      <nav className="template-catalog__tabs" aria-label={t("catalog.tabsAria")}>
         {[
-          { href: "/templates", label: "Tất cả", active: !category },
+          { href: "/templates", label: t("catalog.all"), active: !category },
           { href: "/templates/invite", label: "Wedding Invite", active: category === "invite" },
           { href: "/templates/story", label: "Wedding Story", active: category === "story" },
         ].map((tab) => (
@@ -74,14 +76,14 @@ export function TemplateCatalog({
         ))}
       </nav>
       <p className="template-catalog__note">
-        Ảnh AI hư cấu · Thiết kế chỉnh được trong editor · Demo không lưu phản hồi.
+        {t("catalog.note")}
       </p>
       <div className="invite-template-grid">
         {visible.map((template) => (
           <article className="invite-template-card" key={template.id}>
             <Link
               className="invite-template-card__preview"
-              aria-label={`Xem mẫu ${template.name}`}
+              aria-label={t("catalog.viewTemplateAria", { name: template.name })}
               href={`/template-studio?template=${template.id}&preview=1`}
             >
               {template.preview}
@@ -94,17 +96,17 @@ export function TemplateCatalog({
                     ? "Wedding Story"
                     : "Wedding Invite"}
                 </span>
-                <span>Tùy chỉnh</span>
+                <span>{t("catalog.customizable")}</span>
               </p>
               <div className="landing-actions">
                 <Link
                   className="landing-button landing-button--outline"
                   href={`/template-studio?template=${template.id}&preview=1`}
                 >
-                  Xem demo
+                  {t("catalog.viewDemo")}
                 </Link>
                 <Link className="landing-button" href={`/template-studio?template=${template.id}`}>
-                  Dùng mẫu <ArrowRight size={16} />
+                  {t("catalog.useTemplate")} <ArrowRight size={16} />
                 </Link>
               </div>
             </div>
@@ -112,8 +114,7 @@ export function TemplateCatalog({
         ))}
       </div>
       <p className="landing-caption">
-        {visible.length} mẫu có thể chỉnh trong editor. Lưu thiết kế vào tài khoản chưa được kết
-        nối.
+        {t("catalog.count", { count: visible.length })}
       </p>
     </div>
   );

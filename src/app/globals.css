@@ -2,6 +2,10 @@
 @import "@fontsource/noto-serif/vietnamese-400.css";
 @import "@fontsource/noto-serif/latin-400-italic.css";
 @import "@fontsource/noto-serif/vietnamese-400-italic.css";
+@import "@fontsource/noto-serif/latin-600.css";
+@import "@fontsource/noto-serif/vietnamese-600.css";
+@import "@fontsource/noto-serif/latin-700.css";
+@import "@fontsource/noto-serif/vietnamese-700.css";
 @import "@fontsource/be-vietnam-pro/latin-400.css";
 @import "@fontsource/be-vietnam-pro/vietnamese-400.css";
 @import "@fontsource/be-vietnam-pro/latin-600.css";
@@ -42,8 +46,13 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Be Vietnam Pro", sans-serif;
+  /* The whole app uses Noto Serif; wedding templates keep their own font (see .template-canvas). */
+  --font-sans: "Noto Serif", Georgia, serif;
   --font-display: "Noto Serif", Georgia, serif;
+  /* font-serif / font-mono utilities follow the same typeface so every screen looks the same. */
+  --font-serif: "Noto Serif", Georgia, serif;
+  --font-mono: "Noto Serif", Georgia, serif;
+  --font-template: "Be Vietnam Pro", sans-serif;
 }
 :root {
   --background: #fff9fa;
@@ -2458,4 +2467,16 @@ body:has(.landing-dialog[open]) {
 }
 .template-catalog--invite .template-catalog__note {
   margin-bottom: 18px;
+}
+
+/* Wedding invitation / website templates are designed on Be Vietnam Pro: text without its own font keeps it. */
+.template-canvas {
+  font-family: var(--font-template);
+}
+/* Templates keep the default Tailwind serif / mono stacks they were designed with. */
+.template-canvas .font-serif {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+}
+.template-canvas .font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }

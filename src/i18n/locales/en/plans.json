@@ -1,0 +1,324 @@
+{
+  "pricing": {
+    "fallbackName": {
+      "FREE": "Free",
+      "BASIC": "Basic",
+      "PREMIUM": "Premium"
+    },
+    "comparison": {
+      "categories": {
+        "scale": "Scale & storage",
+        "invitations": "Invitations & RSVP",
+        "reception": "Reception & guest welcome"
+      },
+      "rows": {
+        "guestPlaces": "Guests & seats",
+        "photos": "Wedding album photos",
+        "retention": "Website retention",
+        "customSlug": "Custom website link (with your names)",
+        "removeBranding": "Remove the InviteMe logo from invitations",
+        "templates": "Invitation & love story templates",
+        "emailInvites": "Email invitation sends",
+        "smsInvites": "SMS invitation sends",
+        "reminders": "Automatic RSVP reminder rounds",
+        "aiThankYou": "AI thank-you note assistant",
+        "seating": "Seating chart & tables",
+        "seatLookup": "Guests look up their table on their phone",
+        "checkin": "Welcome desk & QR check-in at the venue",
+        "coHosts": "People who can help manage the wedding",
+        "giftQr": "Gift QR code & gift tracking",
+        "giftExport": "Download the gift book (Excel spreadsheet)"
+      },
+      "values": {
+        "guests50": "50 guests",
+        "guests300": "300 guests",
+        "guests1000": "1,000 guests",
+        "photos10": "10 photos",
+        "photos60": "60 photos",
+        "photos200": "200 photos",
+        "retention7d": "7 days after the wedding",
+        "retention6m": "6 months after the wedding",
+        "retention2y": "2 years after the wedding",
+        "templatesStandard": "Standard templates",
+        "templatesAllPremium": "All premium templates",
+        "email50": "50 sends",
+        "email600": "600 sends",
+        "email2000": "2,000 sends",
+        "none": "—",
+        "sms100": "100 SMS",
+        "sms500": "500 SMS",
+        "reminders2": "2 rounds",
+        "unlimited": "Unlimited",
+        "ai1": "1 run",
+        "ai5": "5 runs",
+        "tablesMax5": "Up to 5 tables",
+        "tablesUnlimited": "Unlimited tables",
+        "ownerOnly": "Owner only",
+        "coHosts2": "2 co-hosts",
+        "coHosts10": "10 co-hosts"
+      },
+      "title": "Detailed feature comparison",
+      "subtitle": "See the full limits and benefits of each plan.",
+      "collapse": "Collapse table",
+      "expand": "Show full table",
+      "feature": "Feature"
+    },
+    "faq": {
+      "billing": {
+        "q": "Do I pay once or every month?",
+        "a": "Every paid InviteMe plan is a ONE-TIME payment that covers your whole wedding. No monthly renewals and no hidden fees."
+      },
+      "upgrade": {
+        "q": "Can we start on the Free plan and upgrade later?",
+        "a": "Absolutely! You can create your wedding, import your guest list and design your invitations for free. When your guest list grows or you need guest check-in or QR gifts, just upgrade at any time."
+      },
+      "payment": {
+        "q": "How does payment work?",
+        "a": "Just open any banking app (Vietcombank, MB, Techcombank, VPBank, ...) and scan the QR code. We detect the payment and activate your plan within 5–30 seconds."
+      },
+      "retention": {
+        "q": "Are the website and photos deleted after the wedding?",
+        "a": "Your memories are kept safe according to your plan: Free keeps them for 7 days after the wedding, Basic for 6 months and Premium for up to 2 years, so you can look back and download your gift book."
+      },
+      "title": "Plan FAQs"
+    },
+    "hero": {
+      "eyebrow": "PRICING & PLANS",
+      "title": "With you on your big day",
+      "subtitle": "Pay <strong>just once</strong> for your whole celebration. No monthly fees, no hidden costs.",
+      "badge": "Instant activation by QR code · 24/7 support"
+    },
+    "card": {
+      "popular": "Most popular",
+      "vip": "All-inclusive VIP",
+      "tagline": {
+        "FREE": "Perfect for an intimate celebration or trying out invitations.",
+        "BASIC": "The right fit for most Vietnamese weddings.",
+        "PREMIUM": "A premium experience with every top-tier perk."
+      },
+      "freePrice": "0 ₫",
+      "perWedding": "/ whole wedding",
+      "unlimited": "Unlimited",
+      "guestPlaces": "<strong>{{value}}</strong> guests & seats",
+      "mediaImages": "<strong>{{value}}</strong> high-quality album photos",
+      "emailInvites": "<strong>{{value}}</strong> invitation emails",
+      "smsInvites": "<strong>{{value}}</strong> invitation text messages",
+      "noSms": "SMS invitations",
+      "coHosts": "<strong>{{value}}</strong> co-hosts to help manage",
+      "noCoHosts": "Add co-hosts",
+      "seatingLabel": "Seating chart:",
+      "seatingTables": "{{count}} tables",
+      "seatingUnlimited": "Unlimited tables",
+      "checkin": "Welcome desk & QR check-in at the venue",
+      "giftQr": "QR gifts & gift book download",
+      "customSlug": "Custom website link with your names",
+      "retentionLabel": "Website kept online:",
+      "retention7d": "7 days after the wedding",
+      "retention6m": "6 months after the wedding",
+      "retention2y": "2 years after the wedding",
+      "startFree": "Start for free",
+      "goToWorkspace": "Go to workspace",
+      "choosePlan": "Choose {{name}}"
+    },
+    "cta": {
+      "title": "Ready to create your dream wedding invitation?",
+      "subtitle": "Start free today. In under 3 minutes you will have a professional wedding website and online invitation.",
+      "start": "Create your invitation now",
+      "templates": "Browse templates"
+    }
+  },
+  "manager": {
+    "orderError": "Could not create the order. Please try again.",
+    "loadErrorTitle": "Could not load plan details",
+    "loadErrorHint": "Please reload the page or contact support.",
+    "reload": "Reload",
+    "unlimited": "Unlimited",
+    "quotaLimit": {
+      "guests": "{{count}} guests",
+      "photos": "{{count}} photos",
+      "sends": "{{count}} sends",
+      "sms": "{{count}} SMS",
+      "tables": "{{count}} tables",
+      "people": "{{count}} people",
+      "runs": "{{count}} runs"
+    },
+    "nearLimit": "Almost at your plan limit",
+    "currentPlan": "Current plan",
+    "legacy": "Legacy (lifetime)",
+    "websiteOpenUntil": "Website open until:",
+    "websiteForever": "Website stays online forever",
+    "usageTitle": "Usage",
+    "quota": {
+      "guestPlaces": "Guests & seats",
+      "mediaImages": "Photos uploaded",
+      "emailInvites": "Email invitation sends",
+      "smsInvites": "SMS invitation sends",
+      "seatingTables": "Seating tables",
+      "coHosts": "Co-hosts",
+      "aiThankYouRuns": "AI thank-you assistant"
+    },
+    "featuresTitle": "Unlocked features",
+    "feature": {
+      "checkin": "QR check-in at the venue",
+      "giftQr": "VietQR gifts & gift book",
+      "customSlug": "Custom website link",
+      "seatLookup": "Guest table lookup",
+      "brandingRemoved": "InviteMe logo removed",
+      "brandingShown": "InviteMe logo shown"
+    },
+    "upgradeTitle": "Upgrade your plan",
+    "upgradeSubtitle": "Raise your guest limit, get unlimited seating tables and unlock every premium feature.",
+    "vipUnlimited": "Unlimited VIP",
+    "popular": "Popular",
+    "perWedding": "/ whole wedding",
+    "perk": {
+      "guestPlaces": "<strong>{{value}}</strong> guests & seats",
+      "mediaImages": "<strong>{{value}}</strong> album photos",
+      "unlimitedTables": "Unlimited seating tables",
+      "checkinGifts": "QR check-in & VietQR gifts",
+      "noBranding": "No InviteMe logo"
+    },
+    "upgradeTo": "Upgrade to {{name}}",
+    "historyTitle": "Order history",
+    "col": {
+      "code": "Order code",
+      "plan": "Plan",
+      "amount": "Amount",
+      "status": "Status",
+      "createdAt": "Created",
+      "actions": "Actions"
+    },
+    "status": {
+      "paid": "Paid",
+      "pending": "Awaiting transfer",
+      "cancelled": "Cancelled"
+    },
+    "vietQr": "VietQR code"
+  },
+  "payment": {
+    "cancelError": "Could not cancel the order.",
+    "expired": "Expired",
+    "eyebrow": "Automatic VietQR payment",
+    "title": "Upgrade to {{name}}",
+    "close": "Close",
+    "successTitle": "Payment successful!",
+    "successBody": "The <strong>{{name}}</strong> plan is now active for your wedding. Redirecting...",
+    "orderCancelled": "Order cancelled",
+    "orderExpired": "Order expired",
+    "createNewOrder": "Please create a new order to continue upgrading.",
+    "qrAlt": "VietQR payment {{code}}",
+    "scanHint": "Scan with your banking app (expires in: {{time}})",
+    "bank": "Bank",
+    "accountNumber": "Account number",
+    "accountName": "Account holder",
+    "amount": "Amount",
+    "transferContent": "Transfer note",
+    "copied": "Copied",
+    "copy": "Copy",
+    "autoNote": "We match the transfer and activate your plan automatically as soon as the money arrives (usually 5–30 seconds).",
+    "cancelling": "Cancelling...",
+    "cancelOrder": "Cancel order",
+    "simulating": "Simulating...",
+    "simulate": "Simulate payment (Dev)",
+    "checkAgain": "Check again"
+  },
+  "admin": {
+    "grantSuccess": "Plan {{plan}} granted to the wedding.",
+    "grantError": "Could not grant the plan. Check the wedding ID.",
+    "title": "Plans & revenue",
+    "subtitle": "Set plan prices, review VietQR payment orders and monitor platform transactions.",
+    "tabs": {
+      "plans": "Plan catalog ({{count}})",
+      "orders": "Plan orders",
+      "payments": "Transfer history (webhook)",
+      "grant": "Manual grant"
+    },
+    "plansError": "Could not load plans. Please check your admin permissions.",
+    "free": "Free",
+    "activeWeddings": "Weddings using it:",
+    "guestPlaces": "Guests:",
+    "guestCount": "{{count}} guests",
+    "mediaImages": "Photo library:",
+    "photoCount": "{{count}} photos",
+    "unlimited": "Unlimited",
+    "premiumTemplates": "Premium templates:",
+    "yes": "Yes",
+    "no": "No",
+    "brandingBadge": "InviteMe badge:",
+    "badgeShown": "Shown",
+    "badgeRemoved": "Removed",
+    "editLimits": "Edit settings",
+    "orderSearch": "Search order code (IM...), email, wedding name...",
+    "orderStatus": {
+      "all": "All statuses",
+      "PENDING": "PENDING - Awaiting payment",
+      "COMPLETED": "COMPLETED - Completed",
+      "CANCELLED": "CANCELLED - Cancelled",
+      "EXPIRED": "EXPIRED - Expired"
+    },
+    "ordersError": "Could not load orders.",
+    "col": {
+      "code": "Order code",
+      "wedding": "Wedding",
+      "plan": "Plan",
+      "amount": "Amount",
+      "status": "Status",
+      "createdAt": "Created",
+      "actions": "Actions",
+      "receivingAccount": "Receiving account",
+      "content": "SMS/bank content",
+      "time": "Time"
+    },
+    "noOrders": "No plan orders found.",
+    "untitledWedding": "Untitled",
+    "noEmail": "No email",
+    "approve": "Approve",
+    "cancel": "Cancel",
+    "ordersPage": "Page {{page}} / {{totalPages}} ({{total}} orders total)",
+    "paymentsPage": "Page {{page}} / {{totalPages}} ({{total}} transactions total)",
+    "prev": "Previous",
+    "next": "Next",
+    "paymentStatus": {
+      "all": "All webhook transactions",
+      "MATCHED": "MATCHED - Matched to an order",
+      "ACTIVATED": "ACTIVATED - Plan activated",
+      "UNMATCHED": "UNMATCHED - Not matched"
+    },
+    "paymentsError": "Could not load transactions.",
+    "noPayments": "No webhook transactions recorded yet.",
+    "grantTitle": "Grant a plan to a wedding",
+    "grantSubtitle": "For customer support, partner gifts or refunds.",
+    "weddingIdPlaceholder": "Example: e3b0c442-98fc-1c14-9afbf4c8996fb924",
+    "grantPlan": "Plan to grant",
+    "grantOption": {
+      "FREE": "FREE - Free",
+      "BASIC": "BASIC - Basic (300 guests, check-in, VietQR)",
+      "PREMIUM": "PREMIUM - Premium (1,000 guests, all-inclusive VIP)"
+    },
+    "internalNote": "Internal note",
+    "internalNotePlaceholder": "Reason for the grant (partner gift, incident support...)",
+    "confirmGrant": "Confirm grant",
+    "editTitle": "Edit plan {{code}}",
+    "close": "Close",
+    "displayName": "Display name",
+    "price": "Price (VND)",
+    "status": "Status",
+    "planStatus": {
+      "ACTIVE": "ACTIVE - On sale",
+      "INACTIVE": "INACTIVE - Hidden"
+    },
+    "saving": "Saving...",
+    "save": "Save changes"
+  },
+  "meta": {
+    "pricingTitle": "Pricing & plans — InviteMe",
+    "pricingDescription": "InviteMe pricing for online wedding invitations and all-in-one wedding management.",
+    "adminTitle": "Plans & orders — InviteMe Admin"
+  },
+  "page": {
+    "noAccessTitle": "Access restricted",
+    "noAccessDescription": "You do not have permission to view this wedding's plan.",
+    "title": "Plan & limits",
+    "subtitle": "See your current plan, track your usage and upgrade to premium features for your wedding."
+  }
+}

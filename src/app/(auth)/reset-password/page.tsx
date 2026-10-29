@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { defaultLanguage, isLanguage, languageCookieName } from "@/i18n/config";
+import { createI18nInstance } from "@/i18n/client";
 import { ResetPasswordForm } from "@/features/auth";
 
-export const metadata: Metadata = {
-  title: "Đặt lại mật khẩu",
-  referrer: "no-referrer",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const savedLanguage = (await cookies()).get(languageCookieName)?.value;
+  const language = isLanguage(savedLanguage) ? savedLanguage : defaultLanguage;
+  const t = createI18nInstance(language).getFixedT(language, "ui");
+  return {
+    title: t("meta.resetPassword.title"),
+    referrer: "no-referrer",
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function Page({
   searchParams,

@@ -41,7 +41,7 @@ export function InvitationRenderer({
   return (
     <div
       ref={host}
-      className="fixed inset-0 z-50 overflow-x-hidden overflow-y-auto bg-background"
+      className="template-canvas fixed inset-0 z-50 overflow-x-hidden overflow-y-auto bg-background"
       aria-label={t("personalInvitation")}
     >
       <InvitationGuestContext value={token}>

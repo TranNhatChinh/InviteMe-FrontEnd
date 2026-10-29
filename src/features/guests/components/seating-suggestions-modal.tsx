@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertCircle, Check, Loader2, Sparkles, Wand2, X } from "lucide-react";
 import { gsap } from "gsap";
 import { useRuntime } from "@/core/config/runtime";
@@ -37,6 +38,7 @@ export function SeatingSuggestionsModal({
   const trayTableCount = plan.tables.filter((table) => table.row == null).length;
 
   const [loading, setLoading] = useState(false);
+  const { t } = useTranslation("seating");
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,8 +75,8 @@ export function SeatingSuggestionsModal({
         .catch((err: unknown) => {
           if (!ignore) {
             const msg =
-              seatingErrorText(err) ??
-              (err instanceof Error ? err.message : "Không thể tính toán phương án xếp bàn.");
+              seatingErrorText(err, t) ??
+              (err instanceof Error ? err.message : t("suggestions.computeFailed"));
             setError(msg);
           }
         })
@@ -89,7 +91,7 @@ export function SeatingSuggestionsModal({
       ignore = true;
       clearTimeout(timer);
     };
-  }, [api, isOpen, mode, placeTables, plan.weddingId]);
+  }, [api, isOpen, mode, placeTables, plan.weddingId, t]);
 
   // GSAP animation
   useEffect(() => {
@@ -113,7 +115,7 @@ export function SeatingSuggestionsModal({
   const handleApply = async () => {
     if (!currentSuggestion) return;
     if (mode === "REPLACE_ALL" && !confirmReplace) {
-      setError("Vui lòng xác nhận thay thế sơ đồ trước khi xếp lại toàn bộ.");
+      setError(t("suggestions.confirmReplace"));
       return;
     }
 
@@ -132,8 +134,8 @@ export function SeatingSuggestionsModal({
       onClose();
     } catch (err: unknown) {
       const msg =
-        seatingErrorText(err) ??
-        (err instanceof Error ? err.message : "Không thể áp dụng phương án xếp chỗ.");
+        seatingErrorText(err, t) ??
+        (err instanceof Error ? err.message : t("suggestions.applyFailed"));
       setError(msg);
     } finally {
       setApplying(false);
@@ -156,11 +158,10 @@ export function SeatingSuggestionsModal({
             </div>
             <div>
               <h2 className="font-serif text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                Gợi ý Xếp chỗ Tự động
+                {t("suggestions.title")}
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Áp dụng phong tục cưới Việt: hai họ hai bên, bậc trên gần sân khấu, người cùng nhóm
-                ngồi cùng bàn.
+                {t("suggestions.subtitle")}
               </p>
             </div>
           </div>
@@ -176,7 +177,7 @@ export function SeatingSuggestionsModal({
         {/* Mode Selector */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-muted/40 p-3">
           <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-            Chế độ xếp chỗ:
+            {t("suggestions.mode")}
           </span>
           <div className="flex rounded-xl bg-card p-1 text-xs border border-border shadow-sm">
             <button
@@ -188,7 +189,7 @@ export function SeatingSuggestionsModal({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Chỉ xếp người chưa có chỗ (Khuyên dùng)
+              {t("suggestions.modeUnassigned")}
             </button>
             <button
               type="button"
@@ -199,7 +200,7 @@ export function SeatingSuggestionsModal({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Xếp lại toàn bộ
+              {t("suggestions.modeReplace")}
             </button>
           </div>
         </div>
@@ -213,7 +214,7 @@ export function SeatingSuggestionsModal({
               className="rounded accent-destructive size-4"
             />
             <span className="font-medium">
-              Tôi xác nhận muốn xóa các vị trí đã xếp tay hiện tại và xếp lại toàn bộ sơ đồ.
+              {t("suggestions.confirmReplaceLabel")}
             </span>
           </label>
         )}
@@ -227,7 +228,7 @@ export function SeatingSuggestionsModal({
               className="rounded accent-primary size-4"
             />
             <span>
-              Đưa {trayTableCount} bàn đang trong khay lên các ô trống của sơ đồ sảnh khi áp dụng.
+              {t("suggestions.placeTrayTables", { count: trayTableCount })}
             </span>
           </label>
         )}
@@ -244,7 +245,7 @@ export function SeatingSuggestionsModal({
           <div className="flex h-56 flex-col items-center justify-center space-y-3">
             <Loader2 className="size-8 animate-spin text-primary" />
             <span className="text-xs text-muted-foreground">
-              Đang tính toán tối ưu 3 phương án theo phong tục cưới...
+              {t("suggestions.computing")}
             </span>
           </div>
         ) : (
@@ -261,40 +262,41 @@ export function SeatingSuggestionsModal({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-[11px] font-bold text-primary">
-                    Khuyên dùng
+                    {t("suggestions.recommended")}
                   </span>
-                  <div className="font-serif text-lg font-bold text-foreground">Giữ nhóm</div>
+                  <div className="font-serif text-lg font-bold text-foreground">
+                    {t("suggestions.keepGroups")}
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Ưu tiên tối đa người cùng nhóm / họ hàng ngồi cùng bàn, bậc trên ở bàn VIP gần sân
-                  khấu.
+                  {t("suggestions.keepGroupsHint")}
                 </p>
 
                 {suggestions.AFFINITY && (
                   <div className="space-y-1.5 pt-2 border-t border-border/50 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Số chỗ xếp được:</span>
+                      <span className="text-muted-foreground">{t("suggestions.seatedCount")}</span>
                       <span className="font-semibold text-foreground">
-                        {suggestions.AFFINITY.assignments.length} chỗ
+                        {t("suggestions.seatsValue", { count: suggestions.AFFINITY.assignments.length })}
                       </span>
                     </div>
                     {suggestions.AFFINITY.tablePlacements &&
                       suggestions.AFFINITY.tablePlacements.length > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Bàn xếp lên sơ đồ:</span>
+                          <span className="text-muted-foreground">{t("suggestions.tablesPlaced")}</span>
                           <span className="font-semibold text-emerald-600">
-                            {suggestions.AFFINITY.tablePlacements.length} bàn
+                            {t("suggestions.tablesValue", { count: suggestions.AFFINITY.tablePlacements.length })}
                           </span>
                         </div>
                       )}
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Chỗ được giữ nguyên:</span>
+                      <span className="text-muted-foreground">{t("suggestions.preserved")}</span>
                       <span className="font-semibold text-emerald-600">
                         {suggestions.AFFINITY.preservedCount}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Số cảnh báo:</span>
+                      <span className="text-muted-foreground">{t("suggestions.warningCount")}</span>
                       <span className="font-semibold text-amber-600">
                         {suggestions.AFFINITY.warnings.length}
                       </span>
@@ -305,7 +307,7 @@ export function SeatingSuggestionsModal({
 
               <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs">
                 <span className="font-semibold text-primary">
-                  {selectedStrategy === "AFFINITY" ? "Đang chọn" : "Chọn phương án này"}
+                  {selectedStrategy === "AFFINITY" ? t("suggestions.selected") : t("suggestions.choose")}
                 </span>
                 {selectedStrategy === "AFFINITY" && <Check className="size-4 text-primary" />}
               </div>
@@ -323,39 +325,41 @@ export function SeatingSuggestionsModal({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-bold text-muted-foreground">
-                    Tiết kiệm
+                    {t("suggestions.saving")}
                   </span>
-                  <div className="font-serif text-lg font-bold text-foreground">Ít bàn nhất</div>
+                  <div className="font-serif text-lg font-bold text-foreground">
+                    {t("suggestions.fewestTables")}
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Tối ưu lấp đầy các bàn, ghép các nhóm nhỏ cùng phía để sử dụng ít bàn tiệc nhất.
+                  {t("suggestions.fewestTablesHint")}
                 </p>
 
                 {suggestions.COMPACT && (
                   <div className="space-y-1.5 pt-2 border-t border-border/50 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Số chỗ xếp được:</span>
+                      <span className="text-muted-foreground">{t("suggestions.seatedCount")}</span>
                       <span className="font-semibold text-foreground">
-                        {suggestions.COMPACT.assignments.length} chỗ
+                        {t("suggestions.seatsValue", { count: suggestions.COMPACT.assignments.length })}
                       </span>
                     </div>
                     {suggestions.COMPACT.tablePlacements &&
                       suggestions.COMPACT.tablePlacements.length > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Bàn xếp lên sơ đồ:</span>
+                          <span className="text-muted-foreground">{t("suggestions.tablesPlaced")}</span>
                           <span className="font-semibold text-emerald-600">
-                            {suggestions.COMPACT.tablePlacements.length} bàn
+                            {t("suggestions.tablesValue", { count: suggestions.COMPACT.tablePlacements.length })}
                           </span>
                         </div>
                       )}
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Chỗ được giữ nguyên:</span>
+                      <span className="text-muted-foreground">{t("suggestions.preserved")}</span>
                       <span className="font-semibold text-emerald-600">
                         {suggestions.COMPACT.preservedCount}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Số cảnh báo:</span>
+                      <span className="text-muted-foreground">{t("suggestions.warningCount")}</span>
                       <span className="font-semibold text-amber-600">
                         {suggestions.COMPACT.warnings.length}
                       </span>
@@ -366,7 +370,7 @@ export function SeatingSuggestionsModal({
 
               <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs">
                 <span className="font-semibold text-primary">
-                  {selectedStrategy === "COMPACT" ? "Đang chọn" : "Chọn phương án này"}
+                  {selectedStrategy === "COMPACT" ? t("suggestions.selected") : t("suggestions.choose")}
                 </span>
                 {selectedStrategy === "COMPACT" && <Check className="size-4 text-primary" />}
               </div>
@@ -384,40 +388,41 @@ export function SeatingSuggestionsModal({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-bold text-muted-foreground">
-                    Liền mạch
+                    {t("suggestions.seamless")}
                   </span>
-                  <div className="font-serif text-lg font-bold text-foreground">Đơn giản</div>
+                  <div className="font-serif text-lg font-bold text-foreground">
+                    {t("suggestions.simple")}
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Giữ trọn vẹn gia đình / người cùng thiệp ngồi liền nhau, tuyệt đối không tách
-                  thiệp.
+                  {t("suggestions.simpleHint")}
                 </p>
 
                 {suggestions.PARTY && (
                   <div className="space-y-1.5 pt-2 border-t border-border/50 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Số chỗ xếp được:</span>
+                      <span className="text-muted-foreground">{t("suggestions.seatedCount")}</span>
                       <span className="font-semibold text-foreground">
-                        {suggestions.PARTY.assignments.length} chỗ
+                        {t("suggestions.seatsValue", { count: suggestions.PARTY.assignments.length })}
                       </span>
                     </div>
                     {suggestions.PARTY.tablePlacements &&
                       suggestions.PARTY.tablePlacements.length > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Bàn xếp lên sơ đồ:</span>
+                          <span className="text-muted-foreground">{t("suggestions.tablesPlaced")}</span>
                           <span className="font-semibold text-emerald-600">
-                            {suggestions.PARTY.tablePlacements.length} bàn
+                            {t("suggestions.tablesValue", { count: suggestions.PARTY.tablePlacements.length })}
                           </span>
                         </div>
                       )}
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Chỗ được giữ nguyên:</span>
+                      <span className="text-muted-foreground">{t("suggestions.preserved")}</span>
                       <span className="font-semibold text-emerald-600">
                         {suggestions.PARTY.preservedCount}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Số cảnh báo:</span>
+                      <span className="text-muted-foreground">{t("suggestions.warningCount")}</span>
                       <span className="font-semibold text-amber-600">
                         {suggestions.PARTY.warnings.length}
                       </span>
@@ -428,7 +433,7 @@ export function SeatingSuggestionsModal({
 
               <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs">
                 <span className="font-semibold text-primary">
-                  {selectedStrategy === "PARTY" ? "Đang chọn" : "Chọn phương án này"}
+                  {selectedStrategy === "PARTY" ? t("suggestions.selected") : t("suggestions.choose")}
                 </span>
                 {selectedStrategy === "PARTY" && <Check className="size-4 text-primary" />}
               </div>
@@ -445,7 +450,7 @@ export function SeatingSuggestionsModal({
                 <div className="rounded-2xl border border-blue-500/30 bg-blue-50/60 dark:bg-blue-950/20 p-4 space-y-2 text-xs">
                   <div className="flex items-center gap-2 font-serif font-semibold text-blue-950 dark:text-blue-200">
                     <Sparkles className="size-4 text-blue-600 dark:text-blue-400" />
-                    <span>Gợi ý kê thêm bàn cho sảnh tiệc:</span>
+                    <span>{t("suggestions.extraTables")}</span>
                   </div>
                   <ul className="space-y-1 text-muted-foreground list-disc list-inside">
                     {currentSuggestion.suggestedAdditionalTables.map((s, idx) => (
@@ -462,60 +467,59 @@ export function SeatingSuggestionsModal({
               <div className="rounded-2xl border border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/20 p-4 space-y-1 text-xs">
                 <div className="flex items-center gap-2 font-serif font-semibold text-emerald-950 dark:text-emerald-200">
                   <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />
-                  <span>Tự động sắp bàn lên sơ đồ:</span>
+                  <span>{t("suggestions.autoPlace")}</span>
                 </div>
                 <p className="text-muted-foreground">
-                  Hệ thống sẽ tự động đưa {currentSuggestion.tablePlacements.length} bàn từ khay lên
-                  các ô trống tối ưu trên sơ đồ sảnh cưới (ưu tiên hàng đầu, gần lối đi).
+                  {t("suggestions.autoPlaceHint", { count: currentSuggestion.tablePlacements.length })}
                 </p>
               </div>
             )}
 
             <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-3 text-xs">
               <div className="font-serif font-semibold text-foreground">
-                Chi tiết phân bổ của phương án{" "}
+                {t("suggestions.breakdown")}{" "}
                 {selectedStrategy === "AFFINITY" || selectedStrategy === "KEEP_GROUPS"
-                  ? "Giữ nhóm"
+                  ? t("suggestions.keepGroups")
                   : selectedStrategy === "COMPACT" || selectedStrategy === "FEWEST_TABLES"
-                    ? "Ít bàn nhất"
-                    : "Đơn giản"}
+                    ? t("suggestions.fewestTables")
+                    : t("suggestions.simple")}
                 :
               </div>
 
               {currentSuggestion.scoreBreakdown && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-b border-border/40 pb-3 text-[11px]">
                   <div className="bg-card p-2 rounded-xl border border-border text-center shadow-xs">
-                    <div className="text-muted-foreground text-[10px]">Cùng nhóm ngồi chung</div>
+                    <div className="text-muted-foreground text-[10px]">{t("suggestions.sameGroup")}</div>
                     <div className="font-semibold text-foreground">
-                      {currentSuggestion.scoreBreakdown.sameGroupMatchesCount} cặp
+                      {t("suggestions.pairs", { count: currentSuggestion.scoreBreakdown.sameGroupMatchesCount })}
                     </div>
                   </div>
                   <div className="bg-card p-2 rounded-xl border border-border text-center shadow-xs">
-                    <div className="text-muted-foreground text-[10px]">Bậc trên ở bàn VIP</div>
+                    <div className="text-muted-foreground text-[10px]">{t("suggestions.eldersVip")}</div>
                     <div className="font-semibold text-emerald-600">
-                      {currentSuggestion.scoreBreakdown.eldersInVipCount} người
+                      {t("suggestions.people", { count: currentSuggestion.scoreBreakdown.eldersInVipCount })}
                     </div>
                   </div>
                   <div className="bg-card p-2 rounded-xl border border-border text-center shadow-xs">
-                    <div className="text-muted-foreground text-[10px]">Số bàn sử dụng</div>
+                    <div className="text-muted-foreground text-[10px]">{t("suggestions.usedTables")}</div>
                     <div className="font-semibold text-foreground">
-                      {currentSuggestion.scoreBreakdown.usedTablesCount} bàn
+                      {t("suggestions.tablesValue", { count: currentSuggestion.scoreBreakdown.usedTablesCount })}
                     </div>
                   </div>
                   <div className="bg-card p-2 rounded-xl border border-border text-center shadow-xs">
-                    <div className="text-muted-foreground text-[10px]">Nhóm bị tách</div>
+                    <div className="text-muted-foreground text-[10px]">{t("suggestions.splitParties")}</div>
                     <div className="font-semibold text-amber-600">
-                      {currentSuggestion.scoreBreakdown.splitPartiesCount} nhóm
+                      {t("suggestions.groups", { count: currentSuggestion.scoreBreakdown.splitPartiesCount })}
                     </div>
                   </div>
                   {/* Both families at one table is allowed; shown so the couple can review it. */}
                   {(currentSuggestion.scoreBreakdown.mixedSideTablesCount ?? 0) > 0 && (
                     <div className="col-span-2 sm:col-span-4 bg-card p-2 rounded-xl border border-border text-center shadow-xs">
                       <div className="text-muted-foreground text-[10px]">
-                        Bàn có khách cả hai họ
+                        {t("suggestions.mixedSides")}
                       </div>
                       <div className="font-semibold text-foreground">
-                        {currentSuggestion.scoreBreakdown.mixedSideTablesCount} bàn
+                        {t("suggestions.tablesValue", { count: currentSuggestion.scoreBreakdown.mixedSideTablesCount })}
                       </div>
                     </div>
                   )}
@@ -525,14 +529,14 @@ export function SeatingSuggestionsModal({
               {currentSuggestion.unassigned.length > 0 && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-200">
                   <div className="font-semibold">
-                    Còn {currentSuggestion.unassigned.length} nhóm chưa xếp được đủ chỗ:
+                    {t("suggestions.unassigned", { count: currentSuggestion.unassigned.length })}
                   </div>
                   <ul className="mt-1 list-disc list-inside space-y-0.5 text-[11px]">
                     {currentSuggestion.unassigned.slice(0, 5).map((u, i) => (
                       <li key={i}>{u.message}</li>
                     ))}
                     {currentSuggestion.unassigned.length > 5 && (
-                      <li>...và {currentSuggestion.unassigned.length - 5} nhóm khác.</li>
+                      <li>{t("suggestions.moreGroups", { count: currentSuggestion.unassigned.length - 5 })}</li>
                     )}
                   </ul>
                 </div>
@@ -540,7 +544,7 @@ export function SeatingSuggestionsModal({
 
               {currentSuggestion.warnings.length > 0 && (
                 <div className="text-[11px] text-muted-foreground">
-                  <span className="font-semibold text-foreground">Cảnh báo: </span>
+                  <span className="font-semibold text-foreground">{t("suggestions.warnings")}</span>
                   {currentSuggestion.warnings.join(" · ")}
                 </div>
               )}
@@ -556,19 +560,18 @@ export function SeatingSuggestionsModal({
               (!currentSuggestion.tablePlacements ||
                 currentSuggestion.tablePlacements.length === 0) && (
                 <span className="text-xs text-muted-foreground">
-                  Phương án này không thay đổi vị trí nào so với sơ đồ hiện tại.
+                  {t("suggestions.noChanges")}
                 </span>
               )}
             {currentSuggestion?.tablePlacements && currentSuggestion.tablePlacements.length > 0 && (
               <span className="text-xs text-emerald-600 font-medium">
-                Sẽ tự động xếp {currentSuggestion.tablePlacements.length} bàn từ khay lên sơ đồ
-                sảnh.
+                {t("suggestions.willPlace", { count: currentSuggestion.tablePlacements.length })}
               </span>
             )}
           </div>
           <div className="flex items-center gap-3">
             <Button type="button" variant="outline" onClick={onClose} disabled={applying}>
-              Hủy
+              {t("suggestions.cancel")}
             </Button>
             <Button
               onClick={handleApply}
@@ -588,7 +591,7 @@ export function SeatingSuggestionsModal({
               ) : (
                 <Sparkles className="size-4" />
               )}
-              <span>{applying ? "Đang áp dụng..." : "Áp dụng phương án này"}</span>
+              <span>{applying ? t("suggestions.applying") : t("suggestions.apply")}</span>
             </Button>
           </div>
         </div>

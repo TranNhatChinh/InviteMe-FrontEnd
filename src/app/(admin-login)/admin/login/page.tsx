@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { defaultLanguage, isLanguage, languageCookieName } from "@/i18n/config";
+import { createI18nInstance } from "@/i18n/client";
 import { AdminLoginForm } from "@/features/auth";
 import { LanguageSwitcher } from "@/shared/components/language-switcher";
 
-export const metadata: Metadata = {
-  title: "Đăng nhập Admin",
-  description: "Đăng nhập vào cổng quản trị InviteMe.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const savedLanguage = (await cookies()).get(languageCookieName)?.value;
+  const language = isLanguage(savedLanguage) ? savedLanguage : defaultLanguage;
+  const t = createI18nInstance(language).getFixedT(language, "ui");
+  return {
+    title: t("meta.adminLogin.title"),
+    description: t("meta.adminLogin.description"),
+  };
+}
 
 export default function AdminLoginPage() {
   return (

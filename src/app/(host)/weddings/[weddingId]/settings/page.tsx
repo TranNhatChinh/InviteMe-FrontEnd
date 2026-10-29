@@ -1,16 +1,21 @@
+"use client";
+
+import { use } from "react";
+import { useTranslation } from "react-i18next";
 import { WeddingSetupForm } from "@/features/weddings";
 import { PermissionGuard } from "@/shared/components/permission-guard";
 import { EmptyState } from "@/shared/feedback/empty-state";
 
-export default async function Page({ params }: { params: Promise<{ weddingId: string }> }) {
-  const { weddingId } = await params;
+export default function Page({ params }: { params: Promise<{ weddingId: string }> }) {
+  const { weddingId } = use(params);
+  const { t } = useTranslation("weddingEditor");
   return (
     <PermissionGuard
       permission="WEDDING_VIEW"
       fallback={
         <EmptyState
-          title="Không có quyền truy cập"
-          description="Bạn không có quyền xem thiết lập lễ cưới này."
+          title={t("pages.settings.noAccessTitle")}
+          description={t("pages.settings.noAccessDescription")}
         />
       }
     >

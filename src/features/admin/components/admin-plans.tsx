@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CreditCard,
@@ -26,6 +27,7 @@ import {
 
 export function AdminPlans() {
   const { api } = useRuntime();
+  const { t } = useTranslation("plans");
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"plans" | "orders" | "payments" | "grant">("plans");
 
@@ -115,12 +117,12 @@ export function AdminPlans() {
         note: grantNote || undefined,
       }),
     onSuccess: () => {
-      setGrantMessage({ type: "success", text: `Đã cấp thành công gói ${grantPlanCode} cho đám cưới.` });
+      setGrantMessage({ type: "success", text: t("admin.grantSuccess", { plan: grantPlanCode }) });
       setGrantWeddingId("");
       setGrantNote("");
     },
     onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : "Không thể cấp gói. Kiểm tra lại ID đám cưới.";
+      const message = err instanceof Error ? err.message : t("admin.grantError");
       setGrantMessage({ type: "error", text: message });
     },
   });
@@ -130,10 +132,10 @@ export function AdminPlans() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground font-serif">
-          Quản lý Gói cước &amp; Doanh thu
+          {t("admin.title")}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Cấu hình giá các gói dịch vụ, duyệt đơn hàng thanh toán VietQR và kiểm soát giao dịch nền tảng.
+          {t("admin.subtitle")}
         </p>
       </div>
 
@@ -149,7 +151,7 @@ export function AdminPlans() {
           }`}
         >
           <Package className="size-4" />
-          <span>Danh mục gói ({plansQuery.data?.length ?? 0})</span>
+          <span>{t("admin.tabs.plans", { count: plansQuery.data?.length ?? 0 })}</span>
         </button>
 
         <button
@@ -162,7 +164,7 @@ export function AdminPlans() {
           }`}
         >
           <Receipt className="size-4" />
-          <span>Đơn đặt gói</span>
+          <span>{t("admin.tabs.orders")}</span>
         </button>
 
         <button
@@ -175,7 +177,7 @@ export function AdminPlans() {
           }`}
         >
           <CreditCard className="size-4" />
-          <span>Lịch sử chuyển khoản (Webhook)</span>
+          <span>{t("admin.tabs.payments")}</span>
         </button>
 
         <button
@@ -188,7 +190,7 @@ export function AdminPlans() {
           }`}
         >
           <Gift className="size-4" />
-          <span>Cấp gói thủ công</span>
+          <span>{t("admin.tabs.grant")}</span>
         </button>
       </div>
 
@@ -201,7 +203,7 @@ export function AdminPlans() {
             </div>
           ) : plansQuery.isError ? (
             <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
-              Không thể tải danh sách gói. Vui lòng kiểm tra quyền quản trị viên.
+              {t("admin.plansError")}
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-3">
@@ -229,37 +231,41 @@ export function AdminPlans() {
                     <div>
                       <h2 className="font-serif text-xl font-normal text-foreground">{plan.name}</h2>
                       <div className="mt-2 text-2xl font-bold tracking-tight text-foreground font-serif">
-                        {plan.price === 0 ? "Miễn phí" : formatCurrency(plan.price, "vi")}
+                        {plan.price === 0 ? t("admin.free") : formatCurrency(plan.price, "vi")}
                       </div>
                     </div>
 
                     <div className="rounded-2xl bg-muted/40 p-4 text-xs space-y-2">
                       <div className="flex justify-between text-muted-foreground">
-                        <span>Đám cưới đang dùng:</span>
+                        <span>{t("admin.activeWeddings")}</span>
                         <span className="font-semibold text-foreground">{plan.activeWeddings}</span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>Số khách mời:</span>
+                        <span>{t("admin.guestPlaces")}</span>
                         <span className="font-semibold text-foreground">
-                          {plan.limits.guestPlaces ? `${plan.limits.guestPlaces} khách` : "Không giới hạn"}
+                          {plan.limits.guestPlaces
+                            ? t("admin.guestCount", { count: plan.limits.guestPlaces })
+                            : t("admin.unlimited")}
                         </span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>Kho ảnh thư viện:</span>
+                        <span>{t("admin.mediaImages")}</span>
                         <span className="font-semibold text-foreground">
-                          {plan.limits.mediaImages ? `${plan.limits.mediaImages} ảnh` : "Không giới hạn"}
+                          {plan.limits.mediaImages
+                            ? t("admin.photoCount", { count: plan.limits.mediaImages })
+                            : t("admin.unlimited")}
                         </span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>Mẫu thiệp cao cấp:</span>
+                        <span>{t("admin.premiumTemplates")}</span>
                         <span className="font-semibold text-foreground">
-                          {plan.limits.premiumTemplates ? "Có" : "Không"}
+                          {plan.limits.premiumTemplates ? t("admin.yes") : t("admin.no")}
                         </span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>Huy hiệu InviteMe:</span>
+                        <span>{t("admin.brandingBadge")}</span>
                         <span className="font-semibold text-foreground">
-                          {plan.limits.brandingBadge ? "Hiển thị" : "Đã gỡ"}
+                          {plan.limits.brandingBadge ? t("admin.badgeShown") : t("admin.badgeRemoved")}
                         </span>
                       </div>
                     </div>
@@ -272,7 +278,7 @@ export function AdminPlans() {
                       onClick={() => setEditingPlan(plan)}
                     >
                       <Edit className="size-3.5" />
-                      <span>Chỉnh sửa thông số</span>
+                      <span>{t("admin.editLimits")}</span>
                     </Button>
                   </div>
                 </div>
@@ -290,7 +296,7 @@ export function AdminPlans() {
             <div className="relative flex-1 min-w-[200px] max-w-sm">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Tìm mã đơn (IM...), email, tên cưới..."
+                placeholder={t("admin.orderSearch")}
                 value={orderSearch}
                 onChange={(e) => {
                   setOrderSearch(e.target.value);
@@ -310,11 +316,11 @@ export function AdminPlans() {
                 }}
                 className="rounded-md border border-input bg-background p-2 text-sm text-foreground"
               >
-                <option value="">Tất cả trạng thái</option>
-                <option value="PENDING">PENDING - Chờ thanh toán</option>
-                <option value="COMPLETED">COMPLETED - Hoàn thành</option>
-                <option value="CANCELLED">CANCELLED - Đã hủy</option>
-                <option value="EXPIRED">EXPIRED - Hết hạn</option>
+                <option value="">{t("admin.orderStatus.all")}</option>
+                <option value="PENDING">{t("admin.orderStatus.PENDING")}</option>
+                <option value="COMPLETED">{t("admin.orderStatus.COMPLETED")}</option>
+                <option value="CANCELLED">{t("admin.orderStatus.CANCELLED")}</option>
+                <option value="EXPIRED">{t("admin.orderStatus.EXPIRED")}</option>
               </select>
             </div>
           </div>
@@ -325,27 +331,27 @@ export function AdminPlans() {
             </div>
           ) : ordersQuery.isError ? (
             <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
-              Không thể tải danh sách đơn hàng.
+              {t("admin.ordersError")}
             </div>
           ) : (
             <div className="overflow-x-auto rounded-2xl border border-border bg-card">
               <table className="w-full text-left text-sm min-w-[750px]">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="py-3 px-4">Mã đơn</th>
-                    <th className="py-3 px-4">Đám cưới</th>
-                    <th className="py-3 px-4">Gói</th>
-                    <th className="py-3 px-4">Số tiền</th>
-                    <th className="py-3 px-4">Trạng thái</th>
-                    <th className="py-3 px-4">Ngày tạo</th>
-                    <th className="py-3 px-4 text-right">Thao tác</th>
+                    <th className="py-3 px-4">{t("admin.col.code")}</th>
+                    <th className="py-3 px-4">{t("admin.col.wedding")}</th>
+                    <th className="py-3 px-4">{t("admin.col.plan")}</th>
+                    <th className="py-3 px-4">{t("admin.col.amount")}</th>
+                    <th className="py-3 px-4">{t("admin.col.status")}</th>
+                    <th className="py-3 px-4">{t("admin.col.createdAt")}</th>
+                    <th className="py-3 px-4 text-right">{t("admin.col.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ordersQuery.data.items.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                        Không tìm thấy đơn đặt gói nào.
+                        {t("admin.noOrders")}
                       </td>
                     </tr>
                   ) : (
@@ -353,8 +359,8 @@ export function AdminPlans() {
                       <tr key={order.id} className="border-b border-border/40 hover:bg-muted/20">
                         <td className="py-3 px-4 font-mono font-bold text-foreground">{order.code}</td>
                         <td className="py-3 px-4">
-                          <div className="font-medium text-foreground">{order.weddingTitle || "Chưa đặt tên"}</div>
-                          <div className="text-xs text-muted-foreground">{order.ownerEmail || "Không có email"}</div>
+                          <div className="font-medium text-foreground">{order.weddingTitle || t("admin.untitledWedding")}</div>
+                          <div className="text-xs text-muted-foreground">{order.ownerEmail || t("admin.noEmail")}</div>
                         </td>
                         <td className="py-3 px-4">
                           <span className="font-semibold text-primary">{order.planCode}</span>
@@ -393,7 +399,7 @@ export function AdminPlans() {
                                   })
                                 }
                               >
-                                Duyệt
+                                {t("admin.approve")}
                               </Button>
                               <Button
                                 size="sm"
@@ -407,7 +413,7 @@ export function AdminPlans() {
                                   })
                                 }
                               >
-                                Hủy
+                                {t("admin.cancel")}
                               </Button>
                             </div>
                           )}
@@ -422,7 +428,11 @@ export function AdminPlans() {
               {ordersQuery.data.totalPages > 1 && (
                 <div className="flex items-center justify-between border-t border-border p-3 text-xs text-muted-foreground">
                   <div>
-                    Trang {ordersQuery.data.page} / {ordersQuery.data.totalPages} (Tổng cộng {ordersQuery.data.totalCount} đơn)
+                    {t("admin.ordersPage", {
+                      page: ordersQuery.data.page,
+                      totalPages: ordersQuery.data.totalPages,
+                      total: ordersQuery.data.totalCount,
+                    })}
                   </div>
                   <div className="flex gap-1">
                     <Button
@@ -431,7 +441,7 @@ export function AdminPlans() {
                       disabled={orderPage <= 1}
                       onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
                     >
-                      Trước
+                      {t("admin.prev")}
                     </Button>
                     <Button
                       size="sm"
@@ -439,7 +449,7 @@ export function AdminPlans() {
                       disabled={orderPage >= ordersQuery.data.totalPages}
                       onClick={() => setOrderPage((p) => p + 1)}
                     >
-                      Sau
+                      {t("admin.next")}
                     </Button>
                   </div>
                 </div>
@@ -463,10 +473,10 @@ export function AdminPlans() {
               }}
               className="rounded-md border border-input bg-background p-2 text-sm text-foreground"
             >
-              <option value="">Tất cả giao dịch webhook</option>
-              <option value="MATCHED">MATCHED - Đã khớp mã đơn</option>
-              <option value="ACTIVATED">ACTIVATED - Đã kích hoạt gói</option>
-              <option value="UNMATCHED">UNMATCHED - Chưa khớp</option>
+              <option value="">{t("admin.paymentStatus.all")}</option>
+              <option value="MATCHED">{t("admin.paymentStatus.MATCHED")}</option>
+              <option value="ACTIVATED">{t("admin.paymentStatus.ACTIVATED")}</option>
+              <option value="UNMATCHED">{t("admin.paymentStatus.UNMATCHED")}</option>
             </select>
           </div>
 
@@ -476,7 +486,7 @@ export function AdminPlans() {
             </div>
           ) : paymentsQuery.isError ? (
             <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-destructive">
-              Không thể tải danh sách giao dịch.
+              {t("admin.paymentsError")}
             </div>
           ) : (
             <div className="overflow-x-auto rounded-2xl border border-border bg-card">
@@ -484,19 +494,19 @@ export function AdminPlans() {
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                     <th className="py-3 px-4">SePay ID</th>
-                    <th className="py-3 px-4">Mã đơn</th>
-                    <th className="py-3 px-4">Số tiền</th>
-                    <th className="py-3 px-4">Tài khoản nhận</th>
-                    <th className="py-3 px-4">Nội dung SMS/Bank</th>
-                    <th className="py-3 px-4">Trạng thái</th>
-                    <th className="py-3 px-4">Thời gian</th>
+                    <th className="py-3 px-4">{t("admin.col.code")}</th>
+                    <th className="py-3 px-4">{t("admin.col.amount")}</th>
+                    <th className="py-3 px-4">{t("admin.col.receivingAccount")}</th>
+                    <th className="py-3 px-4">{t("admin.col.content")}</th>
+                    <th className="py-3 px-4">{t("admin.col.status")}</th>
+                    <th className="py-3 px-4">{t("admin.col.time")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paymentsQuery.data.items.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                        Chưa có giao dịch webhook nào được ghi nhận.
+                        {t("admin.noPayments")}
                       </td>
                     </tr>
                   ) : (
@@ -535,7 +545,11 @@ export function AdminPlans() {
               {paymentsQuery.data.totalPages > 1 && (
                 <div className="flex items-center justify-between border-t border-border p-3 text-xs text-muted-foreground">
                   <div>
-                    Trang {paymentsQuery.data.page} / {paymentsQuery.data.totalPages} (Tổng cộng {paymentsQuery.data.totalCount} giao dịch)
+                    {t("admin.paymentsPage", {
+                      page: paymentsQuery.data.page,
+                      totalPages: paymentsQuery.data.totalPages,
+                      total: paymentsQuery.data.totalCount,
+                    })}
                   </div>
                   <div className="flex gap-1">
                     <Button
@@ -544,7 +558,7 @@ export function AdminPlans() {
                       disabled={paymentPage <= 1}
                       onClick={() => setPaymentPage((p) => Math.max(1, p - 1))}
                     >
-                      Trước
+                      {t("admin.prev")}
                     </Button>
                     <Button
                       size="sm"
@@ -552,7 +566,7 @@ export function AdminPlans() {
                       disabled={paymentPage >= paymentsQuery.data.totalPages}
                       onClick={() => setPaymentPage((p) => p + 1)}
                     >
-                      Sau
+                      {t("admin.next")}
                     </Button>
                   </div>
                 </div>
@@ -567,10 +581,10 @@ export function AdminPlans() {
         <section className="max-w-xl rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-6">
           <div>
             <h2 className="font-serif text-xl font-normal text-foreground">
-              Cấp gói dịch vụ cho Đám cưới
+              {t("admin.grantTitle")}
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Dành cho trường hợp hỗ trợ khách hàng, tặng gói đối tác hoặc hoàn tiền.
+              {t("admin.grantSubtitle")}
             </p>
           </div>
 
@@ -592,7 +606,7 @@ export function AdminPlans() {
                 Wedding ID (UUID)
               </label>
               <Input
-                placeholder="Ví dụ: e3b0c442-98fc-1c14-9afbf4c8996fb924"
+                placeholder={t("admin.weddingIdPlaceholder")}
                 value={grantWeddingId}
                 onChange={(e) => setGrantWeddingId(e.target.value)}
                 className="mt-1.5 font-mono text-sm"
@@ -601,25 +615,25 @@ export function AdminPlans() {
 
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Gói dịch vụ cấp
+                {t("admin.grantPlan")}
               </label>
               <select
                 value={grantPlanCode}
                 onChange={(e) => setGrantPlanCode(e.target.value)}
                 className="mt-1.5 w-full rounded-md border border-input bg-background p-2.5 text-sm"
               >
-                <option value="FREE">FREE - Miễn phí</option>
-                <option value="BASIC">BASIC - Cơ bản (300 khách, Check-in, VietQR)</option>
-                <option value="PREMIUM">PREMIUM - Cao cấp (1,000 khách, VIP trọn gói)</option>
+                <option value="FREE">{t("admin.grantOption.FREE")}</option>
+                <option value="BASIC">{t("admin.grantOption.BASIC")}</option>
+                <option value="PREMIUM">{t("admin.grantOption.PREMIUM")}</option>
               </select>
             </div>
 
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Ghi chú nội bộ
+                {t("admin.internalNote")}
               </label>
               <Input
-                placeholder="Lý do cấp gói (tặng đối tác, hỗ trợ sự cố...)"
+                placeholder={t("admin.internalNotePlaceholder")}
                 value={grantNote}
                 onChange={(e) => setGrantNote(e.target.value)}
                 className="mt-1.5 text-sm"
@@ -632,7 +646,7 @@ export function AdminPlans() {
               className="w-full rounded-full py-5 font-semibold gap-2"
             >
               {grantMutation.isPending && <Loader2 className="size-4 animate-spin" />}
-              <span>Xác nhận cấp gói</span>
+              <span>{t("admin.confirmGrant")}</span>
             </Button>
           </div>
         </section>
@@ -643,11 +657,12 @@ export function AdminPlans() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="font-serif text-xl font-semibold">Chỉnh sửa gói {editingPlan.code}</h3>
+              <h3 className="font-serif text-xl font-semibold">{t("admin.editTitle", { code: editingPlan.code })}</h3>
               <button
                 type="button"
                 onClick={() => setEditingPlan(null)}
                 className="rounded-full p-1 text-muted-foreground hover:bg-muted"
+                aria-label={t("admin.close")}
               >
                 <X className="size-5" />
               </button>
@@ -674,33 +689,33 @@ export function AdminPlans() {
               className="space-y-4 text-sm"
             >
               <div>
-                <label className="font-medium text-xs text-muted-foreground uppercase">Tên hiển thị</label>
+                <label className="font-medium text-xs text-muted-foreground uppercase">{t("admin.displayName")}</label>
                 <Input name="name" defaultValue={editingPlan.name} required className="mt-1" />
               </div>
 
               <div>
-                <label className="font-medium text-xs text-muted-foreground uppercase">Giá tiền (VND)</label>
+                <label className="font-medium text-xs text-muted-foreground uppercase">{t("admin.price")}</label>
                 <Input name="price" type="number" defaultValue={editingPlan.price} required className="mt-1 font-semibold" />
               </div>
 
               <div>
-                <label className="font-medium text-xs text-muted-foreground uppercase">Trạng thái</label>
+                <label className="font-medium text-xs text-muted-foreground uppercase">{t("admin.status")}</label>
                 <select
                   name="status"
                   defaultValue={editingPlan.status}
                   className="mt-1 w-full rounded-md border border-input bg-background p-2 text-sm"
                 >
-                  <option value="ACTIVE">ACTIVE - Đang mở bán</option>
-                  <option value="INACTIVE">INACTIVE - Tạm ẩn</option>
+                  <option value="ACTIVE">{t("admin.planStatus.ACTIVE")}</option>
+                  <option value="INACTIVE">{t("admin.planStatus.INACTIVE")}</option>
                 </select>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-border">
                 <Button type="button" variant="outline" onClick={() => setEditingPlan(null)}>
-                  Hủy
+                  {t("admin.cancel")}
                 </Button>
                 <Button type="submit" disabled={updatePlanMutation.isPending}>
-                  {updatePlanMutation.isPending ? "Đang lưu..." : "Lưu thay đổi"}
+                  {updatePlanMutation.isPending ? t("admin.saving") : t("admin.save")}
                 </Button>
               </div>
             </form>

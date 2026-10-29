@@ -78,7 +78,7 @@ const weddingRouteLabels: Record<string, string> = {
   invitations: "Thiệp mời",
   rsvp: "RSVP",
   "rsvp/reminders": "Nhắc RSVP",
-  waitlist: "Danh sách chờ",
+  waitlist: "Yêu cầu RSVP",
   seating: "Sơ đồ bàn",
   "check-in": "Check-in",
   gifts: "Quà mừng & lời chúc",
@@ -97,6 +97,7 @@ function localizeNavigationLabel(label: string, t: (key: string) => string) {
     "Lễ cưới": t("weddings"),
     Weddings: t("weddings"),
     "Tất cả lễ cưới": t("allWeddings"),
+    "Wedding workspace": t("weddingWorkspace"),
     "Tổng quan": t("dashboard"),
     Dashboard: t("dashboard"),
     Overview: t("adminOverview"),
@@ -111,8 +112,9 @@ function localizeNavigationLabel(label: string, t: (key: string) => string) {
     "Website đám cưới": t("weddingWebsite"),
     "Khách mời": t("guests"),
     "Thiệp mời": t("invitations"),
+    RSVP: t("rsvp"),
     "Nhắc RSVP": t("rsvpReminders"),
-    "Danh sách chờ": t("waitlist"),
+    "Yêu cầu RSVP": t("waitlist"),
     "Sơ đồ bàn": t("seating"),
     "Check-in": t("checkIn"),
     "Quà mừng & lời chúc": t("gifts"),
@@ -121,6 +123,8 @@ function localizeNavigationLabel(label: string, t: (key: string) => string) {
     "Tổng quan check-in": t("checkInOverview"),
     "Nhật ký hoạt động": t("activityHistory"),
     "Cài đặt đám cưới": t("weddingSettings"),
+    "Co-host": t("coHosts"),
+    "Gói dịch vụ": t("plans"),
     "Cài đặt tài khoản": t("accountSettings"),
     "Không gian cưới": t("weddingSpace"),
     "Khách mời & RSVP": t("guestsAndRsvp"),
@@ -422,7 +426,10 @@ function DashboardShellFrame({
           className="min-h-0 flex-1 space-y-6 overflow-y-auto pb-3"
         >
           {navigation.map((group) => (
-            <section key={group.label} aria-label={group.label}>
+            <section
+              key={group.label}
+              aria-label={localizeNavigationLabel(group.label, t)}
+            >
               <h2
                 className={cn(
                   "mb-2 px-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground",
@@ -495,14 +502,17 @@ function DashboardShellFrame({
               {contextualNavigation ? (
                 <div className="space-y-5">
                   {contextualNavigation.groups.map((group) => (
-                    <section key={group.label} aria-label={group.label}>
+                    <section
+                      key={group.label}
+                      aria-label={localizeNavigationLabel(group.label, t)}
+                    >
                       <h3
                         className={cn(
                           "mb-2 px-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground",
                           collapsed && "md:sr-only",
                         )}
                       >
-                        {group.label}
+                        {localizeNavigationLabel(group.label, t)}
                       </h3>
                       <div className="space-y-1">
                         {group.items.map((item) => {

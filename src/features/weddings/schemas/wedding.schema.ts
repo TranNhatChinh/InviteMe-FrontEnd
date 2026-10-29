@@ -23,14 +23,15 @@ export type WeddingSlugMessages = {
   reserved: string;
 };
 
-const vietnameseSlugMessages: WeddingSlugMessages = {
-  min: "Đường dẫn cần có ít nhất 3 ký tự.",
-  max: "Đường dẫn không được dài quá 80 ký tự.",
-  pattern: "Chỉ dùng chữ thường không dấu, số và dấu gạch ngang đơn.",
-  reserved: "Đường dẫn này không thể sử dụng.",
+// Validation messages in this module are i18n keys; UI forms pass translated messages or translate at display.
+const defaultSlugMessages: WeddingSlugMessages = {
+  min: "weddings:validation.slugMin",
+  max: "weddings:validation.slugMax",
+  pattern: "weddings:validation.slugPattern",
+  reserved: "weddings:validation.slugReserved",
 };
 
-export function createWeddingSlugSchema(messages: WeddingSlugMessages = vietnameseSlugMessages) {
+export function createWeddingSlugSchema(messages: WeddingSlugMessages = defaultSlugMessages) {
   return z
     .string()
     .min(3, messages.min)
@@ -60,12 +61,24 @@ export const weddingSetupSchema = z.object({
 export type WeddingSetup = z.infer<typeof weddingSetupSchema>;
 
 const weddingInputShape = z.object({
-  name: z.string().trim().min(1, "Vui lòng nhập tên lễ cưới.").max(200),
+  name: z
+    .string()
+    .trim()
+    .min(1, "weddings:validation.nameRequired")
+    .max(200, "weddings:validation.nameMax"),
   slug: weddingSlugSchema,
   eventDateTime: z.iso.datetime({ offset: true }),
-  venueName: z.string().trim().min(1, "Vui lòng nhập tên địa điểm.").max(200),
-  venueAddress: z.string().trim().min(1, "Vui lòng nhập địa chỉ.").max(2000),
-  capacity: z.number().int().positive("Sức chứa phải lớn hơn 0."),
+  venueName: z
+    .string()
+    .trim()
+    .min(1, "weddings:validation.venueRequired")
+    .max(200, "weddings:validation.venueMax"),
+  venueAddress: z
+    .string()
+    .trim()
+    .min(1, "weddings:validation.addressRequired")
+    .max(2000, "weddings:validation.addressMax"),
+  capacity: z.number().int().positive("weddings:validation.capacityPositive"),
   rsvpDeadline: z.iso.datetime({ offset: true }),
 });
 
@@ -77,7 +90,7 @@ function deadlineMustNotFollowEvent<T extends { eventDateTime: string; rsvpDeadl
     ctx.addIssue({
       code: "custom",
       path: ["rsvpDeadline"],
-      message: "Hạn RSVP không được sau ngày tổ chức.",
+      message: "weddings:validation.deadlineAfterEvent",
     });
 }
 
@@ -149,7 +162,7 @@ function datePartsAt(date: Date, timeZone: string) {
 
 export function localDateTimeToIso(value: string, timeZone = WEDDING_TIME_ZONE) {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-  if (!match) throw new Error("Ngày giờ không hợp lệ.");
+  if (!match) throw new Error("weddings:validation.invalidDateTime");
   const [, year, month, day, hour, minute] = match;
   const target = Date.UTC(
     Number(year),
@@ -179,7 +192,7 @@ export function localDateTimeToIso(value: string, timeZone = WEDDING_TIME_ZONE) 
     Number(check.hour) !== Number(hour) ||
     Number(check.minute) !== Number(minute)
   )
-    throw new Error("Ngày giờ không tồn tại trong múi giờ lễ cưới.");
+    throw new Error("weddingEditor:validation.dateTimeNotInTimeZone");
   const offsetMinutes = Math.round(offsetAt(candidate) / 60_000);
   const sign = offsetMinutes >= 0 ? "+" : "-";
   const absoluteOffset = Math.abs(offsetMinutes);
