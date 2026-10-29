@@ -1,0 +1,31 @@
+{
+  "title": "Notifications",
+  "open": "Open notifications",
+  "unread": "{{count}} unread",
+  "markAllRead": "Mark all as read",
+  "empty": "No notifications yet.",
+  "loading": "Loading notifications…",
+  "loadFailed": "Couldn't load notifications.",
+  "aGuest": "A guest",
+  "noAmount": "amount not set",
+  "generic": "Something new happened in a wedding.",
+  "rsvpSubmitted": {
+    "ATTENDING": "{{name}} will attend · {{people}} people",
+    "MAYBE": "{{name}} is not sure yet · maybe {{people}} people",
+    "DECLINED": "{{name}} can't make it"
+  },
+  "rsvpUpdated": {
+    "ATTENDING": "{{name}} changed the answer: attending · {{people}} people",
+    "MAYBE": "{{name}} changed the answer: not sure · maybe {{people}} people",
+    "DECLINED": "{{name}} changed the answer: not attending"
+  },
+  "rsvpOverLimit": "{{name}} registered {{people}} people, over the invitation's {{max}}",
+  "rsvpChangeRequested": {
+    "ATTENDING": "{{name}} wants to change to attending · {{people}} people, waiting for your approval",
+    "MAYBE": "{{name}} wants to change to not sure, waiting for your approval",
+    "DECLINED": "{{name}} wants to change to not attending, waiting for your approval"
+  },
+  "giftClaimed": "{{giver}} says they sent {{amount}} by QR, waiting for your confirmation",
+  "giftDeskTransfer": "Gift desk: {{giver}} transferred {{amount}}, waiting for your confirmation",
+  "giftDeskEnvelope": "Gift desk: envelope from {{giver}}, enter the amount to confirm"
+}

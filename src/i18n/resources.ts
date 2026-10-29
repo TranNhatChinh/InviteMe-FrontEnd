@@ -45,6 +45,8 @@ import viWeddingEditor from "./locales/vi/weddingEditor.json";
 import enWeddingEditor from "./locales/en/weddingEditor.json";
 import viUi from "./locales/vi/ui.json";
 import enUi from "./locales/en/ui.json";
+import viNotifications from "./locales/vi/notifications.json";
+import enNotifications from "./locales/en/notifications.json";
 
 export const resources = {
   vi: {
@@ -71,6 +73,7 @@ export const resources = {
     plans: viPlans,
     weddingEditor: viWeddingEditor,
     ui: viUi,
+    notifications: viNotifications,
   },
   en: {
     common: enCommon,
@@ -96,6 +99,7 @@ export const resources = {
     plans: enPlans,
     weddingEditor: enWeddingEditor,
     ui: enUi,
+    notifications: enNotifications,
   },
 } satisfies Resource;
 
@@ -123,4 +127,5 @@ export const namespaces = [
   "plans",
   "weddingEditor",
   "ui",
+  "notifications",
 ] as const;
