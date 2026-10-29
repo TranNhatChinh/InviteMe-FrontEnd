@@ -52,6 +52,9 @@ export function WeddingRealtime({ weddingId }: { weddingId: string }) {
         if (change.type.startsWith("WeddingWebsite") || change.type.startsWith("Invitation"))
           invalidatePublication();
         if (change.type.startsWith("Rsvp")) invalidateRsvp();
+        // RSVP answers and gifts may have added a bell notification for this account (notifications feature key).
+        if (change.type.startsWith("Rsvp") || change.type.startsWith("Gift"))
+          void queryClient.invalidateQueries({ queryKey: ["notifications"] });
         if (
           change.type === "PlanningGuestCreated" ||
           change.type === "PlanningGuestArchived" ||

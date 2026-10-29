@@ -1,0 +1,31 @@
+{
+  "title": "Thông báo",
+  "open": "Mở thông báo",
+  "unread": "{{count}} chưa đọc",
+  "markAllRead": "Đánh dấu đã đọc hết",
+  "empty": "Chưa có thông báo nào.",
+  "loading": "Đang tải thông báo…",
+  "loadFailed": "Không tải được thông báo.",
+  "aGuest": "Một khách",
+  "noAmount": "chưa rõ số tiền",
+  "generic": "Có cập nhật mới trong đám cưới.",
+  "rsvpSubmitted": {
+    "ATTENDING": "{{name}} xác nhận tham dự · {{people}} người",
+    "MAYBE": "{{name}} còn phân vân · có thể {{people}} người",
+    "DECLINED": "{{name}} báo không tham dự"
+  },
+  "rsvpUpdated": {
+    "ATTENDING": "{{name}} đổi câu trả lời: tham dự · {{people}} người",
+    "MAYBE": "{{name}} đổi câu trả lời: phân vân · có thể {{people}} người",
+    "DECLINED": "{{name}} đổi câu trả lời: không tham dự"
+  },
+  "rsvpOverLimit": "{{name}} đăng ký {{people}} người, vượt ngưỡng {{max}} người của thiệp",
+  "rsvpChangeRequested": {
+    "ATTENDING": "{{name}} muốn đổi sang tham dự · {{people}} người, cần bạn duyệt",
+    "MAYBE": "{{name}} muốn đổi sang phân vân, cần bạn duyệt",
+    "DECLINED": "{{name}} muốn đổi sang không tham dự, cần bạn duyệt"
+  },
+  "giftClaimed": "{{giver}} báo đã chuyển {{amount}} qua mã QR, chờ bạn xác nhận",
+  "giftDeskTransfer": "Quầy ghi quà: {{giver}} chuyển khoản {{amount}}, chờ bạn xác nhận",
+  "giftDeskEnvelope": "Quầy ghi quà: phong bì của {{giver}}, chờ bạn nhập số tiền"
+}
