@@ -82,7 +82,7 @@ function RemoteCursor({
             place:
               anchorName === "queue"
                 ? t("remoteCursor.queue")
-                : anchorName === "board"
+                : anchorName === "board" || anchorName === "page"
                   ? t("remoteCursor.board")
                   : (plan.tables.find((table) => `table:${table.id}` === anchorName)?.name ??
                     t("remoteCursor.table")),

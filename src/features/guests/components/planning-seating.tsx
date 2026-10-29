@@ -664,7 +664,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           }
         }}
       >
-        <div ref={containerRef} className="space-y-6 pb-20">
+        {/* "page" catches the pointer between the hall, the tray and the header, so a remote cursor never freezes there. */}
+        <div ref={containerRef} data-seating-pointer-anchor="page" className="space-y-6 pb-20">
           {/* 1. TOP HEADER & METRICS */}
           <div className="seating-header-anim flex flex-col justify-between gap-4 border-b border-border pb-5 lg:flex-row lg:items-center">
             <div className="space-y-1">
