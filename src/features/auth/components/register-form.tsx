@@ -99,7 +99,7 @@ export function RegisterForm() {
                 value={String(field.value ?? "")}
                 autoComplete="name"
                 maxLength={150}
-                placeholder="Nguyễn An"
+                placeholder={t("ui:auth.namePlaceholder")}
               />
             )}
           </FormField>

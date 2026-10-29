@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -19,12 +20,13 @@ import { useWeddings } from "../hooks/use-weddings";
 import { Button } from "@/shared/ui/button";
 import { resolveWeddingMediaUrl } from "./wedding-cover-uploader";
 import { formatDate } from "@/i18n/format";
+import { useLocale } from "@/i18n/language-context";
 
 let currentNow = Date.now();
 function computeGreeting(hour: number) {
-  if (hour < 12) return "Chào buổi sáng";
-  if (hour < 18) return "Chào buổi chiều";
-  return "Chào buổi tối";
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
+  return "evening";
 }
 let currentGreeting = computeGreeting(new Date().getHours());
 
@@ -55,6 +57,8 @@ interface HostDashboardProps {
 }
 
 export function HostDashboard({ user }: HostDashboardProps) {
+  const { t } = useTranslation("weddingEditor");
+  const { language } = useLocale();
   const { data: weddingsData, isPending } = useWeddings(DASHBOARD_LIST_PARAMS);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +66,7 @@ export function HostDashboard({ user }: HostDashboardProps) {
   const primaryWedding = weddings[0] ?? null;
 
   // Time-aware greeting & live clock via useSyncExternalStore
-  const greeting = useSyncExternalStore(subscribeToClock, getGreetingSnapshot, () => "Xin chào");
+  const greeting = useSyncExternalStore(subscribeToClock, getGreetingSnapshot, () => "hello");
   const now = useSyncExternalStore(subscribeToClock, getNowSnapshot, () => null);
 
   // Countdown to primary wedding
@@ -99,13 +103,16 @@ export function HostDashboard({ user }: HostDashboardProps) {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
               <Sparkles className="size-3.5" />
-              <span>Không gian điều hành lễ cưới</span>
+              <span>{t("dashboard.eyebrow")}</span>
             </div>
             <h1 className="font-serif text-3xl font-normal tracking-tight text-foreground sm:text-4xl">
-              {greeting}, {user?.displayName || "Bạn"}
+              {t("dashboard.greetingLine", {
+                greeting: t(`dashboard.greeting.${greeting}`),
+                name: user?.displayName || t("dashboard.you"),
+              })}
             </h1>
             <p className="max-w-xl text-sm sm:text-base text-muted-foreground font-light leading-relaxed">
-              Chào mừng bạn trở lại với InviteMe. Dưới đây là tiến độ chuẩn bị và những việc cần lưu tâm cho ngày trọng đại.
+              {t("dashboard.welcome")}
             </p>
           </div>
 
@@ -113,14 +120,14 @@ export function HostDashboard({ user }: HostDashboardProps) {
             <Button asChild className="rounded-full px-6 py-5 font-medium shadow-md shadow-primary/20 gap-2">
               <Link href="/weddings/new">
                 <Plus className="size-4" />
-                <span>Tạo lễ cưới mới</span>
+                <span>{t("dashboard.createWedding")}</span>
               </Link>
             </Button>
             {primaryWedding && (
               <Button asChild variant="outline" className="rounded-full px-6 py-5 font-medium gap-2">
                 <Link href={`/weddings/${primaryWedding.id}/plan`}>
                   <Crown className="size-4 text-amber-500" />
-                  <span>Gói dịch vụ</span>
+                  <span>{t("dashboard.plan")}</span>
                 </Link>
               </Button>
             )}
@@ -149,13 +156,13 @@ export function HostDashboard({ user }: HostDashboardProps) {
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
                   <Heart className="size-3 fill-current" />
-                  <span>Lễ cưới đang diễn ra</span>
+                  <span>{t("dashboard.ongoing")}</span>
                 </span>
                 <Link
                   href={`/weddings/${primaryWedding.id}`}
                   className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                 >
-                  <span>Vào trung tâm quản trị</span>
+                  <span>{t("dashboard.openHub")}</span>
                   <ArrowRight className="size-3.5" />
                 </Link>
               </div>
@@ -166,8 +173,8 @@ export function HostDashboard({ user }: HostDashboardProps) {
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {primaryWedding.weddingDate
-                    ? formatDate(primaryWedding.weddingDate, "vi", { dateStyle: "full" })
-                    : "Chưa ấn định ngày cưới chính thức"}
+                    ? formatDate(primaryWedding.weddingDate, language, { dateStyle: "full" })
+                    : t("dashboard.dateNotSet")}
                 </p>
               </div>
             </div>
@@ -175,23 +182,23 @@ export function HostDashboard({ user }: HostDashboardProps) {
             {/* Metrics footer */}
             <div className="relative z-10 mt-8 grid grid-cols-2 sm:grid-cols-3 gap-4 border-t border-border/60 pt-6">
               <div>
-                <div className="text-xs text-muted-foreground">Khách mời xác nhận</div>
+                <div className="text-xs text-muted-foreground">{t("dashboard.confirmedGuests")}</div>
                 <div className="mt-1 font-serif text-2xl font-bold text-foreground">
                   {primaryWedding.participantCount} / {primaryWedding.maxCapacity || "∞"}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Trạng thái website</div>
+                <div className="text-xs text-muted-foreground">{t("dashboard.websiteStatus")}</div>
                 <div className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                   <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Sẵn sàng</span>
+                  <span>{t("dashboard.ready")}</span>
                 </div>
               </div>
               <div className="col-span-2 sm:col-span-1 flex items-center justify-end">
                 <Button asChild variant="outline" className="rounded-full text-xs gap-1.5">
                   <Link href={`/weddings/${primaryWedding.id}/invitations`}>
                     <Send className="size-3.5" />
-                    <span>Gửi thiệp</span>
+                    <span>{t("dashboard.sendInvitations")}</span>
                   </Link>
                 </Button>
               </div>
@@ -203,37 +210,37 @@ export function HostDashboard({ user }: HostDashboardProps) {
             <div className="space-y-2">
               <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
                 <Clock className="size-4" />
-                <span>Đếm ngược ngày cưới</span>
+                <span>{t("dashboard.countdown")}</span>
               </div>
-              <h3 className="font-serif text-lg font-medium text-foreground">Thời khắc thiêng liêng</h3>
+              <h3 className="font-serif text-lg font-medium text-foreground">{t("dashboard.countdownTitle")}</h3>
             </div>
 
             <div className="my-6">
               {countdown ? (
                 countdown.isPast ? (
                   <div className="rounded-2xl bg-muted/60 p-4 text-center">
-                    <p className="font-serif text-lg font-medium text-foreground">Ngày vui đã diễn ra trọn vẹn!</p>
-                    <p className="text-xs text-muted-foreground mt-1">Hãy tiếp tục gửi lời cảm ơn và lưu giữ khoảnh khắc.</p>
+                    <p className="font-serif text-lg font-medium text-foreground">{t("dashboard.pastTitle")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t("dashboard.pastDescription")}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3 text-center">
                     <div className="rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
                       <div className="font-serif text-4xl font-bold text-primary">{countdown.days}</div>
                       <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wider font-semibold">
-                        Ngày nữa
+                        {t("dashboard.daysLeft")}
                       </div>
                     </div>
                     <div className="rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
                       <div className="font-serif text-4xl font-bold text-foreground">{countdown.hours}</div>
                       <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wider font-semibold">
-                        Giờ
+                        {t("dashboard.hours")}
                       </div>
                     </div>
                   </div>
                 )
               ) : (
                 <div className="rounded-2xl bg-muted/40 p-4 text-center text-xs text-muted-foreground">
-                  Hãy cài đặt ngày cưới trong mục Cài đặt để kích hoạt bộ đếm ngược.
+                  {t("dashboard.noDateHint")}
                 </div>
               )}
             </div>
@@ -241,7 +248,7 @@ export function HostDashboard({ user }: HostDashboardProps) {
             <Button asChild variant="outline" className="w-full rounded-full text-xs">
               <Link href={`/weddings/${primaryWedding.id}/guests`}>
                 <Users className="size-3.5 mr-1.5" />
-                <span>Xem danh sách khách</span>
+                <span>{t("dashboard.viewGuests")}</span>
               </Link>
             </Button>
           </div>
@@ -252,14 +259,14 @@ export function HostDashboard({ user }: HostDashboardProps) {
           <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Heart className="size-8" />
           </div>
-          <h2 className="mt-4 font-serif text-2xl font-normal text-foreground">Bạn chưa có lễ cưới nào</h2>
+          <h2 className="mt-4 font-serif text-2xl font-normal text-foreground">{t("dashboard.emptyTitle")}</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            Bắt đầu tạo không gian số đầu tiên cho ngày hạnh phúc của hai bạn với thiệp cưới điện tử, sơ đồ bàn tiệc và mã mừng VietQR.
+            {t("dashboard.emptyDescription")}
           </p>
           <Button asChild className="mt-6 rounded-full px-8 py-5">
             <Link href="/weddings/new">
               <Plus className="size-4 mr-2" />
-              <span>Khởi tạo lễ cưới ngay</span>
+              <span>{t("dashboard.createNow")}</span>
             </Link>
           </Button>
         </section>
@@ -271,14 +278,14 @@ export function HostDashboard({ user }: HostDashboardProps) {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-6">
             <div>
               <h2 className="font-serif text-xl sm:text-2xl font-semibold text-foreground">
-                Lộ trình chuẩn bị hôn lễ
+                {t("dashboard.roadmapTitle")}
               </h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Các hạng mục thiết yếu cần hoàn tất trước ngày cử hành hôn lễ.
+                {t("dashboard.roadmapDescription")}
               </p>
             </div>
             <span className="text-xs font-semibold uppercase tracking-wider text-primary">
-              Bước quan trọng
+              {t("dashboard.keySteps")}
             </span>
           </div>
 
@@ -292,13 +299,13 @@ export function HostDashboard({ user }: HostDashboardProps) {
                 <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                   <Heart className="size-5" />
                 </div>
-                <h3 className="font-serif text-base font-semibold text-foreground">1. Thiết kế Website cưới</h3>
+                <h3 className="font-serif text-base font-semibold text-foreground">{t("dashboard.steps.website.title")}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Tùy chỉnh thông điệp, câu chuyện tình yêu, album ảnh và địa điểm tổ chức.
+                  {t("dashboard.steps.website.description")}
                 </p>
               </div>
               <div className="mt-4 flex items-center text-xs font-medium text-primary">
-                <span>Thiết lập</span>
+                <span>{t("dashboard.steps.website.action")}</span>
                 <ArrowRight className="size-3 ml-1 transition-transform group-hover:translate-x-1" />
               </div>
             </Link>
@@ -312,13 +319,13 @@ export function HostDashboard({ user }: HostDashboardProps) {
                 <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                   <Users className="size-5" />
                 </div>
-                <h3 className="font-serif text-base font-semibold text-foreground">2. Danh sách khách mời</h3>
+                <h3 className="font-serif text-base font-semibold text-foreground">{t("dashboard.steps.guests.title")}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Nhập danh sách từ Excel, phân nhóm nhà trai/nhà gái và tạo mã thiệp riêng.
+                  {t("dashboard.steps.guests.description")}
                 </p>
               </div>
               <div className="mt-4 flex items-center text-xs font-medium text-primary">
-                <span>Quản lý</span>
+                <span>{t("dashboard.steps.guests.action")}</span>
                 <ArrowRight className="size-3 ml-1 transition-transform group-hover:translate-x-1" />
               </div>
             </Link>
@@ -332,13 +339,13 @@ export function HostDashboard({ user }: HostDashboardProps) {
                 <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                   <UtensilsCrossed className="size-5" />
                 </div>
-                <h3 className="font-serif text-base font-semibold text-foreground">3. Sơ đồ bàn tiệc</h3>
+                <h3 className="font-serif text-base font-semibold text-foreground">{t("dashboard.steps.seating.title")}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Xếp chỗ ngồi thông minh cho từng bàn, tránh xung đột nhóm và tối ưu chỗ trống.
+                  {t("dashboard.steps.seating.description")}
                 </p>
               </div>
               <div className="mt-4 flex items-center text-xs font-medium text-primary">
-                <span>Xếp bàn</span>
+                <span>{t("dashboard.steps.seating.action")}</span>
                 <ArrowRight className="size-3 ml-1 transition-transform group-hover:translate-x-1" />
               </div>
             </Link>
@@ -352,13 +359,13 @@ export function HostDashboard({ user }: HostDashboardProps) {
                 <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                   <Send className="size-5" />
                 </div>
-                <h3 className="font-serif text-base font-semibold text-foreground">4. Gửi thiệp &amp; RSVP</h3>
+                <h3 className="font-serif text-base font-semibold text-foreground">{t("dashboard.steps.invitations.title")}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Gửi thiệp tự động qua Email/SMS và theo dõi phản hồi tham dự thời gian thực.
+                  {t("dashboard.steps.invitations.description")}
                 </p>
               </div>
               <div className="mt-4 flex items-center text-xs font-medium text-primary">
-                <span>Gửi ngay</span>
+                <span>{t("dashboard.steps.invitations.action")}</span>
                 <ArrowRight className="size-3 ml-1 transition-transform group-hover:translate-x-1" />
               </div>
             </Link>
@@ -371,10 +378,10 @@ export function HostDashboard({ user }: HostDashboardProps) {
         <section className="dash-fade-in space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-serif text-xl font-semibold text-foreground">
-              Các lễ cưới khác của bạn ({weddings.length})
+              {t("dashboard.otherWeddings", { count: weddings.length })}
             </h2>
             <Button asChild variant="outline" size="sm" className="rounded-full text-xs">
-              <Link href="/weddings">Xem tất cả</Link>
+              <Link href="/weddings">{t("dashboard.viewAll")}</Link>
             </Button>
           </div>
 
@@ -390,14 +397,14 @@ export function HostDashboard({ user }: HostDashboardProps) {
                     {w.title}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {w.weddingDate ? formatDate(w.weddingDate, "vi", { dateStyle: "medium" }) : "Chưa chọn ngày"}
+                    {w.weddingDate ? formatDate(w.weddingDate, language, { dateStyle: "medium" }) : t("dashboard.noDate")}
                   </p>
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3 text-xs text-muted-foreground">
-                  <span>{w.participantCount} khách mời</span>
+                  <span>{t("dashboard.guestCount", { count: w.participantCount })}</span>
                   <span className="inline-flex items-center gap-1 text-primary">
-                    Chi tiết <ArrowRight className="size-3" />
+                    {t("dashboard.details")} <ArrowRight className="size-3" />
                   </span>
                 </div>
               </Link>

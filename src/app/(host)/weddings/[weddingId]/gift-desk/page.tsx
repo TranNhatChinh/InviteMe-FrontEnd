@@ -1,17 +1,21 @@
+"use client";
+
 import { use } from "react";
+import { useTranslation } from "react-i18next";
 import { PermissionGuard } from "@/shared/components/permission-guard";
 import { EmptyState } from "@/shared/feedback/empty-state";
 import { GiftDesk } from "@/features/gifts";
 
 export default function GiftDeskPage({ params }: { params: Promise<{ weddingId: string }> }) {
   const { weddingId } = use(params);
+  const { t } = useTranslation("weddingEditor");
   return (
     <PermissionGuard
       permission="GIFT_RECORD"
       fallback={
         <EmptyState
-          title="Chưa có quyền ghi nhận quà"
-          description="Chủ tiệc cần cấp quyền ghi nhận quà tại quầy cho tài khoản của bạn."
+          title={t("pages.giftDesk.noAccessTitle")}
+          description={t("pages.giftDesk.noAccessDescription")}
         />
       }
     >

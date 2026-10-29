@@ -34,7 +34,11 @@ import {
   type WeddingSetup,
 } from "../schemas/wedding.schema";
 import { WeddingSlugField } from "./wedding-slug-field";
-import { validateWeddingCover, WeddingCoverUploader } from "./wedding-cover-uploader";
+import {
+  validateWeddingCover,
+  weddingCoverMessages,
+  WeddingCoverUploader,
+} from "./wedding-cover-uploader";
 
 function createFormSchema(t: (key: string) => string) {
   const slugSchema = createWeddingSlugSchema({
@@ -264,7 +268,9 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
   async function submit(values: FormValues) {
     setServerError("");
     setConflict(false);
-    const coverValidation = pendingCover ? validateWeddingCover(pendingCover) : undefined;
+    const coverValidation = pendingCover
+      ? validateWeddingCover(pendingCover, weddingCoverMessages(t))
+      : undefined;
     if (coverValidation) {
       setServerError(coverValidation);
       return;
@@ -343,7 +349,7 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
 
   async function retryCreatedCover() {
     if (!created || !pendingCover || mutationBusy) return;
-    const validation = validateWeddingCover(pendingCover);
+    const validation = validateWeddingCover(pendingCover, weddingCoverMessages(t));
     if (validation) {
       setServerError(validation);
       return;
@@ -445,7 +451,10 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
                 type="button"
                 className="mt-4 min-h-11 w-full rounded-xl sm:w-auto"
                 onClick={() => void retryCreatedCover()}
-                disabled={mutationBusy || Boolean(validateWeddingCover(pendingCover))}
+                disabled={
+                  mutationBusy ||
+                  Boolean(validateWeddingCover(pendingCover, weddingCoverMessages(t)))
+                }
               >
                 {mutationBusy ? t("uploadingCover") : t("retryCoverUpload")}
               </Button>

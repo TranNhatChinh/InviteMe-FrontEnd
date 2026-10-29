@@ -1,23 +1,23 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
 
-const decisionSchema = z.enum(["ATTENDING", "DECLINED"]);
-const attendanceStatusSchema = z.enum(["PENDING", "ATTENDING", "DECLINED", "WAITLISTED"]);
+// Same limits as the backend SubmitRsvpValidator.
+export const RSVP_MAX_PARTY_SIZE = 50;
+export const RSVP_NOTE_MAX = 500;
+export const RSVP_DIETARY_NOTE_MAX = 200;
+
+const decisionSchema = z.enum(["ATTENDING", "MAYBE", "DECLINED"]);
 const placeStatusSchema = z.enum(["PENDING", "USED", "UNUSED"]);
 const requestStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"]);
 
-export const dietaryNoteInputSchema = z.object({
-  participantId: z.string(),
-  note: z.string().nullable(),
-});
-
+// partySize counts the recipient; it is required for ATTENDING / MAYBE and left out for DECLINED.
+// The backend refuses unknown fields, so only these keys are ever sent.
 const submitRsvpSchema = z.object({
   expectedVersion: z.number().int().nonnegative(),
   decision: decisionSchema,
-  participantIds: z.array(z.string()),
-  plusOnes: z.array(z.string()).nullable().optional(),
-  note: z.string().nullable().optional(),
-  dietaryNotes: z.array(dietaryNoteInputSchema).nullable().optional(),
+  partySize: z.number().int().min(1).max(RSVP_MAX_PARTY_SIZE).nullable().optional(),
+  note: z.string().max(RSVP_NOTE_MAX).nullable().optional(),
+  dietaryNote: z.string().max(RSVP_DIETARY_NOTE_MAX).nullable().optional(),
   source: z.string().nullable().optional(),
 });
 
@@ -40,13 +40,14 @@ export const rsvpSchema = z.object({
   recipientName: z.string(),
   version: z.number().int().nonnegative(),
   rsvpId: z.string().nullable(),
-  status: z.enum(["PENDING", "ATTENDING", "DECLINED"]),
-  confirmedPartySize: z.number().int().nonnegative(),
-  waitlistedPartySize: z.number().int().nonnegative(),
-  capacityOutcome: z.enum(["NONE", "CONFIRMED", "PARTIALLY_WAITLISTED", "WAITLISTED"]),
+  status: z.enum(["PENDING", "ATTENDING", "MAYBE", "DECLINED"]),
+  partySize: z.number().int().nonnegative(),
+  maxPeople: z.number().int().nonnegative(),
+  overLimit: z.boolean(),
+  thankYouMessage: z.string().nullable(),
   message: z.string().nullable(),
   note: z.string().nullable(),
-  allowedPeople: z.number().int().nonnegative(),
+  dietaryNote: z.string().nullable(),
   places: z.array(
     z.object({
       id: z.string(),
@@ -60,8 +61,7 @@ export const rsvpSchema = z.object({
       id: z.string(),
       fullName: z.string(),
       role: z.string(),
-      attendanceStatus: attendanceStatusSchema,
-      dietaryNote: z.string().nullable(),
+      attendanceStatus: z.string(),
     }),
   ),
   locked: z.boolean(),
@@ -73,6 +73,7 @@ export const rsvpSchema = z.object({
 
 export type GuestRsvpInput = z.infer<typeof guestRsvpInputSchema>;
 export type Rsvp = z.infer<typeof rsvpSchema>;
+export type RsvpDecision = z.infer<typeof decisionSchema>;
 export type RsvpRequest = z.infer<typeof rsvpRequestSchema>;
 export type RsvpWriteResponse = { rsvp: Rsvp; status: number; queued: boolean };
 

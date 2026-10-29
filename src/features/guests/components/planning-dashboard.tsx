@@ -453,7 +453,9 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
                           )}
                         </td>
                         <td className="p-3">{g.expectedPeople}</td>
-                        <td className="p-3">{sideLabels[g.side]}</td>
+                        <td className="p-3">
+                          {t(`sideValues.${g.side}`, { defaultValue: g.side })}
+                        </td>
                         <td className="p-3">{g.group?.name ?? t("notGrouped")}</td>
                         {can("INVITATION_SEND") && (
                           <td className="p-3">

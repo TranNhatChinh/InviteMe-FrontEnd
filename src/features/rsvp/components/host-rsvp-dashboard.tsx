@@ -13,6 +13,7 @@ import { Button } from "@/shared/ui/button";
 import { ErrorState } from "@/shared/feedback/error-state";
 import { LoadingState } from "@/shared/feedback/loading-state";
 import {
+  acknowledgeRsvpOverLimit,
   exportRsvpGuests,
   getHostRsvp,
   getRsvpDashboard,
@@ -26,21 +27,22 @@ import {
   type RsvpListStatus,
   type RsvpSettings,
 } from "../api/host-rsvp.api";
+import { RSVP_MAX_PARTY_SIZE, type RsvpDecision } from "../api/rsvp.api";
 
 const statusOptions: (RsvpListStatus | "")[] = [
   "",
   "NOT_RESPONDED",
   "ATTENDING",
+  "MAYBE",
   "DECLINED",
-  "WAITING",
-  "PENDING_REQUEST",
+  "NEEDS_ACTION",
 ];
 const fieldClass = "h-10 w-full rounded-lg border bg-background px-3 text-sm";
 
 function message(error: unknown, t: (key: string) => string) {
   if (error instanceof ApiError) {
     if (error.backendCode === "CONCURRENCY_CONFLICT") return t("hostRsvp.errors.conflict");
-    if (error.backendCode === "INSUFFICIENT_SLOTS") return t("hostRsvp.errors.insufficientSlots");
+    if (error.backendCode === "RSVP_NOT_ATTENDING") return t("hostRsvp.errors.notAttending");
     if (error.status === 403) return t("hostRsvp.errors.forbidden");
     return t("hostRsvp.errors.generic");
   }
@@ -128,19 +130,16 @@ export function HostRsvpDashboard({ weddingId }: { weddingId: string }) {
           {[
             [
               t("hostRsvp.respondedInvitations"),
-              `${formatNumber(stats.invitations.responded, language)}/${formatNumber(stats.invitations.invited, language)}`,
+              `${formatNumber(stats.invitations.invited - stats.invitations.notResponded, language)}/${formatNumber(stats.invitations.invited, language)}`,
             ],
-            [t("hostRsvp.confirmedGuests"), formatNumber(stats.people.confirmed, language)],
+            [t("hostRsvp.expectedGuests"), formatNumber(stats.people.expected, language)],
             [
               t("hostRsvp.capacityRemaining"),
               stats.capacity.remaining === null
                 ? t("hostRsvp.unlimited")
                 : formatNumber(stats.capacity.remaining, language),
             ],
-            [
-              t("hostRsvp.waitingRequests"),
-              formatNumber(stats.pendingRequests + stats.people.waitlisted, language),
-            ],
+            [t("hostRsvp.needsAction"), formatNumber(stats.needsAction.invitations, language)],
           ].map(([label, value]) => (
             <div key={label} className="rounded-xl border bg-card p-5">
               <p className="text-sm text-muted-foreground">{label}</p>
@@ -150,10 +149,21 @@ export function HostRsvpDashboard({ weddingId }: { weddingId: string }) {
           <p className="col-span-full text-sm text-muted-foreground">
             {t("hostRsvp.summaryFootnote", {
               notResponded: formatNumber(stats.invitations.notResponded, language),
+              maybe: formatNumber(stats.invitations.maybe, language),
+              maybePeople: formatNumber(stats.people.maybe, language),
               declined: formatNumber(stats.invitations.declined, language),
               locked: formatNumber(stats.lockedGuests, language),
             })}
           </p>
+          {(stats.capacity.overCapacity || stats.capacity.maybeMayExceed) && (
+            <p className="col-span-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              {stats.capacity.overCapacity
+                ? t("hostRsvp.overCapacity", {
+                    count: formatNumber(stats.capacity.overBy, language),
+                  })
+                : t("hostRsvp.maybeMayExceed")}
+            </p>
+          )}
         </div>
       )}
       {settings.data && (
@@ -223,7 +233,7 @@ export function HostRsvpDashboard({ weddingId }: { weddingId: string }) {
                     <th className="p-3">{t("hostRsvp.columns.recipient")}</th>
                     <th className="p-3">{t("hostRsvp.columns.status")}</th>
                     <th className="p-3">{t("hostRsvp.columns.attending")}</th>
-                    <th className="p-3">{t("hostRsvp.columns.waiting")}</th>
+                    <th className="p-3">{t("hostRsvp.columns.maybe")}</th>
                     <th className="p-3">{t("hostRsvp.columns.actions")}</th>
                   </tr>
                 </thead>
@@ -240,6 +250,11 @@ export function HostRsvpDashboard({ weddingId }: { weddingId: string }) {
                         {t(`hostRsvp.status.${guest.rsvpStatus}`, {
                           defaultValue: guest.rsvpStatus,
                         })}
+                        {guest.overLimit && (
+                          <small className="block text-amber-800">
+                            {t("hostRsvp.overLimitBadge")}
+                          </small>
+                        )}
                         {guest.pendingRequest && (
                           <small className="block text-amber-800">
                             {t("hostRsvp.pendingChange")}
@@ -247,9 +262,9 @@ export function HostRsvpDashboard({ weddingId }: { weddingId: string }) {
                         )}
                       </td>
                       <td className="p-3">
-                        {guest.confirmedPeople} / {guest.invitedPlaces}
+                        {guest.people} / {guest.maxPeople}
                       </td>
-                      <td className="p-3">{guest.waitlistedPeople}</td>
+                      <td className="p-3">{guest.maybePeople || "—"}</td>
                       <td className="p-3">
                         <Button size="sm" variant="outline" onClick={() => setSelected(guest)}>
                           {t("hostRsvp.viewRsvp")}
@@ -418,6 +433,20 @@ function HostRsvpDetail({
       setSaving(false);
     }
   }
+  async function acknowledge() {
+    setError("");
+    setNotice("");
+    setSaving(true);
+    try {
+      await acknowledgeRsvpOverLimit(api, weddingId, guest.guestId);
+      setNotice(t("hostRsvp.acknowledged"));
+      await cache.invalidateQueries({ queryKey: hostRsvpKeys.all(weddingId) });
+    } catch (cause) {
+      setError(message(cause, t));
+    } finally {
+      setSaving(false);
+    }
+  }
   return (
     <section
       className="space-y-4 rounded-xl border bg-card p-5"
@@ -435,9 +464,10 @@ function HostRsvpDetail({
         <>
           <p className="text-sm">
             {t("hostRsvp.detailSummary", {
-              confirmed: detail.data.confirmedPartySize,
-              waiting: detail.data.waitlistedPartySize,
+              status: t(`rsvp.status.${detail.data.status}`),
+              people: detail.data.partySize,
               places: detail.data.places.length,
+              max: detail.data.maxPeople,
             })}
             {detail.data.locked ? ` · ${t("hostRsvp.locked")}` : ""}
           </p>
@@ -453,6 +483,26 @@ function HostRsvpDetail({
           </ul>
           {detail.data.pendingRequest && (
             <p className="rounded-lg bg-amber-50 p-3 text-sm">{t("hostRsvp.guestPendingChange")}</p>
+          )}
+          {detail.data.overLimit && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+              <span className="flex-1">
+                {t("hostRsvp.overLimitDetail", {
+                  people: detail.data.partySize,
+                  max: detail.data.maxPeople,
+                })}
+              </span>
+              {editable && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void acknowledge()}
+                >
+                  {t("hostRsvp.acknowledge")}
+                </Button>
+              )}
+            </div>
           )}
           {editable && (
             <>
@@ -532,35 +582,28 @@ function HostAnswerForm({
 }) {
   const { t } = useTranslation("guests");
   const { api } = useRuntime();
-  const [selected, setSelected] = useState(
-    () =>
-      new Set(
-        rsvp.participants
-          .filter(
-            (person) =>
-              person.attendanceStatus === "ATTENDING" || person.attendanceStatus === "WAITLISTED",
-          )
-          .map((person) => person.id),
-      ),
+  const [decision, setDecision] = useState<RsvpDecision>(
+    rsvp.status === "PENDING" ? "ATTENDING" : rsvp.status,
   );
-  const [newNames, setNewNames] = useState("");
+  const [people, setPeople] = useState(String(rsvp.partySize || Math.max(1, rsvp.places.length)));
   const [note, setNote] = useState(rsvp.note ?? "");
   const [source, setSource] = useState<"PHONE" | "CHAT" | "IN_PERSON" | "OTHER">("PHONE");
   const [saving, setSaving] = useState(false);
+  const comes = decision !== "DECLINED";
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     failed("");
+    const count = Number(people);
+    if (comes && !(Number.isInteger(count) && count >= 1 && count <= RSVP_MAX_PARTY_SIZE)) {
+      failed(t("rsvp.errors.partySize", { max: RSVP_MAX_PARTY_SIZE }));
+      return;
+    }
     setSaving(true);
-    const plusOnes = newNames
-      .split("\n")
-      .map((name) => name.trim())
-      .filter(Boolean);
     try {
       await saveHostRsvp(api, weddingId, guestId, {
         expectedVersion: rsvp.version,
-        decision: selected.size + plusOnes.length ? "ATTENDING" : "DECLINED",
-        participantIds: [...selected],
-        plusOnes,
+        decision,
+        partySize: comes ? count : null,
         note: note.trim(),
         source,
       });
@@ -578,34 +621,33 @@ function HostAnswerForm({
   return (
     <form className="space-y-3 border-t pt-4" onSubmit={(event) => void submit(event)}>
       <h3 className="font-medium">{t("hostRsvp.enterForGuest")}</h3>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {rsvp.participants.map((person) => (
-          <label key={person.id} className="flex items-center gap-2 text-sm">
+      <fieldset className="flex flex-wrap gap-4 text-sm">
+        <legend className="sr-only">{t("rsvp.decisionLabel")}</legend>
+        {(["ATTENDING", "MAYBE", "DECLINED"] as const).map((value) => (
+          <label key={value} className="flex items-center gap-2">
             <input
-              type="checkbox"
-              checked={selected.has(person.id)}
-              onChange={(event) =>
-                setSelected((current) => {
-                  const next = new Set(current);
-                  if (event.target.checked) next.add(person.id);
-                  else next.delete(person.id);
-                  return next;
-                })
-              }
+              type="radio"
+              name="host-decision"
+              checked={decision === value}
+              onChange={() => setDecision(value)}
             />
-            {person.fullName}
+            {t(`rsvp.status.${value}`)}
           </label>
         ))}
-      </div>
-      <label className="block text-sm">
-        {t("hostRsvp.newGuestNames")}
-        <textarea
-          className="mt-1 w-full rounded-lg border bg-background p-3"
-          value={newNames}
-          onChange={(event) => setNewNames(event.target.value)}
-          rows={2}
-        />
-      </label>
+      </fieldset>
+      {comes && (
+        <label className="block text-sm">
+          {t(decision === "MAYBE" ? "rsvp.maybePeopleLabel" : "rsvp.peopleLabel")}
+          <input
+            type="number"
+            min={1}
+            max={RSVP_MAX_PARTY_SIZE}
+            className={`${fieldClass} mt-1 max-w-32`}
+            value={people}
+            onChange={(event) => setPeople(event.target.value)}
+          />
+        </label>
+      )}
       <label className="block text-sm">
         {t("hostRsvp.note")}
         <textarea

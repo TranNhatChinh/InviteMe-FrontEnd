@@ -37,21 +37,23 @@ export const wordingPresetsSchema = z
   .min(1)
   .max(30)
   .superRefine((presets, ctx) => {
-    const error = (message: string) => ctx.addIssue({ code: "custom", message });
-    if (presets.filter((p) => p.isDefault).length !== 1) error("Cần đúng một preset mặc định.");
+    // Messages are i18n keys of the "guestTools" namespace; the component translates them with `params`.
+    const error = (message: string, params?: Record<string, string>) =>
+      ctx.addIssue({ code: "custom", message, params });
+    if (presets.filter((p) => p.isDefault).length !== 1) error("wording.validation.oneDefault");
     const ids = new Set<string>(),
       names = new Set<string>(),
       honorifics = new Set<string>();
     for (const preset of presets) {
-      if (ids.has(preset.id)) error("ID preset bị trùng.");
-      if (names.has(honorificKey(preset.name))) error("Tên preset không được trùng.");
+      if (ids.has(preset.id)) error("wording.validation.duplicateId");
+      if (names.has(honorificKey(preset.name))) error("wording.validation.duplicateName");
       ids.add(preset.id);
       names.add(honorificKey(preset.name));
       if (preset.content.includes("{{senderPronoun}}") && !preset.senderPronoun.trim())
-        error(`Preset “${preset.name}” cần cách tự xưng.`);
+        error("wording.validation.senderRequired", { name: preset.name });
       for (const h of preset.honorifics) {
         const key = honorificKey(h);
-        if (honorifics.has(key)) error(`Danh xưng “${h}” chỉ được gán một lần trong wedding.`);
+        if (honorifics.has(key)) error("wording.validation.honorificTwice", { honorific: h });
         honorifics.add(key);
       }
     }

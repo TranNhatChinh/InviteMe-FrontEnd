@@ -1,0 +1,116 @@
+{
+  "meta": {
+    "root": {
+      "description": "Tạo website cưới và lời mời trực tuyến thật riêng cho ngày vui của hai bạn."
+    },
+    "account": {
+      "title": "Tài khoản"
+    },
+    "dashboard": {
+      "title": "Tổng quan kế hoạch — InviteMe",
+      "description": "Không gian chuẩn bị và quản lý các đám cưới của bạn trên InviteMe."
+    },
+    "login": {
+      "title": "Đăng nhập",
+      "description": "Đăng nhập vào tài khoản InviteMe để chuẩn bị ngày cưới của bạn."
+    },
+    "register": {
+      "title": "Đăng ký"
+    },
+    "forgotPassword": {
+      "title": "Quên mật khẩu"
+    },
+    "resetPassword": {
+      "title": "Đặt lại mật khẩu"
+    },
+    "confirmEmail": {
+      "title": "Xác nhận email"
+    },
+    "adminLogin": {
+      "title": "Đăng nhập Admin",
+      "description": "Đăng nhập vào cổng quản trị InviteMe."
+    },
+    "coHostAccept": {
+      "title": "Nhận lời mời co-host",
+      "description": "Xem quyền được cấp và xác nhận tham gia quản lý đám cưới."
+    }
+  },
+  "layout": {
+    "skipToContent": "Bỏ qua đến nội dung chính"
+  },
+  "auth": {
+    "openingConfirmLink": "Đang mở link xác nhận…",
+    "homeAria": "InviteMe — Trang chủ",
+    "namePlaceholder": "Nguyễn An"
+  },
+  "logout": {
+    "serverFailed": "Không thể đăng xuất từ máy chủ. Thử lại hoặc chọn đăng xuất cục bộ."
+  },
+  "adminGuard": {
+    "title": "Khu vực dành cho quản trị viên",
+    "description": "Tài khoản hiện tại không có quyền truy cập cổng Admin InviteMe.",
+    "sessionFailed": "Không tải được phiên Admin",
+    "sessionFailedHelp": "Kiểm tra kết nối rồi thử tải lại thông tin tài khoản."
+  },
+  "invitationStudio": {
+    "saved": "Đã lưu bản thiết kế. Nhấn Xuất bản để cập nhật mẫu công khai.",
+    "published": "Đã xuất bản mẫu thiệp.",
+    "publishFailed": "Không thể xuất bản. Hãy kiểm tra thiết kế và lưu bản nháp trước.",
+    "back": "Danh sách mẫu thiệp",
+    "help": "Chỉnh thiết kế, lưu bản nháp rồi xuất bản.",
+    "publishing": "Đang xuất bản…",
+    "publish": "Xuất bản"
+  },
+  "studio": {
+    "confirmTemplateSwitch": "Bạn có thay đổi chưa lưu. Bạn có chắc chắn muốn đổi mẫu và hủy các thay đổi này không?"
+  },
+  "catalog": {
+    "backHome": "Về trang chủ",
+    "eyebrow": "BỘ SƯU TẬP THIẾT KẾ",
+    "titleInvite": "Các mẫu thiệp mời",
+    "titleStory": "Các mẫu Wedding Story",
+    "titleAll": "Khám phá mẫu thiết kế",
+    "subtitleStory": "Kể chuyện của hai bạn qua ảnh và những chương kỷ niệm.",
+    "subtitle": "Xem trước thiết kế, chọn cách thể hiện ngày vui của hai bạn.",
+    "tabsAria": "Nhóm mẫu thiết kế",
+    "all": "Tất cả",
+    "note": "Ảnh AI hư cấu · Thiết kế chỉnh được trong editor · Demo không lưu phản hồi.",
+    "viewTemplateAria": "Xem mẫu {{name}}",
+    "customizable": "Tùy chỉnh",
+    "viewDemo": "Xem demo",
+    "useTemplate": "Dùng mẫu",
+    "count": "{{count}} mẫu có thể chỉnh trong editor. Lưu thiết kế vào tài khoản chưa được kết nối."
+  },
+  "storyTemplates": {
+    "actionFailed": "Thao tác thất bại.",
+    "draftSaved": "Đã lưu bản nháp.",
+    "title": "Wedding Story Templates",
+    "description": "Quản lý cấu trúc Story: section, variant, màu và font. Nội dung cặp đôi được chỉnh trong Story Editor.",
+    "create": "Tạo template",
+    "loading": "Đang tải Story Templates",
+    "status": {
+      "archived": "Đã lưu trữ",
+      "published": "Đã xuất bản",
+      "draft": "Bản nháp"
+    },
+    "empty": "Chưa có Story Template.",
+    "keyLabel": "Key (cố định sau khi tạo)",
+    "nameLabel": "Tên template",
+    "sectionsTitle": "Section và thứ tự hiển thị",
+    "hide": "Ẩn",
+    "addSection": "Thêm section…",
+    "themeTitle": "Theme mặc định",
+    "palettesTitle": "Palette và font cho couple",
+    "palettesHelp": "Chỉnh JSON cấu hình nâng cao. Mỗi palette cần màu chữ và nền đủ tương phản; backend sẽ kiểm tra khi lưu.",
+    "invalidJson": "JSON palette/font không hợp lệ.",
+    "saveDraft": "Lưu bản nháp",
+    "publishedMessage": "Đã xuất bản template.",
+    "publish": "Xuất bản",
+    "restored": "Đã khôi phục.",
+    "archivedMessage": "Đã lưu trữ.",
+    "restore": "Khôi phục",
+    "archive": "Lưu trữ",
+    "saveBeforePublish": "Lưu bản nháp trước khi xuất bản.",
+    "selectPrompt": "Chọn một Story Template để chỉnh sửa."
+  }
+}

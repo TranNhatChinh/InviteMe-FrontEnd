@@ -1,0 +1,324 @@
+{
+  "pricing": {
+    "fallbackName": {
+      "FREE": "Miễn phí",
+      "BASIC": "Cơ bản",
+      "PREMIUM": "Cao cấp"
+    },
+    "comparison": {
+      "categories": {
+        "scale": "Quy mô & Lưu trữ",
+        "invitations": "Gửi thiệp & Xác nhận tham dự",
+        "reception": "Tiệc cưới & Đón tiếp khách"
+      },
+      "rows": {
+        "guestPlaces": "Số lượng khách mời & chỗ ngồi",
+        "photos": "Số lượng ảnh album cưới",
+        "retention": "Thời gian lưu giữ website",
+        "customSlug": "Tùy chỉnh đường dẫn website riêng (theo tên hai bạn)",
+        "removeBranding": "Xóa logo InviteMe trên thiệp",
+        "templates": "Mẫu thiệp cưới & trang chuyện tình yêu",
+        "emailInvites": "Lượt gửi thiệp qua thư điện tử (Email)",
+        "smsInvites": "Lượt gửi thiệp qua tin nhắn SMS",
+        "reminders": "Đợt tự động nhắc khách xác nhận tham dự",
+        "aiThankYou": "Trợ lý thông minh gợi ý lời cảm ơn",
+        "seating": "Sơ đồ sắp xếp chỗ ngồi & bàn tiệc",
+        "seatLookup": "Khách tự xem vị trí bàn tiệc của mình trên điện thoại",
+        "checkin": "Đón tiếp & quét mã điểm danh tại sảnh cưới",
+        "coHosts": "Số người cùng tham gia quản lý tiệc",
+        "giftQr": "Mã QR nhận mừng cưới & ghi nhận quà mừng",
+        "giftExport": "Tải sổ mừng cưới về máy tính (file bảng tính Excel)"
+      },
+      "values": {
+        "guests50": "50 khách",
+        "guests300": "300 khách",
+        "guests1000": "1,000 khách",
+        "photos10": "10 ảnh",
+        "photos60": "60 ảnh",
+        "photos200": "200 ảnh",
+        "retention7d": "7 ngày sau cưới",
+        "retention6m": "6 tháng sau cưới",
+        "retention2y": "2 năm sau cưới",
+        "templatesStandard": "Mẫu tiêu chuẩn",
+        "templatesAllPremium": "Tất cả mẫu cao cấp",
+        "email50": "50 lượt",
+        "email600": "600 lượt",
+        "email2000": "2,000 lượt",
+        "none": "—",
+        "sms100": "100 SMS",
+        "sms500": "500 SMS",
+        "reminders2": "2 đợt",
+        "unlimited": "Không giới hạn",
+        "ai1": "1 lượt",
+        "ai5": "5 lượt",
+        "tablesMax5": "Tối đa 5 bàn",
+        "tablesUnlimited": "Không giới hạn bàn",
+        "ownerOnly": "Chỉ chủ tiệc",
+        "coHosts2": "2 người đồng hành",
+        "coHosts10": "10 người đồng hành"
+      },
+      "title": "Bảng so sánh chi tiết tính năng",
+      "subtitle": "Xem đầy đủ thông số và quyền lợi cụ thể của từng gói dịch vụ.",
+      "collapse": "Thu gọn bảng",
+      "expand": "Xem toàn bộ bảng",
+      "feature": "Tính năng"
+    },
+    "faq": {
+      "billing": {
+        "q": "Gói dịch vụ thanh toán một lần hay theo tháng?",
+        "a": "Tất cả các gói trả phí của InviteMe đều thanh toán MỘT LẦN DUY NHẤT cho trọn vẹn sự kiện đám cưới của hai bạn. Không phát sinh phí gia hạn hàng tháng hay bất kỳ chi phí ẩn nào."
+      },
+      "upgrade": {
+        "q": "Hai bạn có thể bắt đầu với gói Miễn phí rồi nâng cấp sau không?",
+        "a": "Hoàn toàn được! Hai bạn có thể tạo đám cưới, nhập danh sách khách và thiết kế thiệp hoàn toàn miễn phí. Khi số lượng khách tăng lên hoặc cần tính năng Điểm danh đón khách, Mừng cưới qua mã QR, hai bạn chỉ cần bấm nâng cấp bất cứ lúc nào."
+      },
+      "payment": {
+        "q": "Phương thức thanh toán diễn ra như thế nào?",
+        "a": "Hai bạn chỉ cần mở ứng dụng ngân hàng bất kỳ (Vietcombank, MB, Techcombank, VPBank,...) quét mã QR tự động. Hệ thống sẽ nhận diện và kích hoạt gói cưới cho hai bạn chỉ trong 5–30 giây."
+      },
+      "retention": {
+        "q": "Sau ngày cưới thì website và hình ảnh có bị xóa không?",
+        "a": "Kỷ niệm của hai bạn được lưu giữ an toàn theo hạn mức gói: Gói Miễn phí lưu 7 ngày sau cưới, Gói Cơ bản lưu 6 tháng và Gói Cao cấp lưu tới 2 năm để hai bạn thoải mái xem lại và tải sổ mừng về máy tính."
+      },
+      "title": "Câu hỏi thường gặp về gói cước"
+    },
+    "hero": {
+      "eyebrow": "BẢNG GIÁ & GÓI DỊCH VỤ",
+      "title": "Đồng hành cùng ngày trọng đại của hai bạn",
+      "subtitle": "Thanh toán <strong>một lần duy nhất</strong> cho trọn vẹn ngày vui. Không phí duy trì hàng tháng, không chi phí ẩn.",
+      "badge": "Kích hoạt tự động tức thì qua mã QR · Hỗ trợ đồng hành 24/7"
+    },
+    "card": {
+      "popular": "Được chọn nhiều nhất",
+      "vip": "Trọn gói VIP cao cấp",
+      "tagline": {
+        "FREE": "Hoàn hảo cho tiệc nhỏ ấm cúng hoặc trải nghiệm tạo thử thiệp.",
+        "BASIC": "Giải pháp hoàn hảo cho hầu hết các đám cưới Việt Nam.",
+        "PREMIUM": "Trải nghiệm sang trọng đẳng cấp với mọi đặc quyền cao nhất."
+      },
+      "freePrice": "0 đ",
+      "perWedding": "/ trọn gói đám cưới",
+      "unlimited": "Không giới hạn",
+      "guestPlaces": "<strong>{{value}}</strong> khách mời & chỗ ngồi",
+      "mediaImages": "<strong>{{value}}</strong> ảnh album cưới sắc nét",
+      "emailInvites": "<strong>{{value}}</strong> email gửi thiệp mời",
+      "smsInvites": "<strong>{{value}}</strong> tin nhắn SMS thiệp cưới",
+      "noSms": "Gửi tin nhắn SMS",
+      "coHosts": "<strong>{{value}}</strong> người đồng hành cùng quản lý",
+      "noCoHosts": "Thêm người đồng hành",
+      "seatingLabel": "Sơ đồ bàn:",
+      "seatingTables": "{{count}} bàn",
+      "seatingUnlimited": "Không giới hạn bàn",
+      "checkin": "Đón tiếp & quét mã điểm danh tại sảnh",
+      "giftQr": "Mừng cưới qua mã QR & Tải sổ mừng",
+      "customSlug": "Đường dẫn website riêng theo tên hai bạn",
+      "retentionLabel": "Lưu trữ website:",
+      "retention7d": "7 ngày sau cưới",
+      "retention6m": "6 tháng sau cưới",
+      "retention2y": "2 năm sau cưới",
+      "startFree": "Bắt đầu miễn phí",
+      "goToWorkspace": "Vào không gian làm việc",
+      "choosePlan": "Chọn gói {{name}}"
+    },
+    "cta": {
+      "title": "Sẵn sàng tạo thiệp cưới trong mơ của hai bạn?",
+      "subtitle": "Bắt đầu miễn phí ngay hôm nay. Chỉ mất chưa đầy 3 phút để có ngay một website cưới và thiệp online chuyên nghiệp.",
+      "start": "Bắt đầu tạo thiệp ngay",
+      "templates": "Xem các mẫu thiết kế"
+    }
+  },
+  "manager": {
+    "orderError": "Không thể khởi tạo đơn hàng. Vui lòng thử lại.",
+    "loadErrorTitle": "Không thể tải thông tin gói cước",
+    "loadErrorHint": "Vui lòng tải lại trang hoặc liên hệ hỗ trợ.",
+    "reload": "Tải lại",
+    "unlimited": "Không giới hạn",
+    "quotaLimit": {
+      "guests": "{{count}} khách",
+      "photos": "{{count}} ảnh",
+      "sends": "{{count}} lượt",
+      "sms": "{{count}} SMS",
+      "tables": "{{count}} bàn",
+      "people": "{{count}} người",
+      "runs": "{{count}} lượt"
+    },
+    "nearLimit": "Sắp đạt hạn mức của gói",
+    "currentPlan": "Gói hiện tại",
+    "legacy": "Legacy (Vĩnh viễn)",
+    "websiteOpenUntil": "Website mở đến:",
+    "websiteForever": "Website duy trì vĩnh viễn",
+    "usageTitle": "Hạn mức đã sử dụng",
+    "quota": {
+      "guestPlaces": "Khách mời & Chỗ ngồi",
+      "mediaImages": "Ảnh kỷ niệm đã tải",
+      "emailInvites": "Lượt gửi Email thiệp",
+      "smsInvites": "Lượt gửi SMS thiệp",
+      "seatingTables": "Sơ đồ bàn tiệc",
+      "coHosts": "Co-host cùng quản lý",
+      "aiThankYouRuns": "Trợ lý AI viết lời cảm ơn"
+    },
+    "featuresTitle": "Tính năng đã mở khóa",
+    "feature": {
+      "checkin": "Check-in QR tại sảnh tiệc",
+      "giftQr": "Mừng cưới VietQR & Sổ mừng",
+      "customSlug": "Tùy chỉnh link website riêng",
+      "seatLookup": "Khách tự tra cứu bàn tiệc",
+      "brandingRemoved": "Đã xóa logo InviteMe",
+      "brandingShown": "Hiển thị logo InviteMe"
+    },
+    "upgradeTitle": "Nâng cấp gói dịch vụ",
+    "upgradeSubtitle": "Mở rộng hạn mức khách mời, sơ đồ bàn tiệc không giới hạn và nhận toàn bộ tính năng cao cấp.",
+    "vipUnlimited": "VIP Không giới hạn",
+    "popular": "Phổ biến",
+    "perWedding": "/ trọn gói đám cưới",
+    "perk": {
+      "guestPlaces": "<strong>{{value}}</strong> khách mời & chỗ ngồi",
+      "mediaImages": "<strong>{{value}}</strong> ảnh kỷ niệm album",
+      "unlimitedTables": "Không giới hạn bàn tiệc sơ đồ",
+      "checkinGifts": "Check-in QR & VietQR mừng cưới",
+      "noBranding": "Xóa hoàn toàn logo InviteMe"
+    },
+    "upgradeTo": "Nâng cấp lên {{name}}",
+    "historyTitle": "Lịch sử đơn hàng",
+    "col": {
+      "code": "Mã đơn",
+      "plan": "Gói dịch vụ",
+      "amount": "Số tiền",
+      "status": "Trạng thái",
+      "createdAt": "Thời gian tạo",
+      "actions": "Thao tác"
+    },
+    "status": {
+      "paid": "Đã thanh toán",
+      "pending": "Chờ chuyển khoản",
+      "cancelled": "Đã hủy"
+    },
+    "vietQr": "Mã VietQR"
+  },
+  "payment": {
+    "cancelError": "Không thể hủy đơn hàng.",
+    "expired": "Đã hết hạn",
+    "eyebrow": "Thanh toán VietQR tự động",
+    "title": "Nâng cấp gói {{name}}",
+    "close": "Đóng",
+    "successTitle": "Thanh toán thành công!",
+    "successBody": "Gói dịch vụ <strong>{{name}}</strong> đã được kích hoạt cho đám cưới của bạn. Đang chuyển hướng...",
+    "orderCancelled": "Đơn hàng đã hủy",
+    "orderExpired": "Đơn hàng đã hết hạn",
+    "createNewOrder": "Vui lòng tạo đơn hàng mới để tiếp tục nâng cấp gói.",
+    "qrAlt": "VietQR thanh toán {{code}}",
+    "scanHint": "Quét mã bằng app ngân hàng (Hết hạn sau: {{time}})",
+    "bank": "Ngân hàng",
+    "accountNumber": "Số tài khoản",
+    "accountName": "Chủ tài khoản",
+    "amount": "Số tiền thanh toán",
+    "transferContent": "Nội dung chuyển khoản",
+    "copied": "Đã chép",
+    "copy": "Chép",
+    "autoNote": "Hệ thống sẽ tự động đối soát và kích hoạt gói ngay sau khi nhận được tiền (thường từ 5–30 giây).",
+    "cancelling": "Đang hủy...",
+    "cancelOrder": "Hủy đơn hàng",
+    "simulating": "Đang giả lập...",
+    "simulate": "Giả lập Thanh toán (Dev)",
+    "checkAgain": "Kiểm tra lại"
+  },
+  "admin": {
+    "grantSuccess": "Đã cấp thành công gói {{plan}} cho đám cưới.",
+    "grantError": "Không thể cấp gói. Kiểm tra lại ID đám cưới.",
+    "title": "Quản lý Gói cước & Doanh thu",
+    "subtitle": "Cấu hình giá các gói dịch vụ, duyệt đơn hàng thanh toán VietQR và kiểm soát giao dịch nền tảng.",
+    "tabs": {
+      "plans": "Danh mục gói ({{count}})",
+      "orders": "Đơn đặt gói",
+      "payments": "Lịch sử chuyển khoản (Webhook)",
+      "grant": "Cấp gói thủ công"
+    },
+    "plansError": "Không thể tải danh sách gói. Vui lòng kiểm tra quyền quản trị viên.",
+    "free": "Miễn phí",
+    "activeWeddings": "Đám cưới đang dùng:",
+    "guestPlaces": "Số khách mời:",
+    "guestCount": "{{count}} khách",
+    "mediaImages": "Kho ảnh thư viện:",
+    "photoCount": "{{count}} ảnh",
+    "unlimited": "Không giới hạn",
+    "premiumTemplates": "Mẫu thiệp cao cấp:",
+    "yes": "Có",
+    "no": "Không",
+    "brandingBadge": "Huy hiệu InviteMe:",
+    "badgeShown": "Hiển thị",
+    "badgeRemoved": "Đã gỡ",
+    "editLimits": "Chỉnh sửa thông số",
+    "orderSearch": "Tìm mã đơn (IM...), email, tên cưới...",
+    "orderStatus": {
+      "all": "Tất cả trạng thái",
+      "PENDING": "PENDING - Chờ thanh toán",
+      "COMPLETED": "COMPLETED - Hoàn thành",
+      "CANCELLED": "CANCELLED - Đã hủy",
+      "EXPIRED": "EXPIRED - Hết hạn"
+    },
+    "ordersError": "Không thể tải danh sách đơn hàng.",
+    "col": {
+      "code": "Mã đơn",
+      "wedding": "Đám cưới",
+      "plan": "Gói",
+      "amount": "Số tiền",
+      "status": "Trạng thái",
+      "createdAt": "Ngày tạo",
+      "actions": "Thao tác",
+      "receivingAccount": "Tài khoản nhận",
+      "content": "Nội dung SMS/Bank",
+      "time": "Thời gian"
+    },
+    "noOrders": "Không tìm thấy đơn đặt gói nào.",
+    "untitledWedding": "Chưa đặt tên",
+    "noEmail": "Không có email",
+    "approve": "Duyệt",
+    "cancel": "Hủy",
+    "ordersPage": "Trang {{page}} / {{totalPages}} (Tổng cộng {{total}} đơn)",
+    "paymentsPage": "Trang {{page}} / {{totalPages}} (Tổng cộng {{total}} giao dịch)",
+    "prev": "Trước",
+    "next": "Sau",
+    "paymentStatus": {
+      "all": "Tất cả giao dịch webhook",
+      "MATCHED": "MATCHED - Đã khớp mã đơn",
+      "ACTIVATED": "ACTIVATED - Đã kích hoạt gói",
+      "UNMATCHED": "UNMATCHED - Chưa khớp"
+    },
+    "paymentsError": "Không thể tải danh sách giao dịch.",
+    "noPayments": "Chưa có giao dịch webhook nào được ghi nhận.",
+    "grantTitle": "Cấp gói dịch vụ cho Đám cưới",
+    "grantSubtitle": "Dành cho trường hợp hỗ trợ khách hàng, tặng gói đối tác hoặc hoàn tiền.",
+    "weddingIdPlaceholder": "Ví dụ: e3b0c442-98fc-1c14-9afbf4c8996fb924",
+    "grantPlan": "Gói dịch vụ cấp",
+    "grantOption": {
+      "FREE": "FREE - Miễn phí",
+      "BASIC": "BASIC - Cơ bản (300 khách, Check-in, VietQR)",
+      "PREMIUM": "PREMIUM - Cao cấp (1,000 khách, VIP trọn gói)"
+    },
+    "internalNote": "Ghi chú nội bộ",
+    "internalNotePlaceholder": "Lý do cấp gói (tặng đối tác, hỗ trợ sự cố...)",
+    "confirmGrant": "Xác nhận cấp gói",
+    "editTitle": "Chỉnh sửa gói {{code}}",
+    "close": "Đóng",
+    "displayName": "Tên hiển thị",
+    "price": "Giá tiền (VND)",
+    "status": "Trạng thái",
+    "planStatus": {
+      "ACTIVE": "ACTIVE - Đang mở bán",
+      "INACTIVE": "INACTIVE - Tạm ẩn"
+    },
+    "saving": "Đang lưu...",
+    "save": "Lưu thay đổi"
+  },
+  "meta": {
+    "pricingTitle": "Bảng giá & Gói dịch vụ — InviteMe",
+    "pricingDescription": "Bảng giá các gói thiệp cưới online và quản lý tiệc cưới trọn gói của InviteMe.",
+    "adminTitle": "Quản lý Gói cước & Đơn hàng — Admin InviteMe"
+  },
+  "page": {
+    "noAccessTitle": "Không có quyền truy cập",
+    "noAccessDescription": "Bạn không có quyền xem thông tin gói dịch vụ của đám cưới này.",
+    "title": "Gói dịch vụ & Hạn mức",
+    "subtitle": "Xem thông số gói hiện tại, kiểm tra tiến độ sử dụng và nâng cấp các tính năng cao cấp cho đám cưới."
+  }
+}

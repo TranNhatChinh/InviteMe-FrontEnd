@@ -35,6 +35,16 @@ import viGuestPlanning from "./locales/vi/guestPlanning.json";
 import enGuestPlanning from "./locales/en/guestPlanning.json";
 import viTemplateStudio from "./locales/vi/templateStudio.json";
 import enTemplateStudio from "./locales/en/templateStudio.json";
+import viSeating from "./locales/vi/seating.json";
+import enSeating from "./locales/en/seating.json";
+import viGuestTools from "./locales/vi/guestTools.json";
+import enGuestTools from "./locales/en/guestTools.json";
+import viPlans from "./locales/vi/plans.json";
+import enPlans from "./locales/en/plans.json";
+import viWeddingEditor from "./locales/vi/weddingEditor.json";
+import enWeddingEditor from "./locales/en/weddingEditor.json";
+import viUi from "./locales/vi/ui.json";
+import enUi from "./locales/en/ui.json";
 
 export const resources = {
   vi: {
@@ -56,6 +66,11 @@ export const resources = {
     thankYou: viThankYou,
     guestPlanning: viGuestPlanning,
     templateStudio: viTemplateStudio,
+    seating: viSeating,
+    guestTools: viGuestTools,
+    plans: viPlans,
+    weddingEditor: viWeddingEditor,
+    ui: viUi,
   },
   en: {
     common: enCommon,
@@ -76,6 +91,11 @@ export const resources = {
     thankYou: enThankYou,
     guestPlanning: enGuestPlanning,
     templateStudio: enTemplateStudio,
+    seating: enSeating,
+    guestTools: enGuestTools,
+    plans: enPlans,
+    weddingEditor: enWeddingEditor,
+    ui: enUi,
   },
 } satisfies Resource;
 
@@ -98,4 +118,9 @@ export const namespaces = [
   "thankYou",
   "guestPlanning",
   "templateStudio",
+  "seating",
+  "guestTools",
+  "plans",
+  "weddingEditor",
+  "ui",
 ] as const;

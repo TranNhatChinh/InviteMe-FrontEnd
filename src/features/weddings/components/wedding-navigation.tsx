@@ -84,7 +84,7 @@ const sections: WeddingSection[] = [
   },
   {
     slug: "waitlist",
-    label: "Danh sách chờ",
+    label: "Yêu cầu RSVP",
     permission: "RSVP_VIEW",
     group: "Khách mời & RSVP",
     icon: "waitlist",

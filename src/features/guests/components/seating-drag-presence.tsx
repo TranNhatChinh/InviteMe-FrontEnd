@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import { useTranslation } from "react-i18next";
 import type { SeatingDragPresence } from "@/core/realtime/seating-drag-events";
 import { Avatar } from "@/shared/ui/avatar";
 
@@ -13,13 +14,15 @@ export function useSeatingDragLock(ids: string[]) {
 }
 
 export function DraggingLabel({ presence }: { presence: SeatingDragPresence }) {
+  const { t } = useTranslation("seating");
+  const label = t("common.processingBy", { name: presence.displayName });
   return (
     <span
       className="inline-flex max-w-full items-center gap-1 text-[11px] text-muted-foreground"
-      title={`Đang được xử lí bởi ${presence.displayName}`}
+      title={label}
     >
       <Avatar name={presence.displayName} className="size-5 text-[9px]" />
-      <span className="truncate">Đang được xử lí bởi {presence.displayName}</span>
+      <span className="truncate">{label}</span>
     </span>
   );
 }

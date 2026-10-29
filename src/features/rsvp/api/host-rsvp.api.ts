@@ -4,13 +4,15 @@ import { guestRsvpInputSchema, rsvpRequestSchema, rsvpSchema } from "./rsvp.api"
 
 const count = z.number().int().nonnegative();
 const sideSchema = z.enum(["BRIDE", "GROOM", "MUTUAL", "UNSPECIFIED"]);
+// List filter. NEEDS_ACTION is not an answer: over-limit answers and change requests waiting for the couple.
 export const rsvpListStatusSchema = z.enum([
   "NOT_RESPONDED",
   "ATTENDING",
+  "MAYBE",
   "DECLINED",
-  "WAITING",
-  "PENDING_REQUEST",
+  "NEEDS_ACTION",
 ]);
+const rsvpAnswerSchema = z.enum(["NOT_RESPONDED", "ATTENDING", "MAYBE", "DECLINED"]);
 const page = <T extends z.ZodType>(item: T) =>
   z.object({
     items: z.array(item),
@@ -29,34 +31,33 @@ export const rsvpDashboardSchema = z.object({
   weddingId: z.string(),
   generatedAt: z.string(),
   rsvpDeadline: z.string().nullable(),
-  capacity: z.object({ max: count.nullable(), occupied: count, remaining: count.nullable() }),
+  // Wedding-wide. Expected = ATTENDING people + walk-ins; the capacity only warns, nothing is refused.
+  capacity: z.object({
+    max: count.nullable(),
+    expected: count,
+    remaining: count.nullable(),
+    overCapacity: z.boolean(),
+    overBy: count,
+    maybeMayExceed: z.boolean(),
+  }),
   invitations: z.object({
     invited: count,
-    responded: count,
-    notResponded: count,
     attending: count,
+    maybe: count,
     declined: count,
-    waiting: count,
+    notResponded: count,
     responseRate: z.number().nonnegative(),
   }),
-  people: z.object({
-    invitedPlaces: count,
-    confirmed: count,
-    companions: count,
-    waitlisted: count,
-    declined: count,
-    unusedPlaces: count,
-    pendingPlaces: count,
-  }),
-  pendingRequests: count,
+  needsAction: z.object({ invitations: count, overLimit: count, changeRequests: count }),
+  people: z.object({ expected: count, companions: count, maybe: count }),
   lockedGuests: count,
   notes: z.object({
-    confirmedWithDietaryNote: count,
-    guestsWithNote: count,
+    invitationsWithDietaryNote: count,
+    invitationsWithNote: count,
     topDietaryNotes: z.array(z.object({ note: z.string(), count })),
   }),
   bySide: z.array(
-    z.object({ side: sideSchema, invited: count, responded: count, confirmed: count }),
+    z.object({ side: sideSchema, invited: count, responded: count, expected: count }),
   ),
 });
 export const rsvpGuestRowSchema = z.object({
@@ -67,30 +68,27 @@ export const rsvpGuestRowSchema = z.object({
   groupName: z.string().nullable(),
   phone: z.string().nullable(),
   email: z.string().nullable(),
-  rsvpStatus: rsvpListStatusSchema,
-  invitedPlaces: count,
-  confirmedPeople: count,
-  waitlistedPeople: count,
-  locked: z.boolean(),
+  rsvpStatus: rsvpAnswerSchema,
+  maxPeople: count,
+  people: count,
+  maybePeople: count,
+  overLimit: z.boolean(),
+  needsAction: z.boolean(),
   pendingRequest: z.boolean(),
+  locked: z.boolean(),
+  dietaryNote: z.string().nullable(),
   note: z.string().nullable(),
   respondedAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
-});
-export const waitlistEntrySchema = z.object({
-  id: z.string(),
-  guestId: z.string(),
-  requestedSlots: count,
-  status: z.string(),
-  kind: z.enum(["FULL_PARTY", "ADDITIONAL_MEMBER"]),
-  requestedAt: z.string(),
+  remindersSent: count,
+  lastRemindedAt: z.string().nullable(),
+  lastReminderStatus: z.string().nullable(),
 });
 
 export type RsvpDashboard = z.infer<typeof rsvpDashboardSchema>;
 export type RsvpGuestRow = z.infer<typeof rsvpGuestRowSchema>;
 export type RsvpListStatus = z.infer<typeof rsvpListStatusSchema>;
 export type RsvpSettings = z.infer<typeof rsvpSettingsSchema>;
-export type RsvpWaitlistEntry = z.infer<typeof waitlistEntrySchema>;
 export type RsvpGuestFilters = {
   side?: string;
   groupId?: string;
@@ -119,8 +117,6 @@ export const hostRsvpKeys = {
   settings: (weddingId: string) => ["host-rsvp", weddingId, "settings"] as const,
   requests: (weddingId: string, status: string, pageNumber: number) =>
     ["host-rsvp", weddingId, "requests", status, pageNumber] as const,
-  waitlist: (weddingId: string, pageNumber: number) =>
-    ["host-rsvp", weddingId, "waitlist", pageNumber] as const,
 };
 
 export function getRsvpDashboard(
@@ -229,24 +225,9 @@ export function resolveRsvpRequest(
     schema: rsvpSchema,
   });
 }
-export function listRsvpWaitlist(
-  api: ApiClient,
-  weddingId: string,
-  pageNumber = 1,
-  signal?: AbortSignal,
-) {
-  return api.request(`${rsvps(weddingId)}/waitlist${params({ page: pageNumber, pageSize: 25 })}`, {
-    signal,
-    schema: page(waitlistEntrySchema),
-  });
-}
-export function resolveRsvpWaitlist(
-  api: ApiClient,
-  weddingId: string,
-  entryId: string,
-  decision: "promote" | "decline",
-) {
-  return api.request(`${rsvps(weddingId)}/waitlist/${encodeURIComponent(entryId)}/${decision}`, {
+// "Đã xem": the couple accepts the number of an answer over the invitation's threshold.
+export function acknowledgeRsvpOverLimit(api: ApiClient, weddingId: string, guestId: string) {
+  return api.request(`${rsvps(weddingId)}/${encodeURIComponent(guestId)}/acknowledge`, {
     method: "POST",
     schema: rsvpSchema,
   });

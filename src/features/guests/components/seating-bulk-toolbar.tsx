@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Crown, X } from "lucide-react";
 import { gsap } from "gsap";
 import { Button } from "@/shared/ui/button";
@@ -24,6 +25,7 @@ export function SeatingBulkToolbar({
   groups = [],
   saving = false,
 }: SeatingBulkToolbarProps) {
+  const { t } = useTranslation("seating");
   const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,14 +48,14 @@ export function SeatingBulkToolbar({
       ref={barRef}
       className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex items-center gap-3 rounded-full border border-primary/30 bg-card/95 px-5 py-3 shadow-2xl backdrop-blur-md"
       role="toolbar"
-      aria-label="Thao tác hàng loạt bàn tiệc"
+      aria-label={t("bulk.aria")}
     >
       <div className="flex items-center gap-2 border-r border-border pr-3">
         <span className="flex size-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
           {selectedCount}
         </span>
         <span className="text-xs font-medium text-foreground whitespace-nowrap">
-          bàn đã chọn
+          {t("bulk.selected")}
         </span>
       </div>
 
@@ -66,7 +68,7 @@ export function SeatingBulkToolbar({
             disabled={saving}
             className="rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-900/40"
           >
-            Nhà Trai
+            {t("tray.groomShort")}
           </button>
           <button
             type="button"
@@ -74,7 +76,7 @@ export function SeatingBulkToolbar({
             disabled={saving}
             className="rounded-full px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:text-rose-300 dark:hover:bg-rose-900/40"
           >
-            Nhà Gái
+            {t("tray.brideShort")}
           </button>
           <button
             type="button"
@@ -95,7 +97,7 @@ export function SeatingBulkToolbar({
           className="h-8 rounded-full text-xs gap-1.5 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
         >
           <Crown className="size-3.5" />
-          <span>Gán VIP</span>
+          <span>{t("bulk.vip")}</span>
         </Button>
 
         {/* Assign Group */}
@@ -107,7 +109,7 @@ export function SeatingBulkToolbar({
             className="h-8 rounded-full border border-input bg-background px-3 text-xs text-foreground focus:ring-1 focus:ring-primary"
           >
             <option value="" disabled>
-              Gán Nhóm khách...
+              {t("bulk.group")}
             </option>
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
@@ -122,8 +124,8 @@ export function SeatingBulkToolbar({
         type="button"
         onClick={onClear}
         className="rounded-full p-1.5 text-muted-foreground hover:bg-muted ml-1 transition-colors"
-        title="Bỏ chọn"
-        aria-label="Bỏ chọn"
+        title={t("bulk.clear")}
+        aria-label={t("bulk.clear")}
       >
         <X className="size-4" />
       </button>

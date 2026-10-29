@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useMemo, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Crown, AlertCircle, Plus, Sparkles, Check } from "lucide-react";
 import { gsap } from "gsap";
@@ -62,6 +63,7 @@ function HallSeat({
   editable: boolean;
   onSeatClick?: (tableId: string, seatNumber: number) => void;
 }) {
+  const { t } = useTranslation("seating");
   const lock = useSeatingDragLock(occupant ? [occupant.placeId] : []);
   const drop = useDroppable({
     id: `seat:${tableId}:${seatNumber}`,
@@ -100,10 +102,22 @@ function HallSeat({
       }}
       title={
         occupant
-          ? `Ghế ${seatNumber}: ${occupant.name}${lock ? ` · đang được xử lí bởi ${lock.displayName}` : editable ? " · kéo sang ghế khác để đổi chỗ" : ""}`
-          : `Ghế ${seatNumber} trống${editable ? " · thả khách vào đây" : ""}`
+          ? t("hall.seatOccupied", {
+              seat: seatNumber,
+              name: occupant.name,
+              hint: lock
+                ? t("hall.lockedBy", { name: lock.displayName })
+                : editable
+                  ? t("hall.dragToSwap")
+                  : "",
+            })
+          : t("hall.seatEmpty", { seat: seatNumber, hint: editable ? t("hall.dropHere") : "" })
       }
-      aria-label={occupant ? `Ghế ${seatNumber}, ${occupant.name}` : `Ghế ${seatNumber} trống`}
+      aria-label={
+        occupant
+          ? t("hall.seatAria", { seat: seatNumber, name: occupant.name })
+          : t("hall.seatEmptyAria", { seat: seatNumber })
+      }
       className={`absolute z-10 flex items-center justify-center rounded-full border-2 font-bold leading-none shadow-sm transition-[scale,box-shadow,opacity] duration-150 motion-reduce:transition-none ${
         small ? "size-5 text-[9px]" : "size-6 text-[10px]"
       } ${tone} ${
@@ -174,6 +188,7 @@ function HallEmptyCell({
   editable: boolean;
   onClick: () => void;
 }) {
+  const { t } = useTranslation("seating");
   const { isOver, setNodeRef, active } = useDroppable({
     id: `cell:${side}:${row}:${column}`,
     data: { kind: "cell", half: side, row, column },
@@ -192,7 +207,7 @@ function HallEmptyCell({
             ? "border-primary/50 bg-primary/[0.03]"
             : "border-border/70 bg-card/40"
       }`}
-      title={`Ô trống Hàng ${row}, Cột ${column} - Bấm để thêm bàn, hoặc kéo một bàn vào đây`}
+      title={t("hall.emptyCell", { row, column })}
     >
       <span className="text-[10px] font-mono text-muted-foreground/60 group-hover:hidden">
         {row}·{column}
@@ -218,6 +233,7 @@ export function SeatingHallGrid({
   onSeatClick,
   highlightedTableId,
 }: SeatingHallGridProps) {
+  const { t } = useTranslation("seating");
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -386,7 +402,7 @@ export function SeatingHallGrid({
         } ${sideTheme} ${ringStyle} ${isOver ? "ring-2 ring-emerald-500 ring-offset-2" : ""} ${
           drag.isDragging ? "opacity-40 border-dashed" : ""
         }`}
-        title={editable ? "Bấm để xem bàn · kéo sang ô trống để di chuyển, thả lên bàn khác để đổi vị trí" : undefined}
+        title={editable ? t("hall.tableHint") : undefined}
         onClick={() => {
           if (isMultiSelectMode) {
             onSelectTable(table.id);
@@ -402,14 +418,18 @@ export function SeatingHallGrid({
             onTableClick(table);
           }
         }}
-        aria-label={`Bàn số ${table.number || table.name}, ${seated} trên ${table.capacity} khách`}
+        aria-label={t("hall.tableAria", {
+          number: table.number || table.name,
+          seated,
+          capacity: table.capacity,
+        })}
       >
         {/* VIP badge or Warning badge */}
         <div className="absolute -top-1.5 flex items-center gap-1">
           {table.isVip && (
             <span
               className="flex size-4 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm"
-              title="Bàn VIP"
+              title={t("hall.vipTable")}
             >
               <Crown className="size-2.5" />
             </span>
@@ -417,7 +437,7 @@ export function SeatingHallGrid({
           {warnCount > 0 && (
             <span
               className="flex size-4 items-center justify-center rounded-full bg-destructive text-white shadow-sm animate-pulse"
-              title={`${warnCount} cảnh báo tại bàn này`}
+              title={t("hall.warnings", { count: warnCount })}
             >
               <AlertCircle className="size-2.5" />
             </span>
@@ -437,7 +457,9 @@ export function SeatingHallGrid({
 
         {/* Table Number / Name */}
         <span className="mt-1 font-serif text-[11px] sm:text-xs font-bold tracking-tight truncate max-w-[56px] text-center">
-          {table.number ? `Bàn ${String(table.number).padStart(2, "0")}` : table.name}
+          {table.number
+            ? t("common.tableLabel", { number: String(table.number).padStart(2, "0") })
+            : table.name}
         </span>
 
         {/* Occupancy Indicator */}
@@ -459,7 +481,7 @@ export function SeatingHallGrid({
           {checkedIn > 0 && (
             <span
               className="size-1.5 rounded-full bg-emerald-500"
-              title={`Đã có mặt ${checkedIn} người`}
+              title={t("hall.checkedIn", { count: checkedIn })}
             />
           )}
           <span
@@ -489,12 +511,12 @@ export function SeatingHallGrid({
           <div className="flex items-center justify-center gap-2">
             <Sparkles className="size-4 text-amber-600 dark:text-amber-400" />
             <span className="font-serif text-sm sm:text-base font-bold uppercase tracking-widest text-amber-800 dark:text-amber-200">
-              SÂN KHẤU CHÍNH HÔN LỄ
+              {t("hall.stage")}
             </span>
             <Sparkles className="size-4 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="mt-0.5 text-[10px] text-amber-700/80 dark:text-amber-300/80 font-medium tracking-wider">
-            NƠI CỬ HÀNH NGHI THỨC TRANG TRỌNG
+            {t("hall.ceremony")}
           </div>
         </div>
 
@@ -504,7 +526,7 @@ export function SeatingHallGrid({
           <div className="flex flex-col items-end space-y-3">
             {/* Header */}
             <div className="flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-xs font-serif font-bold text-blue-700 dark:text-blue-300">
-              <span>HỌ NHÀ TRAI</span>
+              <span>{t("hall.groomFamily")}</span>
             </div>
 
             {/* Grid rows */}
@@ -525,11 +547,11 @@ export function SeatingHallGrid({
           {/* 3. CENTER AISLE (LỐI ĐI HOA) */}
           <div className="flex flex-col items-center self-stretch justify-between px-2 sm:px-4 border-x border-dashed border-primary/30 bg-primary/[0.02]">
             <div className="font-mono text-[9px] uppercase tracking-widest text-primary/80 py-2 [writing-mode:vertical-lr] rotate-180">
-              ▼ LỐI ĐI ĐÓN DÂU ▼
+              {t("hall.aisle")}
             </div>
             <div className="flex-1 w-px bg-gradient-to-b from-primary/40 via-primary/20 to-primary/40 my-2" />
             <div className="font-mono text-[9px] uppercase tracking-widest text-primary/80 py-2 [writing-mode:vertical-lr]">
-              ▲ CỔNG CHÍNH TIỆC ▲
+              {t("hall.entrance")}
             </div>
           </div>
 
@@ -537,7 +559,7 @@ export function SeatingHallGrid({
           <div className="flex flex-col items-start space-y-3">
             {/* Header */}
             <div className="flex items-center gap-1.5 rounded-full bg-rose-500/15 px-3 py-1 text-xs font-serif font-bold text-rose-700 dark:text-rose-300">
-              <span>HỌ NHÀ GÁI</span>
+              <span>{t("hall.brideFamily")}</span>
             </div>
 
             {/* Grid rows */}

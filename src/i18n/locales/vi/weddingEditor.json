@@ -1,0 +1,226 @@
+{
+  "story": {
+    "tabs": {
+      "appearance": "Giao diện",
+      "couple": "Cặp đôi",
+      "story": "Love Story",
+      "events": "Sự kiện",
+      "gallery": "Album",
+      "wishes": "Lời chúc & mừng cưới"
+    },
+    "errors": {
+      "namesRequired": "Hãy nhập tên cô dâu và chú rể.",
+      "mainEventRequired": "Hãy chọn một sự kiện chính.",
+      "eventTimeZone": "Ngày giờ sự kiện cần có múi giờ, ví dụ 2026-11-28T10:30:00+07:00.",
+      "saveFailed": "Không lưu được.",
+      "uploadFailed": "Không tải được ảnh."
+    },
+    "published": "Đã xuất bản.",
+    "draftSaved": "Đã lưu bản nháp.",
+    "templateSubtitle": "Mẫu {{name}} · Bố cục và hiệu ứng theo mẫu",
+    "edit": "Chỉnh sửa",
+    "preview": "Xem trước",
+    "demoBadge": "Bản xem thử · thay đổi chưa lưu",
+    "saveDraft": "Lưu nháp",
+    "publish": "Xuất bản",
+    "editSections": "Mục chỉnh sửa",
+    "templatesHeading": "Mẫu Wedding Story",
+    "confirmTemplateChange": "Xác nhận đổi mẫu",
+    "switchTo": "Đổi sang {{name}}?",
+    "hiddenSections": "Mẫu mới không hiển thị: {{sections}}. Nội dung vẫn được giữ trong bản nháp.",
+    "contentKept": "Nội dung hiện có vẫn được giữ.",
+    "templateChangeNote": "Bảng màu và font sẽ về mặc định của mẫu mới. Trang đã xuất bản chỉ đổi khi bạn xuất bản lại.",
+    "sectionNames": {
+      "loveStory": "Chuyện tình"
+    },
+    "cancel": "Hủy",
+    "changeTemplate": "Đổi mẫu",
+    "templateHint": "Template quyết định bố cục và chuyển động.",
+    "palette": "Bảng màu",
+    "headingFont": "Font tiêu đề",
+    "bodyFont": "Font nội dung",
+    "motion": "Hiệu ứng",
+    "motionTemplate": "Theo mẫu",
+    "motionOff": "Tắt",
+    "mainEventHint": "Ngày trên trang đầu và đồng hồ lấy từ sự kiện chính trong mục Sự kiện.",
+    "uploadCover": "Tải ảnh bìa",
+    "slideshow": "Ảnh trình chiếu",
+    "slideshowHint": "Tối đa 3 ảnh; ảnh bìa dùng khi chưa thêm ảnh.",
+    "slideAlt": "Slide {{number}}",
+    "remove": "Xóa",
+    "addSlide": "Thêm ảnh slide",
+    "groom": "Chú rể",
+    "bride": "Cô dâu",
+    "name": "Tên",
+    "shortName": "Tên ngắn",
+    "fatherName": "Tên cha",
+    "motherName": "Tên mẹ",
+    "bio": "Giới thiệu",
+    "uploadPortrait": "Tải ảnh chân dung",
+    "showStory": "Hiển thị chuyện tình",
+    "storyIntro": "Lời mở đầu câu chuyện",
+    "milestone": "Mốc {{number}}",
+    "removeMilestone": "Xóa mốc",
+    "milestoneFields": {
+      "date": "Ngày",
+      "title": "Tiêu đề",
+      "body": "Nội dung"
+    },
+    "uploadMilestoneImage": "Tải ảnh mốc",
+    "addMilestone": "Thêm mốc",
+    "showEvents": "Hiển thị sự kiện",
+    "event": "Sự kiện {{number}}",
+    "mainEvent": "Sự kiện chính",
+    "removeEvent": "Xóa sự kiện",
+    "eventFields": {
+      "title": "Tên",
+      "date": "Ngày giờ ISO có múi giờ (VD: 2026-11-28T10:30:00+07:00)",
+      "venue": "Địa điểm",
+      "address": "Địa chỉ",
+      "mapUrl": "Link bản đồ"
+    },
+    "addEvent": "Thêm sự kiện",
+    "galleryHint": "Có thể lưu tối đa 30 ảnh. Mẫu hiện hiển thị 12 ảnh đầu; ảnh còn lại vẫn được giữ.",
+    "showGallery": "Hiển thị album",
+    "galleryImageAlt": "Ảnh cưới {{number}}",
+    "removeImage": "Xóa ảnh",
+    "addGalleryImage": "Thêm ảnh album",
+    "showWishes": "Hiển thị lời chúc",
+    "showGift": "Hiển thị mừng cưới",
+    "bank": "Ngân hàng",
+    "accountHolder": "Tên chủ tài khoản",
+    "accountNumber": "Số tài khoản"
+  },
+  "website": {
+    "confirmChangeTemplate": "Bạn có thay đổi chưa lưu. Bạn có chắc muốn đổi mẫu và hủy các thay đổi này không?",
+    "pickerTitle": "Chọn mẫu Wedding Story",
+    "pickerDescription": "Khám phá các mẫu website đám cưới được thiết kế sẵn. Chọn một mẫu để bắt đầu tùy chỉnh cho ngày vui của bạn.",
+    "backToCurrent": "Quay lại bản chỉnh sửa hiện tại",
+    "previewTemplateAria": "Xem trước mẫu: {{name}}",
+    "previewAria": "Xem trước: {{name}}",
+    "selectTemplate": "Chọn mẫu",
+    "close": "Đóng",
+    "selectThisTemplate": "Chọn mẫu này",
+    "closePreview": "Đóng xem trước",
+    "publishSuccess": "Đã xuất bản website thành công!",
+    "publishFailed": "Xuất bản website thất bại. Vui lòng thử lại.",
+    "unpublishSuccess": "Đã gỡ xuất bản website.",
+    "unpublishFailed": "Gỡ website thất bại. Vui lòng thử lại.",
+    "remoteConflict": "Website đã được cập nhật từ một phiên làm việc khác (phiên bản {{version}}).",
+    "reloadDiscard": "Tải lại và hủy thay đổi chưa lưu",
+    "changeStoryTemplate": "Đổi mẫu Story",
+    "galleryImageName": "Ảnh cưới {{id}}",
+    "draftSaved": "Đã lưu bản nháp website."
+  },
+  "cover": {
+    "validation": {
+      "unsupported": "Chỉ hỗ trợ ảnh JPEG, PNG hoặc WebP.",
+      "tooLarge": "Ảnh vượt quá dung lượng tối đa 5 MB.",
+      "empty": "Tệp ảnh trống. Vui lòng chọn ảnh khác."
+    },
+    "updated": "Ảnh bìa đã được cập nhật.",
+    "uploadFailed": "Không thể tải ảnh lên. Vui lòng thử lại.",
+    "removed": "Đã gỡ ảnh bìa.",
+    "removeFailed": "Không thể gỡ ảnh bìa. Vui lòng thử lại.",
+    "selected": "Ảnh đã chọn",
+    "current": "Ảnh bìa hiện tại",
+    "addForWorkspace": "Thêm ảnh bìa cho workspace",
+    "dropHint": "Kéo ảnh vào đây hoặc chọn từ thiết bị · JPEG, PNG, WebP · tối đa 5 MB",
+    "chooseAnother": "Chọn ảnh khác",
+    "choose": "Chọn ảnh",
+    "chooseAria": "Chọn ảnh bìa JPEG, PNG hoặc WebP",
+    "uploading": "Đang tải ảnh…",
+    "upload": "Tải ảnh lên",
+    "remove": "Gỡ ảnh bìa",
+    "removeTitle": "Gỡ ảnh bìa?",
+    "removeDescription": "Ảnh hiện tại sẽ bị gỡ khỏi phần thiết lập lễ cưới.",
+    "keep": "Giữ ảnh",
+    "confirmRemove": "Gỡ ảnh",
+    "cancelReplace": "Hủy thay ảnh",
+    "previewAlt": "Xem trước ảnh bìa lễ cưới",
+    "preview": "Xem trước ảnh bìa",
+    "previewFailed": "Không tải được ảnh hiện tại. Bạn có thể chọn ảnh mới để thay thế."
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "Chào buổi sáng",
+      "afternoon": "Chào buổi chiều",
+      "evening": "Chào buổi tối",
+      "hello": "Xin chào"
+    },
+    "eyebrow": "Không gian điều hành lễ cưới",
+    "greetingLine": "{{greeting}}, {{name}}",
+    "you": "Bạn",
+    "welcome": "Chào mừng bạn trở lại với InviteMe. Dưới đây là tiến độ chuẩn bị và những việc cần lưu tâm cho ngày trọng đại.",
+    "createWedding": "Tạo lễ cưới mới",
+    "plan": "Gói dịch vụ",
+    "ongoing": "Lễ cưới đang diễn ra",
+    "openHub": "Vào trung tâm quản trị",
+    "dateNotSet": "Chưa ấn định ngày cưới chính thức",
+    "confirmedGuests": "Khách mời xác nhận",
+    "websiteStatus": "Trạng thái website",
+    "ready": "Sẵn sàng",
+    "sendInvitations": "Gửi thiệp",
+    "countdown": "Đếm ngược ngày cưới",
+    "countdownTitle": "Thời khắc thiêng liêng",
+    "pastTitle": "Ngày vui đã diễn ra trọn vẹn!",
+    "pastDescription": "Hãy tiếp tục gửi lời cảm ơn và lưu giữ khoảnh khắc.",
+    "daysLeft": "Ngày nữa",
+    "hours": "Giờ",
+    "noDateHint": "Hãy cài đặt ngày cưới trong mục Cài đặt để kích hoạt bộ đếm ngược.",
+    "viewGuests": "Xem danh sách khách",
+    "emptyTitle": "Bạn chưa có lễ cưới nào",
+    "emptyDescription": "Bắt đầu tạo không gian số đầu tiên cho ngày hạnh phúc của hai bạn với thiệp cưới điện tử, sơ đồ bàn tiệc và mã mừng VietQR.",
+    "createNow": "Khởi tạo lễ cưới ngay",
+    "roadmapTitle": "Lộ trình chuẩn bị hôn lễ",
+    "roadmapDescription": "Các hạng mục thiết yếu cần hoàn tất trước ngày cử hành hôn lễ.",
+    "keySteps": "Bước quan trọng",
+    "steps": {
+      "website": {
+        "title": "1. Thiết kế Website cưới",
+        "description": "Tùy chỉnh thông điệp, câu chuyện tình yêu, album ảnh và địa điểm tổ chức.",
+        "action": "Thiết lập"
+      },
+      "guests": {
+        "title": "2. Danh sách khách mời",
+        "description": "Nhập danh sách từ Excel, phân nhóm nhà trai/nhà gái và tạo mã thiệp riêng.",
+        "action": "Quản lý"
+      },
+      "seating": {
+        "title": "3. Sơ đồ bàn tiệc",
+        "description": "Xếp chỗ ngồi thông minh cho từng bàn, tránh xung đột nhóm và tối ưu chỗ trống.",
+        "action": "Xếp bàn"
+      },
+      "invitations": {
+        "title": "4. Gửi thiệp & RSVP",
+        "description": "Gửi thiệp tự động qua Email/SMS và theo dõi phản hồi tham dự thời gian thực.",
+        "action": "Gửi ngay"
+      }
+    },
+    "otherWeddings": "Các lễ cưới khác của bạn ({{count}})",
+    "viewAll": "Xem tất cả",
+    "noDate": "Chưa chọn ngày",
+    "guestCount": "{{count}} khách mời",
+    "guestCount_one": "{{count}} khách mời",
+    "details": "Chi tiết"
+  },
+  "validation": {
+    "dateTimeNotInTimeZone": "Ngày giờ không tồn tại trong múi giờ lễ cưới."
+  },
+  "pages": {
+    "settings": {
+      "noAccessTitle": "Không có quyền truy cập",
+      "noAccessDescription": "Bạn không có quyền xem thiết lập lễ cưới này."
+    },
+    "accessRestrictedTitle": "Quyền truy cập bị hạn chế",
+    "accessRestrictedDescription": "Bạn không có quyền xem mục này.",
+    "invitations": {
+      "title": "Thiệp mời",
+      "description": "Quản lý thiết kế, nội dung lời mời và gửi email/SMS cho khách của đám cưới."
+    },
+    "giftDesk": {
+      "noAccessTitle": "Chưa có quyền ghi nhận quà",
+      "noAccessDescription": "Chủ tiệc cần cấp quyền ghi nhận quà tại quầy cho tài khoản của bạn."
+    }
+  }
+}

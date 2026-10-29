@@ -823,7 +823,7 @@ function Workspace({
                           if (
                             canUndo &&
                             !window.confirm(
-                              "Bạn có thay đổi chưa lưu. Bạn có chắc chắn muốn đổi mẫu và hủy các thay đổi này không?",
+                              t("ui:studio.confirmTemplateSwitch"),
                             )
                           ) {
                             return;
@@ -1107,7 +1107,7 @@ function Workspace({
           </aside>
           <section
             ref={workspace}
-            className={styles.workspace}
+            className={`template-canvas ${styles.workspace}`}
             aria-label={t("library.workspaceAria")}
           >
             <RevealPausedContext.Provider value={showingCover}>

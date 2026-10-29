@@ -1,4 +1,7 @@
+"use client";
+
 import { use } from "react";
+import { useTranslation } from "react-i18next";
 import { PermissionGuard } from "@/shared/components/permission-guard";
 import { EmptyState } from "@/shared/feedback/empty-state";
 import { WeddingPlanManager } from "@/features/plans";
@@ -9,24 +12,25 @@ export default function WeddingPlanPage({
   params: Promise<{ weddingId: string }>;
 }) {
   const { weddingId } = use(params);
+  const { t } = useTranslation("plans");
 
   return (
     <PermissionGuard
       permission="WEDDING_VIEW"
       fallback={
         <EmptyState
-          title="Không có quyền truy cập"
-          description="Bạn không có quyền xem thông tin gói dịch vụ của đám cưới này."
+          title={t("page.noAccessTitle")}
+          description={t("page.noAccessDescription")}
         />
       }
     >
       <div className="space-y-6">
         <div>
           <h1 className="font-serif text-3xl font-normal text-foreground">
-            Gói dịch vụ &amp; Hạn mức
+            {t("page.title")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Xem thông số gói hiện tại, kiểm tra tiến độ sử dụng và nâng cấp các tính năng cao cấp cho đám cưới.
+            {t("page.subtitle")}
           </p>
         </div>
         <WeddingPlanManager weddingId={weddingId} />

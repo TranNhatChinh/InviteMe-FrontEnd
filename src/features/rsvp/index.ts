@@ -13,6 +13,7 @@ export { HostRsvpDashboard } from "./components/host-rsvp-dashboard";
 export { HostRsvpQueues } from "./components/host-rsvp-queues";
 export { RsvpReminderCenter } from "./components/rsvp-reminder-center";
 export {
+  acknowledgeRsvpOverLimit,
   exportRsvpGuests,
   getHostRsvp,
   getRsvpDashboard,
@@ -20,10 +21,8 @@ export {
   hostRsvpKeys,
   listRsvpGuests,
   listRsvpRequests,
-  listRsvpWaitlist,
   lockRsvps,
   resolveRsvpRequest,
-  resolveRsvpWaitlist,
   saveHostRsvp,
   saveRsvpSettings,
 } from "./api/host-rsvp.api";
@@ -33,5 +32,4 @@ export type {
   RsvpGuestRow,
   RsvpListStatus,
   RsvpSettings,
-  RsvpWaitlistEntry,
 } from "./api/host-rsvp.api";

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import Image from "next/image";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -99,58 +100,47 @@ const FALLBACK_PLANS: PlanDto[] = [
   },
 ];
 
-const COMPARISON_ROWS = [
+type ComparisonCell = boolean | string;
+
+// Labels are translation keys under pricing.comparison.* in the "plans" namespace.
+const COMPARISON_ROWS: {
+  category: string;
+  items: { name: string; free: ComparisonCell; basic: ComparisonCell; premium: ComparisonCell }[];
+}[] = [
   {
-    category: "Quy mô & Lưu trữ",
+    category: "scale",
     items: [
-      { name: "Số lượng khách mời & chỗ ngồi", free: "50 khách", basic: "300 khách", premium: "1,000 khách" },
-      { name: "Số lượng ảnh album cưới", free: "10 ảnh", basic: "60 ảnh", premium: "200 ảnh" },
-      { name: "Thời gian lưu giữ website", free: "7 ngày sau cưới", basic: "6 tháng sau cưới", premium: "2 năm sau cưới" },
-      { name: "Tùy chỉnh đường dẫn website riêng (theo tên hai bạn)", free: false, basic: true, premium: true },
-      { name: "Xóa logo InviteMe trên thiệp", free: false, basic: true, premium: true },
+      { name: "guestPlaces", free: "guests50", basic: "guests300", premium: "guests1000" },
+      { name: "photos", free: "photos10", basic: "photos60", premium: "photos200" },
+      { name: "retention", free: "retention7d", basic: "retention6m", premium: "retention2y" },
+      { name: "customSlug", free: false, basic: true, premium: true },
+      { name: "removeBranding", free: false, basic: true, premium: true },
     ],
   },
   {
-    category: "Gửi thiệp & Xác nhận tham dự",
+    category: "invitations",
     items: [
-      { name: "Mẫu thiệp cưới & trang chuyện tình yêu", free: "Mẫu tiêu chuẩn", basic: "Tất cả mẫu cao cấp", premium: "Tất cả mẫu cao cấp" },
-      { name: "Lượt gửi thiệp qua thư điện tử (Email)", free: "50 lượt", basic: "600 lượt", premium: "2,000 lượt" },
-      { name: "Lượt gửi thiệp qua tin nhắn SMS", free: "—", basic: "100 SMS", premium: "500 SMS" },
-      { name: "Đợt tự động nhắc khách xác nhận tham dự", free: "—", basic: "2 đợt", premium: "Không giới hạn" },
-      { name: "Trợ lý thông minh gợi ý lời cảm ơn", free: "—", basic: "1 lượt", premium: "5 lượt" },
+      { name: "templates", free: "templatesStandard", basic: "templatesAllPremium", premium: "templatesAllPremium" },
+      { name: "emailInvites", free: "email50", basic: "email600", premium: "email2000" },
+      { name: "smsInvites", free: "none", basic: "sms100", premium: "sms500" },
+      { name: "reminders", free: "none", basic: "reminders2", premium: "unlimited" },
+      { name: "aiThankYou", free: "none", basic: "ai1", premium: "ai5" },
     ],
   },
   {
-    category: "Tiệc cưới & Đón tiếp khách",
+    category: "reception",
     items: [
-      { name: "Sơ đồ sắp xếp chỗ ngồi & bàn tiệc", free: "Tối đa 5 bàn", basic: "Không giới hạn bàn", premium: "Không giới hạn bàn" },
-      { name: "Khách tự xem vị trí bàn tiệc của mình trên điện thoại", free: false, basic: true, premium: true },
-      { name: "Đón tiếp & quét mã điểm danh tại sảnh cưới", free: false, basic: true, premium: true },
-      { name: "Số người cùng tham gia quản lý tiệc", free: "Chỉ chủ tiệc", basic: "2 người đồng hành", premium: "10 người đồng hành" },
-      { name: "Mã QR nhận mừng cưới & ghi nhận quà mừng", free: false, basic: true, premium: true },
-      { name: "Tải sổ mừng cưới về máy tính (file bảng tính Excel)", free: false, basic: true, premium: true },
+      { name: "seating", free: "tablesMax5", basic: "tablesUnlimited", premium: "tablesUnlimited" },
+      { name: "seatLookup", free: false, basic: true, premium: true },
+      { name: "checkin", free: false, basic: true, premium: true },
+      { name: "coHosts", free: "ownerOnly", basic: "coHosts2", premium: "coHosts10" },
+      { name: "giftQr", free: false, basic: true, premium: true },
+      { name: "giftExport", free: false, basic: true, premium: true },
     ],
   },
 ];
 
-const FAQS = [
-  {
-    q: "Gói dịch vụ thanh toán một lần hay theo tháng?",
-    a: "Tất cả các gói trả phí của InviteMe đều thanh toán MỘT LẦN DUY NHẤT cho trọn vẹn sự kiện đám cưới của hai bạn. Không phát sinh phí gia hạn hàng tháng hay bất kỳ chi phí ẩn nào.",
-  },
-  {
-    q: "Hai bạn có thể bắt đầu với gói Miễn phí rồi nâng cấp sau không?",
-    a: "Hoàn toàn được! Hai bạn có thể tạo đám cưới, nhập danh sách khách và thiết kế thiệp hoàn toàn miễn phí. Khi số lượng khách tăng lên hoặc cần tính năng Điểm danh đón khách, Mừng cưới qua mã QR, hai bạn chỉ cần bấm nâng cấp bất cứ lúc nào.",
-  },
-  {
-    q: "Phương thức thanh toán diễn ra như thế nào?",
-    a: "Hai bạn chỉ cần mở ứng dụng ngân hàng bất kỳ (Vietcombank, MB, Techcombank, VPBank,...) quét mã QR tự động. Hệ thống sẽ nhận diện và kích hoạt gói cưới cho hai bạn chỉ trong 5–30 giây.",
-  },
-  {
-    q: "Sau ngày cưới thì website và hình ảnh có bị xóa không?",
-    a: "Kỷ niệm của hai bạn được lưu giữ an toàn theo hạn mức gói: Gói Miễn phí lưu 7 ngày sau cưới, Gói Cơ bản lưu 6 tháng và Gói Cao cấp lưu tới 2 năm để hai bạn thoải mái xem lại và tải sổ mừng về máy tính.",
-  },
-];
+const FAQ_KEYS = ["billing", "upgrade", "payment", "retention"] as const;
 
 export interface PricingTableProps {
   embedded?: boolean;
@@ -166,6 +156,7 @@ export function PricingTable({
   planHref = (code) => `/register?plan=${code}`,
 }: PricingTableProps) {
   const { api } = useRuntime();
+  const { t } = useTranslation("plans");
   const [showComparison, setShowComparison] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -176,7 +167,17 @@ export function PricingTable({
     staleTime: 60_000,
   });
 
-  const plans = (plansQuery.data && plansQuery.data.length > 0) ? plansQuery.data : FALLBACK_PLANS;
+  const plans =
+    plansQuery.data && plansQuery.data.length > 0
+      ? plansQuery.data
+      : FALLBACK_PLANS.map((plan) => ({ ...plan, name: t(`pricing.fallbackName.${plan.code}`, { defaultValue: plan.name }) }));
+
+  const renderCell = (value: ComparisonCell, checkClassName: string) =>
+    typeof value === "boolean" ? (
+      value ? <Check className={`size-4 ${checkClassName} mx-auto`} /> : <Minus className="size-4 text-muted-foreground/40 mx-auto" />
+    ) : (
+      t(`pricing.comparison.values.${value}`, { defaultValue: value })
+    );
 
   // GSAP animation khi phần bảng giá cuộn vào tầm nhìn
   useEffect(() => {
@@ -237,17 +238,17 @@ export function PricingTable({
       {/* Header */}
       <div className={`${embedded ? "landing-heading" : "text-center"} max-w-3xl mx-auto mb-14 space-y-3`}>
         <p className={`${embedded ? "landing-eyebrow" : "text-xs font-semibold uppercase tracking-[0.2em] text-primary"}`}>
-          BẢNG GIÁ &amp; GÓI DỊCH VỤ
+          {t("pricing.hero.eyebrow")}
         </p>
         <h2 id="pricing-title" className="font-serif text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-foreground">
-          Đồng hành cùng ngày trọng đại của hai bạn
+          {t("pricing.hero.title")}
         </h2>
         <p className="text-muted-foreground text-sm sm:text-base leading-relaxed">
-          Thanh toán <strong>một lần duy nhất</strong> cho trọn vẹn ngày vui. Không phí duy trì hàng tháng, không chi phí ẩn.
+          <Trans t={t} i18nKey="pricing.hero.subtitle" components={{ strong: <strong /> }} />
         </p>
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-4 py-1.5 text-xs text-muted-foreground shadow-sm mt-2">
           <ShieldCheck className="size-4 text-emerald-600" />
-          <span>Kích hoạt tự động tức thì qua mã QR · Hỗ trợ đồng hành 24/7</span>
+          <span>{t("pricing.hero.badge")}</span>
         </div>
       </div>
 
@@ -273,7 +274,7 @@ export function PricingTable({
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                   <span className="inline-flex items-center gap-1 rounded-full bg-primary px-3.5 py-1 text-xs font-semibold text-primary-foreground shadow-sm">
                     <Sparkles className="size-3" />
-                    Được chọn nhiều nhất
+                    {t("pricing.card.popular")}
                   </span>
                 </div>
               )}
@@ -281,7 +282,7 @@ export function PricingTable({
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-3.5 py-1 text-xs font-semibold text-white shadow-sm">
                     <Zap className="size-3" />
-                    Trọn gói VIP cao cấp
+                    {t("pricing.card.vip")}
                   </span>
                 </div>
               )}
@@ -291,16 +292,16 @@ export function PricingTable({
                 <h3 className="font-serif text-2xl font-normal text-foreground">{plan.name}</h3>
                 <p className="text-xs text-muted-foreground mt-1 min-h-[32px]">
                   {plan.code === "FREE"
-                    ? "Hoàn hảo cho tiệc nhỏ ấm cúng hoặc trải nghiệm tạo thử thiệp."
+                    ? t("pricing.card.tagline.FREE")
                     : plan.code === "BASIC"
-                      ? "Giải pháp hoàn hảo cho hầu hết các đám cưới Việt Nam."
-                      : "Trải nghiệm sang trọng đẳng cấp với mọi đặc quyền cao nhất."}
+                      ? t("pricing.card.tagline.BASIC")
+                      : t("pricing.card.tagline.PREMIUM")}
                 </p>
                 <div className="mt-5 flex items-baseline gap-1">
                   <span className="text-3xl sm:text-4xl font-semibold tracking-tight text-foreground font-serif">
-                    {plan.price === 0 ? "0 đ" : formatCurrency(plan.price, "vi")}
+                    {plan.price === 0 ? t("pricing.card.freePrice") : formatCurrency(plan.price, "vi")}
                   </span>
-                  <span className="text-xs text-muted-foreground font-normal">/ trọn gói đám cưới</span>
+                  <span className="text-xs text-muted-foreground font-normal">{t("pricing.card.perWedding")}</span>
                 </div>
               </div>
 
@@ -309,19 +310,19 @@ export function PricingTable({
                 <li className="flex items-start gap-3 text-foreground font-medium">
                   <Check className="size-4 shrink-0 text-primary mt-0.5" />
                   <span>
-                    <strong>{plan.limits.guestPlaces ?? "Không giới hạn"}</strong> khách mời &amp; chỗ ngồi
+                    <Trans t={t} i18nKey="pricing.card.guestPlaces" values={{ value: plan.limits.guestPlaces ?? t("pricing.card.unlimited") }} components={{ strong: <strong /> }} />
                   </span>
                 </li>
                 <li className="flex items-start gap-3 text-foreground">
                   <Check className="size-4 shrink-0 text-primary mt-0.5" />
                   <span>
-                    <strong>{plan.limits.mediaImages ?? "Không giới hạn"}</strong> ảnh album cưới sắc nét
+                    <Trans t={t} i18nKey="pricing.card.mediaImages" values={{ value: plan.limits.mediaImages ?? t("pricing.card.unlimited") }} components={{ strong: <strong /> }} />
                   </span>
                 </li>
                 <li className="flex items-start gap-3 text-foreground">
                   <Check className="size-4 shrink-0 text-primary mt-0.5" />
                   <span>
-                    <strong>{plan.limits.emailInvites ?? "Không giới hạn"}</strong> email gửi thiệp mời
+                    <Trans t={t} i18nKey="pricing.card.emailInvites" values={{ value: plan.limits.emailInvites ?? t("pricing.card.unlimited") }} components={{ strong: <strong /> }} />
                   </span>
                 </li>
 
@@ -329,13 +330,13 @@ export function PricingTable({
                   <li className="flex items-start gap-3 text-foreground">
                     <Check className="size-4 shrink-0 text-primary mt-0.5" />
                     <span>
-                      <strong>{plan.limits.smsInvites}</strong> tin nhắn SMS thiệp cưới
+                      <Trans t={t} i18nKey="pricing.card.smsInvites" values={{ value: plan.limits.smsInvites }} components={{ strong: <strong /> }} />
                     </span>
                   </li>
                 ) : (
                   <li className="flex items-start gap-3 text-muted-foreground/60 line-through">
                     <Minus className="size-4 shrink-0 text-muted-foreground/40 mt-0.5" />
-                    <span>Gửi tin nhắn SMS</span>
+                    <span>{t("pricing.card.noSms")}</span>
                   </li>
                 )}
 
@@ -343,22 +344,24 @@ export function PricingTable({
                   <li className="flex items-start gap-3 text-foreground">
                     <Check className="size-4 shrink-0 text-primary mt-0.5" />
                     <span>
-                      <strong>{plan.limits.coHosts}</strong> người đồng hành cùng quản lý
+                      <Trans t={t} i18nKey="pricing.card.coHosts" values={{ value: plan.limits.coHosts }} components={{ strong: <strong /> }} />
                     </span>
                   </li>
                 ) : (
                   <li className="flex items-start gap-3 text-muted-foreground/60 line-through">
                     <Minus className="size-4 shrink-0 text-muted-foreground/40 mt-0.5" />
-                    <span>Thêm người đồng hành</span>
+                    <span>{t("pricing.card.noCoHosts")}</span>
                   </li>
                 )}
 
                 <li className="flex items-start gap-3 text-foreground">
                   <Check className="size-4 shrink-0 text-primary mt-0.5" />
                   <span>
-                    Sơ đồ bàn:{" "}
+                    {t("pricing.card.seatingLabel")}{" "}
                     <strong>
-                      {plan.limits.seatingTables ? `${plan.limits.seatingTables} bàn` : "Không giới hạn bàn"}
+                      {plan.limits.seatingTables
+                        ? t("pricing.card.seatingTables", { count: plan.limits.seatingTables })
+                        : t("pricing.card.seatingUnlimited")}
                     </strong>
                   </span>
                 </li>
@@ -369,7 +372,7 @@ export function PricingTable({
                   ) : (
                     <Minus className="size-4 shrink-0 text-muted-foreground/40 mt-0.5" />
                   )}
-                  <span>Đón tiếp &amp; quét mã điểm danh tại sảnh</span>
+                  <span>{t("pricing.card.checkin")}</span>
                 </li>
 
                 <li className={`flex items-start gap-3 ${plan.limits.giftQr ? "text-foreground" : "text-muted-foreground/60 line-through"}`}>
@@ -378,7 +381,7 @@ export function PricingTable({
                   ) : (
                     <Minus className="size-4 shrink-0 text-muted-foreground/40 mt-0.5" />
                   )}
-                  <span>Mừng cưới qua mã QR &amp; Tải sổ mừng</span>
+                  <span>{t("pricing.card.giftQr")}</span>
                 </li>
 
                 <li className={`flex items-start gap-3 ${plan.limits.customSlug ? "text-foreground" : "text-muted-foreground/60 line-through"}`}>
@@ -387,19 +390,19 @@ export function PricingTable({
                   ) : (
                     <Minus className="size-4 shrink-0 text-muted-foreground/40 mt-0.5" />
                   )}
-                  <span>Đường dẫn website riêng theo tên hai bạn</span>
+                  <span>{t("pricing.card.customSlug")}</span>
                 </li>
 
                 <li className="flex items-start gap-3 text-foreground">
                   <Check className="size-4 shrink-0 text-primary mt-0.5" />
                   <span>
-                    Lưu trữ website:{" "}
+                    {t("pricing.card.retentionLabel")}{" "}
                     <strong>
                       {plan.limits.publicLinkDaysAfterWedding === 7
-                        ? "7 ngày sau cưới"
+                        ? t("pricing.card.retention7d")
                         : plan.limits.publicLinkDaysAfterWedding === 183
-                          ? "6 tháng sau cưới"
-                          : "2 năm sau cưới"}
+                          ? t("pricing.card.retention6m")
+                          : t("pricing.card.retention2y")}
                     </strong>
                   </span>
                 </li>
@@ -409,7 +412,7 @@ export function PricingTable({
               <div className="pt-2">
                 {plan.code === "FREE" ? (
                   <Button asChild variant="outline" className="w-full rounded-full py-5 text-sm font-medium">
-                    <Link href={startHref}>{startHref === "/register" ? "Bắt đầu miễn phí" : "Vào không gian làm việc"}</Link>
+                    <Link href={startHref}>{startHref === "/register" ? t("pricing.card.startFree") : t("pricing.card.goToWorkspace")}</Link>
                   </Button>
                 ) : (
                   <Button
@@ -422,7 +425,7 @@ export function PricingTable({
                     }`}
                   >
                     <Link href={planHref(plan.code)}>
-                      <span>Chọn gói {plan.name}</span>
+                      <span>{t("pricing.card.choosePlan", { name: plan.name })}</span>
                       <ArrowRight className="size-4" />
                     </Link>
                   </Button>
@@ -437,9 +440,9 @@ export function PricingTable({
       <div className="rounded-3xl border border-border bg-card p-6 sm:p-10 mb-12 shadow-sm">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border pb-6">
           <div>
-            <h3 className="font-serif text-2xl font-normal text-foreground">Bảng so sánh chi tiết tính năng</h3>
+            <h3 className="font-serif text-2xl font-normal text-foreground">{t("pricing.comparison.title")}</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Xem đầy đủ thông số và quyền lợi cụ thể của từng gói dịch vụ.
+              {t("pricing.comparison.subtitle")}
             </p>
           </div>
           <Button
@@ -448,7 +451,7 @@ export function PricingTable({
             onClick={() => setShowComparison(!showComparison)}
             className="rounded-full gap-2 text-xs"
           >
-            <span>{showComparison ? "Thu gọn bảng" : "Xem toàn bộ bảng"}</span>
+            <span>{showComparison ? t("pricing.comparison.collapse") : t("pricing.comparison.expand")}</span>
             {showComparison ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
           </Button>
         </div>
@@ -458,41 +461,29 @@ export function PricingTable({
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-foreground">
-                  <th className="py-3 px-4 font-semibold w-2/5">Tính năng</th>
-                  <th className="py-3 px-4 font-semibold text-center w-1/5">Miễn phí</th>
-                  <th className="py-3 px-4 font-semibold text-center w-1/5 text-primary">Cơ bản</th>
-                  <th className="py-3 px-4 font-semibold text-center w-1/5 text-amber-600">Cao cấp</th>
+                  <th className="py-3 px-4 font-semibold w-2/5">{t("pricing.comparison.feature")}</th>
+                  <th className="py-3 px-4 font-semibold text-center w-1/5">{t("pricing.fallbackName.FREE")}</th>
+                  <th className="py-3 px-4 font-semibold text-center w-1/5 text-primary">{t("pricing.fallbackName.BASIC")}</th>
+                  <th className="py-3 px-4 font-semibold text-center w-1/5 text-amber-600">{t("pricing.fallbackName.PREMIUM")}</th>
                 </tr>
               </thead>
               <tbody>
                 {COMPARISON_ROWS.map((section, idx) => (
                   <tr key={idx} className="contents">
                     <td colSpan={4} className="bg-muted/40 font-semibold px-4 py-2.5 text-xs uppercase tracking-wider text-muted-foreground">
-                      {section.category}
+                      {t(`pricing.comparison.categories.${section.category}`)}
                     </td>
                     {section.items.map((row, rowIdx) => (
                       <tr key={rowIdx} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                        <td className="py-3 px-4 text-foreground font-medium">{row.name}</td>
+                        <td className="py-3 px-4 text-foreground font-medium">{t(`pricing.comparison.rows.${row.name}`)}</td>
                         <td className="py-3 px-4 text-center text-muted-foreground">
-                          {typeof row.free === "boolean" ? (
-                            row.free ? <Check className="size-4 text-emerald-600 mx-auto" /> : <Minus className="size-4 text-muted-foreground/40 mx-auto" />
-                          ) : (
-                            row.free
-                          )}
+                          {renderCell(row.free, "text-emerald-600")}
                         </td>
                         <td className="py-3 px-4 text-center font-medium text-foreground">
-                          {typeof row.basic === "boolean" ? (
-                            row.basic ? <Check className="size-4 text-primary mx-auto" /> : <Minus className="size-4 text-muted-foreground/40 mx-auto" />
-                          ) : (
-                            row.basic
-                          )}
+                          {renderCell(row.basic, "text-primary")}
                         </td>
                         <td className="py-3 px-4 text-center font-semibold text-foreground">
-                          {typeof row.premium === "boolean" ? (
-                            row.premium ? <Check className="size-4 text-amber-600 mx-auto" /> : <Minus className="size-4 text-muted-foreground/40 mx-auto" />
-                          ) : (
-                            row.premium
-                          )}
+                          {renderCell(row.premium, "text-amber-600")}
                         </td>
                       </tr>
                     ))}
@@ -509,10 +500,10 @@ export function PricingTable({
         <>
           <div className="max-w-3xl mx-auto mb-16">
             <h2 className="font-serif text-2xl font-normal text-center mb-8 text-foreground">
-              Câu hỏi thường gặp về gói cước
+              {t("pricing.faq.title")}
             </h2>
             <div className="space-y-4">
-              {FAQS.map((faq, index) => {
+              {FAQ_KEYS.map((faqKey, index) => {
                 const isOpen = openFaq === index;
                 return (
                   <div
@@ -524,12 +515,12 @@ export function PricingTable({
                       onClick={() => setOpenFaq(isOpen ? null : index)}
                       className="flex w-full items-center justify-between gap-4 text-left font-medium text-foreground"
                     >
-                      <span className="font-serif text-base">{faq.q}</span>
+                      <span className="font-serif text-base">{t(`pricing.faq.${faqKey}.q`)}</span>
                       {isOpen ? <ChevronUp className="size-4 shrink-0 text-muted-foreground" /> : <ChevronDown className="size-4 shrink-0 text-muted-foreground" />}
                     </button>
                     {isOpen && (
                       <p className="mt-3 text-sm text-muted-foreground leading-relaxed animate-in fade-in duration-200">
-                        {faq.a}
+                        {t(`pricing.faq.${faqKey}.a`)}
                       </p>
                     )}
                   </div>
@@ -540,19 +531,19 @@ export function PricingTable({
 
           <div className="rounded-3xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card to-amber-500/10 p-8 sm:p-12 text-center max-w-4xl mx-auto shadow-sm space-y-4">
             <h2 className="font-serif text-2xl sm:text-3xl text-foreground font-normal">
-              Sẵn sàng tạo thiệp cưới trong mơ của hai bạn?
+              {t("pricing.cta.title")}
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
-              Bắt đầu miễn phí ngay hôm nay. Chỉ mất chưa đầy 3 phút để có ngay một website cưới và thiệp online chuyên nghiệp.
+              {t("pricing.cta.subtitle")}
             </p>
             <div className="pt-2 flex flex-wrap items-center justify-center gap-4">
               <Button asChild className="rounded-full px-8 h-12 font-semibold shadow-md">
                 <Link href={startHref}>
-                  Bắt đầu tạo thiệp ngay <ArrowRight className="size-4 ml-1" />
+                  {t("pricing.cta.start")} <ArrowRight className="size-4 ml-1" />
                 </Link>
               </Button>
               <Button asChild variant="outline" className="rounded-full px-6 h-12">
-                <Link href="/#templates">Xem các mẫu thiết kế</Link>
+                <Link href="/#templates">{t("pricing.cta.templates")}</Link>
               </Button>
             </div>
           </div>

@@ -53,6 +53,7 @@ import {
 } from "../api/planning-seating.api";
 import { moveSeatingWithRetry } from "../utils/seating-conflict-retry";
 import { seatingErrorText } from "../utils/seating-errors";
+import { placeNeedsSeat } from "../utils/seating-places";
 import { useSeatingCollaboration } from "../hooks/use-seating-collaboration";
 import { SeatingDragPresenceContext } from "./seating-drag-presence";
 import { offsetDragPreview, seatingDropFeedback, type SeatingDropPosition } from "../utils/seating-drag-preview";
@@ -106,6 +107,7 @@ const tableCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates,
 
 export function PlanningSeating({ weddingId }: { weddingId: string }) {
   const { t } = useTranslation("guestPlanning");
+  const { t: ts } = useTranslation("seating");
   const { api, realtime } = useRuntime();
   const { can, isWeddingWide } = usePermission();
   const editable = can("SEATING_EDIT");
@@ -320,14 +322,21 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       const guest = place ? guests.get(place.guestId) : undefined;
       (map[a.tableId] ??= {})[a.seatNumber] = {
         placeId: a.placeId,
-        name: place?.person?.fullName || guest?.recipientName || `Ghế ${a.seatNumber}`,
+        name: place?.person?.fullName || guest?.recipientName || ts("board.seatFallback", { seat: a.seatNumber }),
         side: guest?.side,
       };
     }
     return map;
-  }, [plan]);
+  }, [plan, ts]);
 
   // Assigned place IDs set
+  // Places that still need a seat and have none: the "unseated guests" figure (empty places of a firm answer are not counted).
+  const unseatedCount = useMemo(() => {
+    if (!plan) return 0;
+    const seated = new Set(plan.assignments.map((a) => a.placeId));
+    const guests = new Map(plan.guests.map((g) => [g.id, g]));
+    return plan.places.filter((p) => !seated.has(p.id) && placeNeedsSeat(p, guests.get(p.guestId))).length;
+  }, [plan]);
   const assignedPlaceIds = useMemo(() => {
     const set = new Set<string>();
     if (!plan) return set;
@@ -376,32 +385,32 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         const destination = latest.tables.find((table) => table.id === input.tableId);
         setMessage(
           destination
-            ? `Đã xếp ${input.placeIds.length} khách vào ${destination.name}.`
-            : `Đã đưa ${input.placeIds.length} khách về khay chưa xếp.`,
+            ? ts("board.movedPlaces", { count: input.placeIds.length, table: destination.name })
+            : ts("board.placesToTray", { count: input.placeIds.length }),
         );
       } else if (input.action === "MOVE_PARTY") {
         const destination = latest.tables.find((table) => table.id === input.tableId);
         setMessage(
           destination
-            ? `Đã xếp trọn vẹn thiệp vào ${destination.name}.`
-            : "Đã đưa thiệp về khay chưa xếp.",
+            ? ts("board.movedParty", { table: destination.name })
+            : ts("board.partyToTray"),
         );
       } else if (input.action === "PLACE_TABLE" || input.action === "MOVE_TABLE") {
-        setMessage("Đã cập nhật vị trí bàn trên sơ đồ sảnh.");
+        setMessage(ts("board.tableMoved"));
       } else if (input.action === "SWAP_PLACES") {
-        setMessage("Đã đổi chỗ hai khách.");
+        setMessage(ts("board.placesSwapped"));
       } else if (input.action === "SWAP_TABLES") {
-        setMessage("Đã hoán đổi vị trí 2 bàn tiệc thành công.");
+        setMessage(ts("board.tablesSwapped"));
       } else if (input.action === "RENUMBER_TABLES") {
-        setMessage("Đã đánh số lại tất cả các bàn theo hàng và cột.");
+        setMessage(ts("board.renumbered"));
       } else if (input.action === "TAG_TABLES") {
-        setMessage("Đã cập nhật thông tin cho các bàn đã chọn.");
+        setMessage(ts("board.tagged"));
       } else if (input.action === "START_EVENT") {
-        setMessage("Tiệc cưới đã chính thức bắt đầu! Chế độ ngày cưới đã kích hoạt.");
+        setMessage(ts("board.eventStarted"));
       } else if (input.action === "LOCK_PLAN") {
-        setMessage("Đã khóa sơ đồ bàn. Ngăn chặn chỉnh sửa ngoài ý muốn.");
+        setMessage(ts("board.locked"));
       } else if (input.action === "UNLOCK_PLAN") {
-        setMessage("Đã mở khóa sơ đồ bàn.");
+        setMessage(ts("board.unlocked"));
       } else {
         setMessage(t("seating.saved"));
       }
@@ -412,7 +421,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     } catch (error) {
       setFailure(true);
       const msg =
-        seatingErrorText(error) ?? (error instanceof Error ? error.message : "Thao tác thất bại.");
+        seatingErrorText(error, ts) ?? (error instanceof Error ? error.message : ts("board.failed"));
       setMessage(msg);
     } finally {
       savingRef.current = false;
@@ -430,7 +439,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       const next = !publication.data?.published;
       await setSeatingPublication(api, weddingId, next);
       await cache.invalidateQueries({ queryKey: seatingPublicationKey(weddingId) });
-      setMessage(next ? "Đã công khai sơ đồ chỗ ngồi cho khách mời." : "Đã ẩn sơ đồ chỗ ngồi.");
+      setMessage(next ? ts("board.published") : ts("board.unpublished"));
       setFailure(false);
     } catch (err: unknown) {
       setFailure(true);
@@ -458,10 +467,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       await cache.invalidateQueries({ queryKey: seatingLayoutKey(weddingId) });
       await cache.invalidateQueries({ queryKey: key });
       setIsLayoutModalOpen(false);
-      setMessage("Đã cập nhật sơ đồ kích thước sảnh cưới.");
+      setMessage(ts("board.layoutSaved"));
     } catch (err: unknown) {
       const msg =
-        err instanceof Error ? err.message : "Không thể cập nhật sơ đồ sảnh. Vui lòng thử lại.";
+        err instanceof Error ? err.message : ts("board.layoutFailed");
       setLayoutError(msg);
     } finally {
       setLayoutSaving(false);
@@ -505,7 +514,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       <div className="flex h-96 items-center justify-center space-y-4 flex-col">
         <Sparkles className="size-8 text-primary animate-pulse" />
         <span className="font-serif text-sm text-muted-foreground">
-          Đang tải sơ đồ sảnh tiệc và danh sách bàn ghế...
+          {ts("board.loading")}
         </span>
       </div>
     );
@@ -515,10 +524,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     return (
       <div className="rounded-3xl border border-destructive/20 bg-destructive/10 p-8 text-center space-y-3">
         <p className="font-serif text-lg font-semibold text-destructive">
-          Không thể tải dữ liệu sơ đồ bàn tiệc.
+          {ts("board.loadFailed")}
         </p>
         <Button onClick={() => void planQuery.refetch()} variant="outline">
-          Thử lại
+          {ts("board.retry")}
         </Button>
       </div>
     );
@@ -648,18 +657,18 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-serif text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                  Sơ đồ &amp; Xếp bàn Tiệc cưới
+                  {ts("board.title")}
                 </span>
                 {plan.isLocked && (
                   <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
                     <Lock className="size-3" />
-                    <span>Đã khóa</span>
+                    <span>{ts("board.lockedBadge")}</span>
                   </span>
                 )}
                 {plan.isEventStarted && (
                   <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                     <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Ngày cưới</span>
+                    <span>{ts("board.weddingDay")}</span>
                   </span>
                 )}
                 <span
@@ -670,8 +679,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   }`}
                   title={
                     status === "connected"
-                      ? "Đang kết nối trực tiếp, thay đổi được cập nhật ngay"
-                      : "Mất kết nối, vui lòng kiểm tra mạng"
+                      ? ts("board.liveHint")
+                      : ts("board.offlineHint")
                   }
                 >
                   <span
@@ -679,11 +688,11 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       status === "connected" ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"
                     }`}
                   />
-                  <span>{status === "connected" ? "Trực tiếp" : "Ngoại tuyến"}</span>
+                  <span>{status === "connected" ? ts("board.live") : ts("board.offline")}</span>
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Sắp xếp bàn tiệc trên sơ đồ sảnh cưới và phân bổ chỗ ngồi cho khách mời hai họ.
+                {ts("board.subtitle")}
               </p>
             </div>
 
@@ -696,7 +705,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 onClick={() => setIsLayoutModalOpen(true)}
               >
                 <Grid className="size-3.5 text-primary" />
-                <span>Thiết lập sảnh</span>
+                <span>{ts("board.hallSetup")}</span>
               </Button>
 
               <Button
@@ -709,7 +718,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 }}
               >
                 <Plus className="size-3.5 text-primary" />
-                <span>Tạo bàn mới</span>
+                <span>{ts("board.newTable")}</span>
               </Button>
 
               <Button
@@ -722,7 +731,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 }}
               >
                 <CheckSquare className="size-3.5" />
-                <span>{isMultiSelectMode ? "Hủy chọn bàn" : "Chọn nhiều bàn"}</span>
+                <span>{isMultiSelectMode ? ts("board.cancelMulti") : ts("board.multiSelect")}</span>
               </Button>
 
               <Button
@@ -733,7 +742,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 onClick={() => setIsSuggestionsModalOpen(true)}
               >
                 <Wand2 className="size-3.5 text-amber-500" />
-                <span>Xếp tự động</span>
+                <span>{ts("board.autoSeat")}</span>
               </Button>
 
               <Button
@@ -743,7 +752,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 onClick={() => setIsDayOfDrawerOpen(true)}
               >
                 <Activity className="size-3.5 text-primary" />
-                <span>Ngày cưới</span>
+                <span>{ts("board.weddingDay")}</span>
               </Button>
 
               <Button
@@ -754,7 +763,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 onClick={() => void togglePublication()}
               >
                 <Eye className="size-3.5" />
-                <span>{publication.data?.published ? "Thu hồi công khai" : "Xuất bản sơ đồ"}</span>
+                <span>{publication.data?.published ? ts("board.unpublish") : ts("board.publish")}</span>
               </Button>
             </div>
           </div>
@@ -763,37 +772,43 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           <div className="seating-header-anim grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             <div className="rounded-2xl border border-border bg-card p-3.5 shadow-sm space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                Đã đặt lên sơ đồ
+                {ts("board.placedTables")}
               </span>
               <div className="font-serif text-lg font-bold text-foreground">
-                {placedTables.length} / {plan.tables.length} bàn
+                {ts("board.tablesRatio", { placed: placedTables.length, total: plan.tables.length })}
               </div>
             </div>
 
             <div className="rounded-2xl border border-border bg-card p-3.5 shadow-sm space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                Khách đã xếp chỗ
+                {ts("board.seatedGuests")}
               </span>
               <div className="font-serif text-lg font-bold text-foreground">
-                {assignedPlaceIds.size} / {plan.places.length} khách
+                {ts("board.guestsRatio", {
+                  seated: assignedPlaceIds.size,
+                  total: assignedPlaceIds.size + unseatedCount,
+                })}
               </div>
             </div>
 
             <div className="rounded-2xl border border-border bg-card p-3.5 shadow-sm space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                Quy mô sảnh tiệc
+                {ts("board.hallSize")}
               </span>
               <div className="font-serif text-lg font-bold text-foreground">
-                {layout.groomRows + layout.brideRows} hàng · {layout.numbering === "BY_ROW" ? "Theo hàng" : "Chẵn lẻ"}
+                {ts("board.hallSizeValue", {
+                  rows: layout.groomRows + layout.brideRows,
+                  numbering: layout.numbering === "BY_ROW" ? ts("board.byRow") : ts("board.oddEven"),
+                })}
               </div>
             </div>
 
             <div className="rounded-2xl border border-border bg-card p-3.5 shadow-sm space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                Khách chưa xếp
+                {ts("board.unseated")}
               </span>
               <div className="font-serif text-lg font-bold text-amber-600 dark:text-amber-400">
-                {plan.places.length - assignedPlaceIds.size} khách
+                {ts("board.guestsCount", { count: unseatedCount })}
               </div>
             </div>
           </div>
@@ -824,7 +839,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               <div className="flex items-center gap-2">
                 <Sparkles className="size-4 animate-spin text-primary" />
                 <span className="font-semibold">
-                  Đang chọn thiệp ({selectedParty.placeIds.length} khách). Hãy bấm vào một bàn trên sơ đồ hoặc trong khay để xếp cả nhóm vào bàn đó!
+                  {ts("board.partySelected", { count: selectedParty.placeIds.length })}
                 </span>
               </div>
               <Button
@@ -836,7 +851,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 }}
                 className="h-7 text-xs rounded-full"
               >
-                Hủy chọn
+                {ts("board.cancelSelection")}
               </Button>
             </div>
           )}
@@ -959,7 +974,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             onClose={() => setIsSuggestionsModalOpen(false)}
             onApplied={() => {
               void cache.invalidateQueries({ queryKey: key });
-              setMessage("Đã áp dụng thành công phương án xếp chỗ tự động.");
+              setMessage(ts("board.suggestionApplied"));
             }}
           />
 
@@ -1055,7 +1070,9 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 const table = plan.tables.find((t) => t.id === dragTableId);
                 return table ? (
                   <div className="flex size-16 flex-col items-center justify-center rounded-full border-2 border-primary bg-card font-serif text-xs font-bold shadow-xl">
-                    {table.number ? `Bàn ${String(table.number).padStart(2, "0")}` : table.name}
+                    {table.number
+                      ? ts("common.tableLabel", { number: String(table.number).padStart(2, "0") })
+                      : table.name}
                     <span className="font-mono text-[10px] font-normal text-muted-foreground">
                       {assignmentsCountByTable[table.id] ?? 0}/{table.capacity}
                     </span>

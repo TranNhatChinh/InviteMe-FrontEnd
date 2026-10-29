@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
 import {
@@ -18,6 +19,7 @@ import { adminApi } from "@/features/admin";
 
 export function AdminInvitationStudio({ id }: { id: string }) {
   const { api } = useRuntime();
+  const { t } = useTranslation("ui");
   const client = useQueryClient();
   const [message, setMessage] = useState("");
   const [publishing, setPublishing] = useState(false);
@@ -36,7 +38,7 @@ export function AdminInvitationStudio({ id }: { id: string }) {
       configurationJson: JSON.stringify(storedInvitationDocument(parseStudioDocument(serialized))),
       status: item.status,
     });
-    setMessage("Đã lưu bản thiết kế. Nhấn Xuất bản để cập nhật mẫu công khai.");
+    setMessage(t("invitationStudio.saved"));
     await client.invalidateQueries({ queryKey: ["admin-template", id] });
   }
   async function publish() {
@@ -44,14 +46,14 @@ export function AdminInvitationStudio({ id }: { id: string }) {
     setMessage("");
     try {
       await adminApi.publishTemplate(api, id);
-      setMessage("Đã xuất bản mẫu thiệp.");
+      setMessage(t("invitationStudio.published"));
       await Promise.all([
         client.invalidateQueries({ queryKey: ["admin-template", id] }),
         client.invalidateQueries({ queryKey: ["admin-templates"] }),
         client.invalidateQueries({ queryKey: ["public-templates"] }),
       ]);
     } catch {
-      setMessage("Không thể xuất bản. Hãy kiểm tra thiết kế và lưu bản nháp trước.");
+      setMessage(t("invitationStudio.publishFailed"));
     } finally {
       setPublishing(false);
     }
@@ -74,18 +76,18 @@ export function AdminInvitationStudio({ id }: { id: string }) {
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4">
         <div>
           <Link href="/admin/templates" className="text-sm text-primary">
-            ← Danh sách mẫu thiệp
+            ← {t("invitationStudio.back")}
           </Link>
           <h1 className="font-display text-2xl">{template.data.name}</h1>
           <p className="text-sm text-muted-foreground">
-            Chỉnh thiết kế, lưu bản nháp rồi xuất bản.
+            {t("invitationStudio.help")}
           </p>
         </div>
         <Button
           disabled={publishing || !template.data.configurationJson}
           onClick={() => void publish()}
         >
-          {publishing ? "Đang xuất bản…" : "Xuất bản"}
+          {publishing ? t("invitationStudio.publishing") : t("invitationStudio.publish")}
         </Button>
       </header>
       {message && (

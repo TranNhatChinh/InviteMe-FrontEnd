@@ -1,6 +1,7 @@
 "use client";
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useTranslation } from "react-i18next";
 import { Crown, Layers, Plus, RotateCcw, Wand2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import type { PlanningTable } from "../api/planning-seating.api";
@@ -29,6 +30,7 @@ function TrayTable({
   editable: boolean;
   onTableClick: (table: PlanningTable) => void;
 }) {
+  const { t } = useTranslation("seating");
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
     id: `tbl:${table.id}`,
     data: { kind: "table", tableId: table.id, side: table.side },
@@ -43,7 +45,7 @@ function TrayTable({
       className={`group relative flex flex-col justify-between rounded-2xl border border-border bg-muted/20 p-3.5 transition-all hover:border-primary hover:bg-card hover:shadow-sm ${
         editable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
       } ${isDragging ? "opacity-40" : ""}`}
-      title={editable ? "Bấm để xem bàn · kéo lên một ô trống của sơ đồ để đặt bàn" : undefined}
+      title={editable ? t("tray.tableHint") : undefined}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
@@ -56,21 +58,23 @@ function TrayTable({
       <div className="flex items-start justify-between">
         <div className="space-y-0.5">
           <span className="font-serif text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-            {table.number ? `Bàn ${String(table.number).padStart(2, "0")}` : table.name}
+            {table.number
+              ? t("common.tableLabel", { number: String(table.number).padStart(2, "0") })
+              : table.name}
           </span>
           <div className="text-[10px] text-muted-foreground">
             {table.side === "GROOM"
-              ? "Nhà Trai"
+              ? t("tray.groomShort")
               : table.side === "BRIDE"
-                ? "Nhà Gái"
-                : "Bàn Chung"}
+                ? t("tray.brideShort")
+                : t("tray.sharedShort")}
           </div>
         </div>
         {table.isVip && <Crown className="size-3.5 text-amber-500" />}
       </div>
 
       <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-2 text-[10px] font-mono">
-        <span className="text-muted-foreground">Đã xếp:</span>
+        <span className="text-muted-foreground">{t("tray.seated")}</span>
         <span className="font-semibold text-foreground">
           {seated} / {table.capacity}
         </span>
@@ -90,6 +94,7 @@ export function SeatingTray({
   autoPlacing = false,
   editable = false,
 }: SeatingTrayProps) {
+  const { t } = useTranslation("seating");
   const { setNodeRef, isOver, active } = useDroppable({
     id: "table-tray",
     data: { kind: "table-tray" },
@@ -107,7 +112,7 @@ export function SeatingTray({
         <div className="flex items-center gap-2">
           <Layers className="size-4 text-primary" />
           <h3 className="font-serif text-base font-semibold text-foreground">
-            Khay bàn chưa đặt lên sơ đồ ({unplacedTables.length})
+            {t("tray.title", { count: unplacedTables.length })}
           </h3>
         </div>
 
@@ -119,10 +124,10 @@ export function SeatingTray({
               onClick={onAutoPlaceClick}
               disabled={autoPlacing || !editable}
               className="rounded-full text-xs gap-1.5 h-8 text-primary border-primary/30 hover:bg-primary/5"
-              title="Tự động xếp các bàn trong khay vào các ô trống tối ưu trên sơ đồ sảnh"
+              title={t("tray.autoPlaceHint")}
             >
               <Wand2 className="size-3.5" />
-              <span>Tự xếp lên sơ đồ</span>
+              <span>{t("tray.autoPlace")}</span>
             </Button>
           )}
 
@@ -132,10 +137,10 @@ export function SeatingTray({
             onClick={onRenumberClick}
             disabled={renumbering}
             className="rounded-full text-xs gap-1.5 h-8"
-            title="Đánh số lại tất cả các bàn theo hàng và cột trên sơ đồ sảnh"
+            title={t("tray.renumberHint")}
           >
             <RotateCcw className="size-3.5" />
-            <span>Đánh số lại theo vị trí</span>
+            <span>{t("tray.renumber")}</span>
           </Button>
 
           <Button
@@ -144,14 +149,14 @@ export function SeatingTray({
             className="rounded-full text-xs gap-1.5 h-8"
           >
             <Plus className="size-3.5" />
-            <span>Thêm bàn mới</span>
+            <span>{t("tray.addTable")}</span>
           </Button>
         </div>
       </div>
 
       {unplacedTables.length === 0 ? (
         <div className="py-6 text-center text-xs text-muted-foreground">
-          Tất cả các bàn tiệc đã được sắp xếp lên sơ đồ sảnh cưới.
+          {t("tray.allPlaced")}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">

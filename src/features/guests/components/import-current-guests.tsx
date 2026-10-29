@@ -8,14 +8,14 @@ import { useLanguage } from "@/i18n/language-context";
 import { formatNumber } from "@/i18n/format";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
-import { listPlanningGuests, sideLabels } from "../api/planning.api";
+import { listPlanningGuests } from "../api/planning.api";
 
 /**
  * The guests already in the wedding, open beside the file check: a row reported as a duplicate phone or name can be
  * compared with the guest it clashes with without leaving the import (leaving would drop the file).
  */
 export function ImportCurrentGuests({ weddingId }: { weddingId: string }) {
-  const { t } = useTranslation("guestPlanning", { keyPrefix: "importPage.currentGuests" });
+  const { t, i18n } = useTranslation("guestPlanning", { keyPrefix: "importPage.currentGuests" });
   const { language } = useLanguage();
   const { api } = useRuntime();
   const [open, setOpen] = useState(false);
@@ -82,7 +82,7 @@ export function ImportCurrentGuests({ weddingId }: { weddingId: string }) {
                       {[guest.honorific, guest.recipientName].filter(Boolean).join(" ")}
                     </td>
                     <td className="py-2 pr-3 text-right tabular-nums">{guest.expectedPeople}</td>
-                    <td className="py-2 pr-3 text-muted-foreground">{sideLabels[guest.side]}</td>
+                    <td className="py-2 pr-3 text-muted-foreground">{i18n.t(`sideValues.${guest.side}`, { ns: "guestPlanning", defaultValue: guest.side })}</td>
                     <td className="py-2 pr-3 text-muted-foreground">{guest.group?.name ?? "—"}</td>
                     <td className="py-2 text-muted-foreground">
                       {[guest.phone, guest.email].filter(Boolean).join(" · ") || "—"}
