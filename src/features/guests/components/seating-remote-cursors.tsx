@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";
 import { MousePointer2 } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import type { SeatingDragPointer, SeatingDragPresence } from "@/core/realtime/seating-drag-events";
@@ -21,7 +20,6 @@ function RemoteCursor({
   presence: SeatingDragPresence;
   plan: SeatingPlan;
 }) {
-  const { t } = useTranslation("seating");
   const node = useRef<HTMLDivElement>(null);
   const { realtime } = useRuntime();
   const [anchorName, setAnchorName] = useState("board");
@@ -78,15 +76,12 @@ function RemoteCursor({
           <DraggingLabel presence={presence} />
         </span>
         <p className="hidden rounded bg-white px-2 py-1 text-[10px] text-muted-foreground group-data-[offscreen=true]:block">
-          {t("remoteCursor.offscreen", {
-            place:
-              anchorName === "queue"
-                ? t("remoteCursor.queue")
-                : anchorName === "board" || anchorName === "page"
-                  ? t("remoteCursor.board")
-                  : (plan.tables.find((table) => `table:${table.id}` === anchorName)?.name ??
-                    t("remoteCursor.table")),
-          })}
+          Ngoài vùng đang xem ·{" "}
+          {anchorName === "queue"
+            ? "Hàng chờ"
+            : anchorName === "board"
+              ? "Sơ đồ"
+              : (plan.tables.find((table) => `table:${table.id}` === anchorName)?.name ?? "Bàn")}
         </p>
         <SeatingDragPreview plan={plan} ids={presence.placeIds} feedback={feedback} />
       </div>

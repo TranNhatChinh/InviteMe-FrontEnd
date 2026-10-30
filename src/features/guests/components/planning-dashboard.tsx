@@ -1,19 +1,17 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@/core/api/api-error";
 import { useRuntime } from "@/core/config/runtime";
 import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
 import { CoupleImport } from "./couple-import";
-import { ImportCurrentGuests } from "./import-current-guests";
 import {
   archivePlanningGuest,
   createPlanningGuest,
   restorePlanningGuest,
   importBody,
   importGuests,
-  checkImportGuests,
   listPlanningGuests,
   getPlanningGuest,
   listPlanningGroups,
@@ -35,7 +33,7 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
   const { t } = useTranslation("guestPlanning");
   const { language } = useLocale();
   const { api } = useRuntime();
-  const { can, isWeddingWide } = usePermission();
+  const { can } = usePermission();
   const cache = useQueryClient();
   const [importing, setImporting] = useState(false);
   const [creatingGuest, setCreatingGuest] = useState(false);
@@ -73,7 +71,6 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
     queryFn: ({ signal }) => listPlanningGroups(api, weddingId, signal),
     enabled: can("GUEST_VIEW"),
   });
-  const groupNames = useMemo(() => groups.data?.items.map((group) => group.name), [groups.data]);
   const createGuest = useMutation({
     mutationFn: ({ input, key }: { input: PlanningGuestCreate; key: string }) =>
       createPlanningGuest(api, weddingId, input, key),
@@ -196,68 +193,29 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
       createAttempt.current = { serialized, key: crypto.randomUUID() };
     createGuest.mutate({ input, key: createAttempt.current.key });
   }
-  async function checkImport(rows: CoupleRow[], signal?: AbortSignal) {
-    const body = importBody(rows);
-    return await checkImportGuests(api, weddingId, body, signal);
-  }
   async function save(rows: CoupleRow[]) {
     const body = importBody(rows),
       serialized = JSON.stringify(body);
     if (attempt.current?.serialized !== serialized)
       attempt.current = { serialized, key: crypto.randomUUID() };
     const result = await importGuests(api, weddingId, body, attempt.current.key);
-    const skippedCount = new Set(result.skipped?.map((issue) => issue.rowNumber)).size;
-    const warningRows = new Set(result.warnings.map((issue) => issue.rowNumber)).size;
     setNotice(
-      [
-        t("importPage.result.created", {
-          recipients: formatNumber(result.createdGuestCount, language),
-          guests: formatNumber(result.createdPlaceCount, language),
-        }),
-        skippedCount
-          ? t("importPage.result.skipped", { count: formatNumber(skippedCount, language) })
-          : "",
-        warningRows
-          ? t("importPage.result.warnings", { count: formatNumber(warningRows, language) })
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" "),
+      `${t("imported", { guests: formatNumber(result.createdGuestCount, language), people: formatNumber(result.createdPlaceCount, language) })}${result.warnings.length ? ` ${t("importedDuplicateWarning", { count: formatNumber(result.warnings.length, language) })}` : ""}`,
     );
-    await Promise.all([
-      cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] }),
-      cache.invalidateQueries({ queryKey: ["guest-planning-groups", weddingId] }),
-    ]);
+    await cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] });
     setPage(1);
     setSearch("");
     setImporting(false);
     attempt.current = null;
   }
-  if (importing)
-    return (
-      <CoupleImport
-        onClose={() => setImporting(false)}
-        onImport={save}
-        onCheck={checkImport}
-        groups={groupNames}
-        groupsState={
-          groups.isError
-            ? "error"
-            : groups.isPending && groups.fetchStatus !== "idle"
-              ? "loading"
-              : "ready"
-        }
-        onRetryGroups={() => void groups.refetch()}
-        currentGuests={<ImportCurrentGuests weddingId={weddingId} />}
-      />
-    );
+  if (importing) return <CoupleImport onClose={() => setImporting(false)} onImport={save} />;
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-3xl">{t("title")}</h1>
         {can("SEATING_VIEW") && (
           <Button variant="outline" asChild>
-            <Link href={`/weddings/${weddingId}/seating`}>{t("seatingLink")}</Link>
+            <Link href={`/weddings/${weddingId}/seating`}>{t("seating")}</Link>
           </Button>
         )}
         {can("GUEST_EDIT") && !archivedOnly && (
@@ -272,17 +230,14 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
             >
               {creatingGuest ? t("closeForm") : t("addGuest")}
             </Button>
-            {/* The BE only imports for wedding-wide GUEST_EDIT, not for group-scoped co-hosts. */}
-            {isWeddingWide("GUEST_EDIT") && (
-              <Button
-                onClick={() => {
-                  attempt.current = null;
-                  setImporting(true);
-                }}
-              >
-                {t("import")}
-              </Button>
-            )}
+            <Button
+              onClick={() => {
+                attempt.current = null;
+                setImporting(true);
+              }}
+            >
+              {t("import")}
+            </Button>
           </div>
         )}
       </div>
@@ -457,9 +412,7 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
                           )}
                         </td>
                         <td className="p-3">{g.expectedPeople}</td>
-                        <td className="p-3">
-                          {t(`sideValues.${g.side}`, { defaultValue: g.side })}
-                        </td>
+                        <td className="p-3">{sideLabels[g.side]}</td>
                         <td className="p-3">{g.group?.name ?? t("notGrouped")}</td>
                         {can("INVITATION_SEND") && (
                           <td className="p-3">

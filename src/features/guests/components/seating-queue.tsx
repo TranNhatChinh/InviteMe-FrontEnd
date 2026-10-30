@@ -26,7 +26,7 @@ type QueueProps = {
 export function queuePlaceName(
   place: Place,
   guest: PlanningGuest,
-  companionName: (position: number) => string,
+  companionName: (position: number) => string = (position) => `Người đi kèm ${position}`,
 ) {
   return (
     place.person?.fullName ||
