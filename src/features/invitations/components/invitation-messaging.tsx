@@ -37,6 +37,7 @@ import {
 } from "@/shared/lib/message-recipients";
 import { z } from "zod";
 import { useTranslation } from "react-i18next";
+import { countSmsSegments } from "../utils/sms-segments";
 
 const recipientSchema = z.object({
   id: z.string(),
@@ -81,9 +82,9 @@ function friendlyError(error: unknown, t: (key: string) => string): string {
   if (!(error instanceof ApiError)) return t("errors.generic");
   if (error.status === 503 || error.backendCode === "INVITATION_CHANNEL_NOT_CONFIGURED")
     return t("errors.channelNotConfigured");
-  if (error.backendCode === "SPEEDSMS_SENDER_NOT_FOUND") return t("errors.senderNotFound");
-  if (error.backendCode === "SPEEDSMS_INVALID_PHONE") return t("errors.invalidPhone");
-  if (error.backendCode === "SPEEDSMS_INSUFFICIENT_BALANCE") return t("errors.insufficientBalance");
+  if (["SMS_PHONE_INVALID", "GUEST_PHONE_INVALID", "TEXTBEE_RECIPIENT_INVALID"].includes(error.backendCode ?? "")) return t("errors.invalidPhone");
+  if (["TEXTBEE_NOT_CONFIGURED", "TEXTBEE_AUTH_FAILED", "TEXTBEE_ACCESS_DENIED", "TEXTBEE_DEVICE_NOT_FOUND"].includes(error.backendCode ?? "")) return t("errors.providerNotConfigured");
+  if (error.backendCode === "SMS_CONTENT_TOO_LONG") return t("errors.smsTooLong");
   if (error.backendCode === "CONCURRENCY_CONFLICT" || error.status === 409)
     return t("errors.conflict");
   if (error.status === 422) return t("errors.invalidRequest");
@@ -124,6 +125,13 @@ function statusLabel(status: string, t: (key: string) => string) {
     SENT: "status.sent",
     FAILED: "status.failed",
     PARTIAL_FAILED: "status.partialFailed",
+    ACCEPTED: "status.accepted",
+    DELIVERED: "status.delivered",
+    UNKNOWN: "status.unknown",
+    REVIEW_REQUIRED: "status.reviewRequired",
+    NEEDS_REVIEW: "status.reviewRequired",
+    SIMULATED: "status.simulated",
+    COMPLETED: "status.completed",
   };
   return statusKeys[status] ? t(statusKeys[status]) : status;
 }
@@ -604,16 +612,15 @@ export function InvitationMessaging({
                   <pre className="whitespace-pre-wrap break-words rounded-lg bg-background p-3 text-sm">
                     {previewQuery.data.smsContent}
                   </pre>
-                  <p
-                    className={
-                      previewQuery.data.smsContent.length > 201
-                        ? "text-sm text-destructive"
-                        : "text-xs text-muted-foreground"
-                    }
-                  >
-                    {t("smsCharacterCount", { count: previewQuery.data.smsContent.length })}
-                    {previewQuery.data.smsContent.length > 201 && ` ${t("smsOverLimit")}`}
-                  </p>
+                  {(() => {
+                    const smsLength = countSmsSegments(previewQuery.data.smsContent);
+                    return (
+                      <p className={smsLength.segments > 3 ? "text-sm text-destructive" : "text-xs text-muted-foreground"}>
+                        {t("smsSegmentCount", { encoding: smsLength.encoding, units: smsLength.units, segments: smsLength.segments })}
+                        {smsLength.segments > 3 && ` ${t("smsOverLimit")}`}
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
               <Button
@@ -818,11 +825,15 @@ export function InvitationMessaging({
             </div>
           ) : (
             <>
-              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+              <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 {[
                   ["statusLabel", statusLabel(batchQuery.data.status, t)],
                   ["total", batchQuery.data.totalCount],
                   ["sent", batchQuery.data.sentCount],
+                  ["accepted", batchQuery.data.acceptedCount ?? 0],
+                  ["delivered", batchQuery.data.deliveredCount ?? 0],
+                  ["unknown", batchQuery.data.unknownCount ?? 0],
+                  ["simulated", batchQuery.data.simulatedCount ?? 0],
                   [
                     "failedOrPending",
                     `${batchQuery.data.failedCount} / ${batchQuery.data.pendingCount}`,

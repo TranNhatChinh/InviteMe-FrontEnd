@@ -671,10 +671,18 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
           ) : (
             batch.data && (
               <>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {(["sentCount", "failedCount", "pendingCount"] as const).map((key) => (
-                    <div key={key} className="rounded-xl bg-muted/40 px-4 py-3 text-sm">
-                      {t(key, { count: batch.data[key] })}
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                  {[
+                    ["sentCount", batch.data.sentCount],
+                    ["acceptedCount", batch.data.acceptedCount ?? 0],
+                    ["deliveredCount", batch.data.deliveredCount ?? 0],
+                    ["failedCount", batch.data.failedCount],
+                    ["pendingCount", batch.data.pendingCount],
+                    ["unknownCount", batch.data.unknownCount ?? 0],
+                    ["simulatedCount", batch.data.simulatedCount ?? 0],
+                  ].map(([key, count]) => (
+                    <div key={String(key)} className="rounded-xl bg-muted/40 px-4 py-3 text-sm">
+                      {t(String(key), { count })}
                     </div>
                   ))}
                 </div>
