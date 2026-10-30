@@ -25,11 +25,15 @@ export const invitationPreviewSchema = z.object({
 });
 export const invitationBatchSchema = z.object({
   id: z.string(),
-  status: z.enum(["PENDING", "SENT", "FAILED", "PARTIAL_FAILED"]),
+  status: z.enum(["PENDING", "SENT", "FAILED", "PARTIAL_FAILED", "NEEDS_REVIEW", "SIMULATED", "COMPLETED"]),
   totalCount: z.number().int().nonnegative(),
   sentCount: z.number().int().nonnegative(),
   failedCount: z.number().int().nonnegative(),
   pendingCount: z.number().int().nonnegative(),
+  acceptedCount: z.number().int().nonnegative().optional(),
+  deliveredCount: z.number().int().nonnegative().optional(),
+  unknownCount: z.number().int().nonnegative().optional(),
+  simulatedCount: z.number().int().nonnegative().optional(),
   createdAt: z.string(),
   jobs: z.array(
     z.object({
@@ -37,9 +41,11 @@ export const invitationBatchSchema = z.object({
       guestId: z.string(),
       channel: z.enum(["EMAIL", "SMS"]),
       recipient: z.string(),
-      status: z.enum(["PENDING", "SENDING", "SENT", "FAILED"]),
+      status: z.enum(["PENDING", "SENDING", "ACCEPTED", "SENT", "DELIVERED", "FAILED", "UNKNOWN", "REVIEW_REQUIRED", "SIMULATED"]),
       attemptCount: z.number().int().nonnegative(),
       sentAt: z.string().nullable(),
+      providerAcceptedAt: z.string().nullable().optional(),
+      deliveredAt: z.string().nullable().optional(),
       errorCode: z.string().nullable(),
     }),
   ),

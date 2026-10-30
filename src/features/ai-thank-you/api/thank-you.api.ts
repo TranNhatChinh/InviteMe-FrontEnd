@@ -30,6 +30,10 @@ export const thankYouBatchSchema = z.object({
   sentCount: z.number(),
   failedCount: z.number(),
   pendingCount: z.number(),
+  acceptedCount: z.number().optional(),
+  deliveredCount: z.number().optional(),
+  unknownCount: z.number().optional(),
+  simulatedCount: z.number().optional(),
   createdAt: z.string(),
   jobs: z.array(
     z.object({
@@ -43,6 +47,8 @@ export const thankYouBatchSchema = z.object({
       attemptCount: z.number(),
       sentAt: z.string().nullable(),
       errorCode: z.string().nullable(),
+      providerAcceptedAt: z.string().nullable().optional(),
+      deliveredAt: z.string().nullable().optional(),
     }),
   ),
 });
