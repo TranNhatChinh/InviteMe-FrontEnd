@@ -159,7 +159,7 @@ export function importBody(rows: CoupleRow[]) {
         ({ "Nhà gái": "BRIDE", "Nhà trai": "GROOM", Chung: "MUTUAL" } as Record<string, string>)[
           r.values[4] ?? ""
         ] ?? "UNSPECIFIED",
-      group: r.values[5] ? { newName: r.values[5], confirmed: true } : null,
+      groupName: r.values[5] || null,
       phone: r.values[6] || null,
       email: r.values[8] || null,
       note: r.values[7] || null,

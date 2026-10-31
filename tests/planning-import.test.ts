@@ -39,7 +39,7 @@ test("import maps expected places including primary, explicit side and family wi
         invitationKind: "FAMILY",
         expectedPeople: 4,
         side: "BRIDE",
-        group: { newName: "Họ ngoại", confirmed: true },
+        groupName: "Họ ngoại",
         phone: null,
         email: null,
         note: "Hai trẻ nhỏ",
@@ -52,7 +52,7 @@ test("missing side stays unspecified, group optional, count includes representat
   const row = importBody(rows).rows[0];
   assert.equal(row?.side, "UNSPECIFIED");
   assert.equal(row?.expectedPeople, 1);
-  assert.equal(row?.group, null);
+  assert.equal(row?.groupName, null);
 });
 test("row errors preserve only allowed row and field metadata, never backend message", () => {
   const error = normalizeHttpError(422, {
