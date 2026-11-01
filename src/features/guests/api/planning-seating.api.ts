@@ -1,17 +1,20 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
 import { planningGuestSchema } from "./planning.api";
+import { groupKind } from "@/shared/lib/planning-groups";
 
 export const seatingPlanSchema = z.object({
   weddingId: z.string(),
   version: z.number().int(),
   tables: z.array(
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      capacity: z.number().int(),
-      groupId: z.string().nullable().optional(),
-    }),
+    z
+      .object({
+        id: z.string(),
+        name: z.string(),
+        capacity: z.number().int(),
+        group: groupKind.nullable().optional(),
+      })
+      .transform(({ group, ...table }) => ({ ...table, ...(group ? { groupId: group } : {}) })),
   ),
   guests: z.array(planningGuestSchema),
   places: z.array(
@@ -108,7 +111,12 @@ export function changeSeatingPlan(
 ) {
   return api.request(path(id), {
     method: "PATCH",
-    body: { ...change, expectedVersion, ...(dragToken ? { dragToken } : {}) },
+    body: {
+      ...change,
+      ...("groupId" in change ? { group: change.groupId ?? "OTHER", groupId: undefined } : {}),
+      expectedVersion,
+      ...(dragToken ? { dragToken } : {}),
+    },
     schema: seatingPlanSchema,
   });
 }

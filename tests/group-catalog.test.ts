@@ -1,15 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import {
-  addGroup,
-  defaultGroups,
-  findGroup,
-  groupReviewKey,
-  groupSuggestions,
-  resolveGroupRows,
-  unknownGroups,
-} from "../src/features/guests/utils/group-catalog";
+import { defaultGroups, findGroup } from "../src/features/guests/utils/group-catalog";
 import {
   coupleHeaders,
   parseCoupleCsv,
@@ -22,47 +14,21 @@ import {
   recommendedTableCount,
 } from "../src/features/guests/utils/seating-demo";
 
-test("normalization accepts case/spacing but never automatically corrects misspellings", () => {
-  assert.equal(findGroup("  HỌ   NGOẠI ", defaultGroups), "Họ ngoại");
-  assert.equal(findGroup("Bạn đai học", defaultGroups), undefined);
-  assert.ok(groupSuggestions("Bạn đai học", defaultGroups).includes("Bạn đại học"));
-});
-test("unknown labels require explicit mapping or creation; side is preserved", () => {
-  const rows = parseCoupleCsv(
-    readFileSync(new URL("../public/templates/khach-moi-can-xu-ly.csv", import.meta.url), "utf8"),
-  );
-  assert.equal(unknownGroups(rows, defaultGroups).length, 2);
-  const mapped = resolveGroupRows(
-    rows,
-    groupReviewKey("Nhà gái", "Bạn đai học"),
-    "Bạn đại học",
-    defaultGroups,
-  );
-  assert.equal(mapped[2]?.values[5], "Bạn đại học");
-  assert.equal(mapped[2]?.values[4], "Nhà gái");
-  assert.equal(unknownGroups(mapped, defaultGroups).length, 1);
-  assert.equal(rows[2]?.values[5], "Bạn đai học");
-  const created = addGroup(defaultGroups, " Công ty ABC ");
-  const resolved = resolveGroupRows(
-    mapped,
-    groupReviewKey("Nhà trai", "Công ty ABC"),
-    created.label,
-    created.catalog,
-  );
-  assert.equal(unknownGroups(resolved, created.catalog).length, 0);
-  assert.throws(() =>
-    resolveGroupRows(rows, groupReviewKey("Nhà gái", "Bạn đai học"), "Chưa tạo", defaultGroups),
-  );
-});
-test("custom group names are validated and repeated names are not duplicated", () => {
-  assert.throws(() => addGroup(defaultGroups, " "));
-  assert.throws(() => addGroup(defaultGroups, "=SUM(A1:A2)"));
-  assert.throws(() => addGroup(defaultGroups, "a".repeat(101)));
-  assert.equal(addGroup(defaultGroups, "HỌ NGOẠI").catalog.length, defaultGroups.length);
+test("only six fixed groups are selectable", () => {
+  assert.deepEqual(defaultGroups, [
+    "Họ hàng",
+    "Bạn bè",
+    "Đồng nghiệp",
+    "Đối tác",
+    "Hàng xóm",
+    "Khác",
+  ]);
+  assert.equal(findGroup("  HỌ   HÀNG ", defaultGroups), "Họ hàng");
+  assert.equal(findGroup("Bạn bè cũ", defaultGroups), undefined);
 });
 test("invalid sides fail validation; blank stays unknown; editing side clears only its validation error", () => {
   const rows = parseCoupleCsv(
-    `${coupleHeaders.join(",")}\nAn,Bác,Gia đình,4,Nhà sai,Họ ngoại,,\nHoa,Cô,Cá nhân,1,,Họ ngoại,,`,
+    `${coupleHeaders.join(",")}\nAn,Bác,Gia đình,4,Nhà sai,Họ hàng,,\nHoa,Cô,Cá nhân,1,,Họ hàng,,`,
   );
   assert.ok(rows[0]?.errors.some((error) => error.includes("Phía khách mời")));
   assert.equal(rows[1]?.values[4], "");
@@ -89,12 +55,12 @@ test("all sample counts remain correct and all non-test groups are known", () =>
       rows.reduce((sum, row) => sum + (row.expected ?? 0), 0),
       count,
     );
-    assert.equal(unknownGroups(rows, defaultGroups).length, 0);
+    assert.ok(rows.every((row) => !row.values[5] || !!findGroup(row.values[5], defaultGroups)));
   }
 });
 test("the same group label on opposite wedding sides never becomes one affinity group or table", () => {
   const rows = parseCoupleCsv(
-    `${coupleHeaders.join(",")}\nAn,Bác,Gia đình,4,Nhà gái,Họ ngoại,,\nHoa,Cô,Gia đình,2,Nhà trai,Họ ngoại,,`,
+    `${coupleHeaders.join(",")}\nAn,Bác,Gia đình,4,Nhà gái,Họ hàng,,\nHoa,Cô,Gia đình,2,Nhà trai,Họ hàng,,`,
   );
   const parties = seatingParties(rows);
   assert.equal(recommendedTableCount(parties, 10), 2);
@@ -114,5 +80,5 @@ test("Excel template can be read directly and has the same five contacts and ten
     rows.reduce((sum, row) => sum + (row.expected ?? 0), 0),
     10,
   );
-  assert.equal(unknownGroups(rows, defaultGroups).length, 0);
+  assert.equal(rows.filter((row) => !findGroup(row.values[5] ?? "", defaultGroups)).length, 0);
 });

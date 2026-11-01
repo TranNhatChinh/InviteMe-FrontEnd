@@ -23,14 +23,7 @@ import {
   type CoupleRow,
 } from "../utils/couple-import";
 import { CoupleSeatingPreview } from "./couple-seating-preview";
-import { ImportGroupReview } from "./import-group-review";
-import {
-  addGroup,
-  defaultGroups,
-  findGroup,
-  resolveGroupRows,
-  unknownGroups,
-} from "../utils/group-catalog";
+import { defaultGroups, findGroup } from "../utils/group-catalog";
 import { readCoupleFile } from "../utils/read-couple-file";
 import { ApiError } from "@/core/api/api-error";
 
@@ -79,7 +72,7 @@ export function CoupleImport({
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [seating, setSeating] = useState(false);
-  const [catalog, setCatalog] = useState<string[]>([...defaultGroups]);
+  const catalog = defaultGroups;
   const [saving, setSaving] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<number, string[]>>({});
   async function submit() {
@@ -125,7 +118,14 @@ export function CoupleImport({
       if (!response.ok) throw new Error(t("errors.missingSample"));
       const content = await response.text();
       if (id !== request.current) return;
-      setRows(parseCoupleCsv(content));
+      setRows(
+        parseCoupleCsv(content).map((row) => ({
+          ...row,
+          values: row.values.map((value, index) =>
+            index === 5 ? (findGroup(value, catalog) ?? "Khác") : value,
+          ),
+        })),
+      );
       setFilename(file);
     } catch {
       if (id === request.current) setError(t("errors.missingFile"));
@@ -155,7 +155,14 @@ export function CoupleImport({
     try {
       const data = await readCoupleFile(file);
       if (id !== request.current) return;
-      setRows(data);
+      setRows(
+        data.map((row) => ({
+          ...row,
+          values: row.values.map((value, index) =>
+            index === 5 ? (findGroup(value, catalog) ?? "Khác") : value,
+          ),
+        })),
+      );
     } catch {
       if (id === request.current) setError(t("errors.readFile"));
     } finally {
@@ -163,17 +170,7 @@ export function CoupleImport({
     }
   }
   const valid = rows?.filter((row) => !row.errors.length) ?? [];
-  const pendingGroups = unknownGroups(rows ?? [], catalog);
   const total = valid.reduce((sum, row) => sum + (row.expected ?? 0), 0);
-  function resolve(key: string, label: string) {
-    if (rows) setRows(validateCoupleRows(resolveGroupRows(rows, key, label, catalog)));
-  }
-  function create(key: string, label: string) {
-    if (!rows) return;
-    const result = addGroup(catalog, label);
-    setCatalog(result.catalog);
-    setRows(validateCoupleRows(resolveGroupRows(rows, key, result.label, result.catalog)));
-  }
   function setSide(line: number, side: string) {
     if (rows)
       setRows(
@@ -189,7 +186,7 @@ export function CoupleImport({
   }
   const normalizedRows = rows?.map((row) => {
     const values = [...row.values];
-    values[5] = findGroup(values[5] ?? "", catalog) ?? values[5] ?? "";
+    values[5] = findGroup(values[5] ?? "", catalog) ?? "Khác";
     return { ...row, values };
   });
   const localizeRowMessage = (message: string) => {
@@ -349,9 +346,6 @@ export function CoupleImport({
         </p>
       )}
       {rows && (
-        <ImportGroupReview rows={rows} catalog={catalog} onResolve={resolve} onCreate={create} />
-      )}
-      {rows && (
         <section
           className="space-y-4 rounded-2xl border bg-card p-5"
           aria-label={t("previewResult")}
@@ -363,7 +357,6 @@ export function CoupleImport({
             {t("validRows", { count: formatNumber(valid.length, language) })} ·{" "}
             {t("expectedTotal", { count: formatNumber(total, language) })} ·{" "}
             {t("invalidRows", { count: formatNumber(rows.length - valid.length, language) })} ·{" "}
-            {t("groupsPending", { count: formatNumber(pendingGroups.length, language) })}.{" "}
             {t("invalidRowsNote")}
           </p>
           <div className="max-h-96 overflow-auto">
@@ -432,6 +425,34 @@ export function CoupleImport({
                             {["Cá nhân", "Gia đình", "Nhóm"].map((label) => (
                               <option key={label} value={label}>
                                 {translatedKind(label)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : onImport && i === 5 ? (
+                          <select
+                            aria-label={`${headerLabels[h] ?? h} ${formatNumber(row.line, language)}`}
+                            className="w-36 rounded border bg-background p-2"
+                            value={findGroup(row.values[i] ?? "", catalog) ?? "Khác"}
+                            onChange={(event) =>
+                              setRows(
+                                validateCoupleRows(
+                                  rows.map((r) =>
+                                    r.line === row.line
+                                      ? {
+                                          ...r,
+                                          values: r.values.map((value, index) =>
+                                            index === 5 ? event.target.value : value,
+                                          ),
+                                        }
+                                      : r,
+                                  ),
+                                ),
+                              )
+                            }
+                          >
+                            {catalog.map((label) => (
+                              <option key={label} value={label}>
+                                {label}
                               </option>
                             ))}
                           </select>
@@ -505,8 +526,7 @@ export function CoupleImport({
                 saving ||
                 busy ||
                 !valid.length ||
-                (onImport ? valid.length !== rows.length : total > 500) ||
-                pendingGroups.length > 0
+                (onImport ? valid.length !== rows.length : total > 500)
               }
               onClick={() => (onImport ? void submit() : setSeating(true))}
             >
@@ -526,11 +546,6 @@ export function CoupleImport({
               )}
             </Button>
           </div>
-          {pendingGroups.length > 0 && (
-            <p className="text-xs text-amber-900">
-              {t("resolveGroups", { count: formatNumber(pendingGroups.length, language) })}
-            </p>
-          )}
           {!onImport && total > 500 && (
             <p className="text-xs text-muted-foreground">{t("demoLimit")}</p>
           )}

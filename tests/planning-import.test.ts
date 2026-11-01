@@ -27,7 +27,7 @@ test("import maps expected places including primary, explicit side and family wi
   const rows = validateCoupleRows([
     {
       line: 8,
-      values: ["Nguyễn Văn An", "Bác", "Gia đình", "4", "Nhà gái", "Họ ngoại", "", "Hai trẻ nhỏ"],
+      values: ["Nguyễn Văn An", "Bác", "Gia đình", "4", "Nhà gái", "Họ hàng", "", "Hai trẻ nhỏ"],
     },
   ]);
   assert.deepEqual(importBody(rows), {
@@ -39,7 +39,7 @@ test("import maps expected places including primary, explicit side and family wi
         invitationKind: "FAMILY",
         expectedPeople: 4,
         side: "BRIDE",
-        groupName: "Họ ngoại",
+        group: "RELATIVES",
         phone: null,
         email: null,
         note: "Hai trẻ nhỏ",
@@ -52,7 +52,7 @@ test("missing side stays unspecified, group optional, count includes representat
   const row = importBody(rows).rows[0];
   assert.equal(row?.side, "UNSPECIFIED");
   assert.equal(row?.expectedPeople, 1);
-  assert.equal(row?.groupName, null);
+  assert.equal(row?.group, "OTHER");
 });
 test("row errors preserve only allowed row and field metadata, never backend message", () => {
   const error = normalizeHttpError(422, {

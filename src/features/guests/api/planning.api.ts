@@ -1,8 +1,9 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
 import type { CoupleRow } from "../utils/couple-import";
+import { groupKind, groupLabels } from "@/shared/lib/planning-groups";
 
-const group = z.object({ id: z.string(), name: z.string() });
+const group = groupKind.transform((id) => ({ id, name: groupLabels[id] }));
 export const planningGuestSchema = z.object({
   id: z.string(),
   version: z.number(),
@@ -51,7 +52,6 @@ const result = z.object({
   items: z.array(
     z.object({ rowNumber: z.number(), guestId: z.string(), expectedPeople: z.number() }),
   ),
-  createdGroups: z.array(group),
   warnings: z.array(issue),
 });
 export type PlanningGuest = z.infer<typeof planningGuestSchema>;
@@ -159,7 +159,7 @@ export function importBody(rows: CoupleRow[]) {
         ({ "Nhà gái": "BRIDE", "Nhà trai": "GROOM", Chung: "MUTUAL" } as Record<string, string>)[
           r.values[4] ?? ""
         ] ?? "UNSPECIFIED",
-      groupName: r.values[5] || null,
+      group: Object.entries(groupLabels).find(([, label]) => label === r.values[5])?.[0] ?? "OTHER",
       phone: r.values[6] || null,
       email: r.values[8] || null,
       note: r.values[7] || null,
@@ -196,7 +196,7 @@ export function listPlanningGuests(
     archivedOnly: String(archivedOnly),
   });
   if (filters.side) params.set("side", filters.side);
-  if (filters.groupId) params.set("groupId", filters.groupId);
+  if (filters.groupId) params.set("group", filters.groupId);
   return api.request(`${path(id)}/guests?${params}`, {
     signal,
     schema: z.object({
@@ -231,7 +231,9 @@ export function updatePlanningGuest(
 ) {
   return api.request(`${path(id)}/guests/${encodeURIComponent(guestId)}`, {
     method: "PUT",
-    body: planningGuestUpdateSchema.parse(input),
+    body: (({ groupId, ...rest }) => ({ ...rest, group: groupId ?? "OTHER" }))(
+      planningGuestUpdateSchema.parse(input),
+    ),
     schema: planningGuestSchema,
   });
 }
@@ -244,7 +246,9 @@ export function createPlanningGuest(
 ) {
   return api.request(`${path(id)}/guests`, {
     method: "POST",
-    body: planningGuestCreateSchema.parse(input),
+    body: (({ groupId, ...rest }) => ({ ...rest, group: groupId ?? "OTHER" }))(
+      planningGuestCreateSchema.parse(input),
+    ),
     headers: { "Idempotency-Key": key },
     schema: planningGuestSchema,
   });

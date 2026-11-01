@@ -17,13 +17,13 @@ export const coupleExamples = [
     "Gia đình",
     "4",
     "Nhà gái",
-    "Họ ngoại",
+    "Họ hàng",
     "",
     "Gia đình có hai trẻ nhỏ cần ghế",
   ],
-  ["Trần Thị Hoa", "Cô", "Gia đình", "2", "Nhà gái", "Họ ngoại", "", "Muốn ngồi gần lối ra"],
-  ["Lê Minh Anh", "Bạn", "Cá nhân", "2", "Nhà gái", "Bạn đại học", "", "Đi cùng một người"],
-  ["Phạm Thu Hà", "Bạn", "Cá nhân", "1", "Nhà gái", "Bạn đại học", "", ""],
+  ["Trần Thị Hoa", "Cô", "Gia đình", "2", "Nhà gái", "Họ hàng", "", "Muốn ngồi gần lối ra"],
+  ["Lê Minh Anh", "Bạn", "Cá nhân", "2", "Nhà gái", "Bạn bè", "", "Đi cùng một người"],
+  ["Phạm Thu Hà", "Bạn", "Cá nhân", "1", "Nhà gái", "Bạn bè", "", ""],
   ["Hoàng Quốc Nam", "Anh", "Cá nhân", "1", "Nhà trai", "Đồng nghiệp", "", ""],
 ].map((row) => [...row, ""]);
 
