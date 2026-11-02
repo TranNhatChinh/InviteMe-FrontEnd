@@ -122,6 +122,7 @@
   "workspaceReady": "Your workspace is ready",
   "weddingSavedDescription": "Wedding details have been saved. You can open the workspace or finish uploading the cover image below.",
   "coverPendingUpload": "Cover image waiting to upload:",
+  "coverWillSave": "The image will upload when you save this form.",
   "backToWorkspace": "Back to workspace",
   "setupEyebrow": "WEDDING SETUP",
   "createEyebrow": "START YOUR WORKSPACE",
@@ -265,6 +266,7 @@
     "notFound": "Wedding not found.",
     "rateLimited": "You're making requests too quickly. Please try again later.",
     "saveFailed": "Couldn't save the details. Review the information and try again.",
-    "createdButCoverFailed": "Wedding “{{name}}” was created, but its cover image couldn't be uploaded. {{error}}"
+    "createdButCoverFailed": "Wedding “{{name}}” was created, but its cover image couldn't be uploaded. {{error}}",
+    "detailsSavedCoverFailed": "Wedding details were saved, but the cover image couldn't upload. Your selected image is still here; press Save changes to try again. {{error}}"
   }
 }

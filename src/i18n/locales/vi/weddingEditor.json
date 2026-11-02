@@ -123,6 +123,7 @@
     "removed": "Đã gỡ ảnh bìa.",
     "removeFailed": "Không thể gỡ ảnh bìa. Vui lòng thử lại.",
     "selected": "Ảnh đã chọn",
+    "selectedForSave": "Ảnh mới · chưa lưu",
     "current": "Ảnh bìa hiện tại",
     "addForWorkspace": "Thêm ảnh bìa cho workspace",
     "dropHint": "Kéo ảnh vào đây hoặc chọn từ thiết bị · JPEG, PNG, WebP · tối đa 5 MB",

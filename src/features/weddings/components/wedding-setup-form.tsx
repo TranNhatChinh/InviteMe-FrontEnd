@@ -179,6 +179,7 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
   const initializedFromServer = useRef(false);
   const [created, setCreated] = useState<WeddingSetup | null>(null);
   const [pendingCover, setPendingCover] = useState<File | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const formSchema = useMemo(() => createFormSchema(t), [t]);
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -190,6 +191,17 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
   const watchedEventDate = useWatch({ control: form.control, name: "eventDateTime" });
   const watchedVenue = useWatch({ control: form.control, name: "venueName" });
   const watchedCapacity = useWatch({ control: form.control, name: "capacity" });
+  const hasUnsavedChanges = form.formState.isDirty || Boolean(pendingCover);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnBeforeLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeave);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeave);
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     if (!setup.data || initializedFromServer.current) return;
@@ -234,6 +246,7 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
 
   async function uploadCover(target: WeddingSetup, file: File) {
     setMutationBusy(true);
+    setUploadingCover(true);
     setServerError("");
     try {
       const result = await uploadWeddingCover(api, target.id, file, target.version);
@@ -246,6 +259,7 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
         setConflict(true);
       throw new Error(errorMessage(error, t));
     } finally {
+      setUploadingCover(false);
       setMutationBusy(false);
     }
   }
@@ -307,18 +321,25 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
     }
     setMutationBusy(true);
     let createdDuringSubmit: WeddingSetup | null = null;
+    let weddingDetailsSaved = Boolean(weddingId && setup.data && !form.formState.isDirty);
     try {
       if (weddingId && setup.data) {
-        const updated = await updateWeddingSetup(api, weddingId, {
-          ...commonInput,
-          coverImageUrl: setup.data.coverImageUrl,
-          expectedVersion: setup.data.version,
-        });
-        cache.setQueryData(weddingKeys.detail(weddingId), updated);
-        void refreshList();
+        let latest = setup.data;
+        if (form.formState.isDirty) {
+          latest = await updateWeddingSetup(api, weddingId, {
+            ...commonInput,
+            coverImageUrl: setup.data.coverImageUrl,
+            expectedVersion: setup.data.version,
+          });
+          weddingDetailsSaved = true;
+          reset(formValuesFrom(latest));
+          cache.setQueryData(weddingKeys.detail(weddingId), latest);
+          void refreshList();
+        }
         if (pendingCover) {
-          await uploadCover(updated, pendingCover);
+          latest = await uploadCover(latest, pendingCover);
           setPendingCover(null);
+          void refreshList();
         }
         router.push(`/weddings/${encodeURIComponent(weddingId)}/overview?updated=1`);
       } else {
@@ -338,6 +359,12 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
         setServerError(
           t("errors.createdButCoverFailed", {
             name: createdDuringSubmit.name,
+            error: error instanceof Error ? error.message : errorMessage(error, t),
+          }),
+        );
+      } else if (pendingCover && weddingDetailsSaved) {
+        setServerError(
+          t("errors.detailsSavedCoverFailed", {
             error: error instanceof Error ? error.message : errorMessage(error, t),
           }),
         );
@@ -443,7 +470,6 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
               busy={mutationBusy}
               deferUpload
               onSelect={setPendingCover}
-              onUpload={async () => undefined}
               onRemove={async () => undefined}
             />
             {pendingCover && (
@@ -484,7 +510,6 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
 
   const initial = setup.data;
   const busy = mutationBusy || form.formState.isSubmitting;
-  const hasUnsavedChanges = form.formState.isDirty || Boolean(pendingCover);
   const cancelAction = () =>
     router.push(weddingId ? `/weddings/${encodeURIComponent(weddingId)}/overview` : "/weddings");
   return (
@@ -756,16 +781,16 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
                 currentUrl={initial?.coverImageUrl ?? null}
                 disabled={!canEdit}
                 busy={busy}
-                deferUpload={!isEdit}
-                onSelect={!isEdit ? setPendingCover : undefined}
-                onUpload={async (file) => {
-                  if (isEdit && initial) {
-                    await uploadCover(initial, file);
-                    form.clearErrors();
-                  }
-                }}
+                deferUpload
+                saveWithForm
+                onSelect={setPendingCover}
                 onRemove={removeCover}
               />
+              {pendingCover && (
+                <p role="status" className="mt-3 text-sm text-muted-foreground">
+                  {t("coverWillSave")}
+                </p>
+              )}
             </section>
           </fieldset>
           {!canEdit && (
@@ -807,15 +832,23 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
               <Button
                 type="submit"
                 className="min-h-11 rounded-xl px-6 shadow-sm"
-                disabled={busy || (isEdit && !setup.data)}
+                disabled={
+                  busy ||
+                  (isEdit && !setup.data) ||
+                  Boolean(
+                    pendingCover && validateWeddingCover(pendingCover, weddingCoverMessages(t)),
+                  )
+                }
               >
-                {busy
-                  ? isEdit
-                    ? t("savingWedding")
-                    : t("creatingWedding")
-                  : isEdit
-                    ? t("saveChanges")
-                    : t("createWedding")}
+                {uploadingCover
+                  ? t("uploadingCover")
+                  : busy
+                    ? isEdit
+                      ? t("savingWedding")
+                      : t("creatingWedding")
+                    : isEdit
+                      ? t("saveChanges")
+                      : t("createWedding")}
               </Button>
             )}
           </div>

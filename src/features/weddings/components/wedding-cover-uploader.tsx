@@ -57,14 +57,16 @@ export function WeddingCoverUploader({
   onRemove,
   deferUpload = false,
   onSelect,
+  saveWithForm = false,
 }: {
   currentUrl: string | null;
   disabled?: boolean;
   busy?: boolean;
-  onUpload: (file: File) => Promise<void>;
+  onUpload?: (file: File) => Promise<void>;
   onRemove: () => Promise<void>;
   deferUpload?: boolean;
   onSelect?: (file: File | null) => void;
+  saveWithForm?: boolean;
 }) {
   const { t } = useTranslation("weddingEditor");
   const coverMessages = weddingCoverMessages(t);
@@ -100,7 +102,7 @@ export function WeddingCoverUploader({
   }
 
   async function upload() {
-    if (!file) return;
+    if (!file || !onUpload) return;
     const validation = validateWeddingCover(file, coverMessages);
     if (validation) {
       setError(validation);
@@ -160,7 +162,9 @@ export function WeddingCoverUploader({
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">
                 {file
-                  ? t("cover.selected")
+                  ? saveWithForm
+                    ? t("cover.selectedForSave")
+                    : t("cover.selected")
                   : currentUrl
                     ? t("cover.current")
                     : t("cover.addForWorkspace")}
@@ -190,7 +194,7 @@ export function WeddingCoverUploader({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {file && !deferUpload && (
+        {file && !deferUpload && onUpload && (
           <Button
             type="button"
             className="min-h-11 rounded-xl px-4"

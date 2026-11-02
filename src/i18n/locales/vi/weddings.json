@@ -122,6 +122,7 @@
   "workspaceReady": "Workspace đã sẵn sàng",
   "weddingSavedDescription": "Thông tin lễ cưới đã được lưu. Bạn có thể mở workspace hoặc hoàn tất tải ảnh bìa bên dưới.",
   "coverPendingUpload": "Ảnh đang chờ tải lên:",
+  "coverWillSave": "Ảnh sẽ được tải lên cùng lúc khi bạn lưu biểu mẫu.",
   "backToWorkspace": "Quay lại workspace",
   "setupEyebrow": "THIẾT LẬP LỄ CƯỚI",
   "createEyebrow": "BẮT ĐẦU WORKSPACE",
@@ -265,6 +266,7 @@
     "notFound": "Không tìm thấy lễ cưới.",
     "rateLimited": "Bạn thao tác quá nhanh, vui lòng thử lại sau.",
     "saveFailed": "Chưa thể lưu thông tin. Vui lòng kiểm tra dữ liệu và thử lại.",
-    "createdButCoverFailed": "Đã tạo lễ cưới “{{name}}” nhưng chưa tải được ảnh. {{error}}"
+    "createdButCoverFailed": "Đã tạo lễ cưới “{{name}}” nhưng chưa tải được ảnh. {{error}}",
+    "detailsSavedCoverFailed": "Thông tin đã lưu nhưng ảnh chưa tải lên được. Ảnh vẫn được giữ; nhấn Lưu thay đổi để thử lại. {{error}}"
   }
 }

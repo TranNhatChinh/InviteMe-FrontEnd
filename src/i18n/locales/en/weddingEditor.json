@@ -123,6 +123,7 @@
     "removed": "Cover image removed.",
     "removeFailed": "Couldn't remove the cover image. Please try again.",
     "selected": "Selected image",
+    "selectedForSave": "New image · not saved",
     "current": "Current cover image",
     "addForWorkspace": "Add a cover image for the workspace",
     "dropHint": "Drag an image here or choose one from your device · JPEG, PNG, WebP · up to 5 MB",
