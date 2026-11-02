@@ -1,4 +1,5 @@
 import type { ApiClient } from "@/core/api/api-client";
+import { z } from "zod";
 import {
   weddingCreateInputSchema,
   weddingSetupSchema,
@@ -99,6 +100,22 @@ export function deleteWeddingCover(api: ApiClient, weddingId: string, expectedVe
   return api.request(`/weddings/${encodeURIComponent(weddingId)}/cover-image?${params}`, {
     method: "DELETE",
     schema: weddingCoverResultSchema,
+  });
+}
+
+export function deleteWedding(
+  api: ApiClient,
+  weddingId: string,
+  input: { confirmationSlug: string; expectedVersion: number; acknowledgePackageLoss: true },
+) {
+  return api.request(`/weddings/${encodeURIComponent(weddingId)}`, {
+    method: "DELETE",
+    body: input,
+    schema: z.object({
+      weddingId: z.string().uuid(),
+      status: z.literal("DELETION_PENDING"),
+      requestedAt: z.iso.datetime({ offset: true }),
+    }),
   });
 }
 
