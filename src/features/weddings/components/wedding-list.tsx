@@ -2,14 +2,18 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { parseISO } from "date-fns";
 import {
   ArrowUpRight,
   CalendarDays,
+  Check,
   Flower2,
   Image as ImageIcon,
   Plus,
   Search,
+  ShieldAlert,
+  Trash2,
   Users,
 } from "lucide-react";
 import { Pagination } from "@/shared/components/pagination";
@@ -21,6 +25,12 @@ import { useWeddings } from "../hooks/use-weddings";
 import type { WeddingListSort } from "../api/wedding.api";
 import { useLocale } from "@/i18n/language-context";
 import { formatDate, formatNumber } from "@/i18n/format";
+import { useRuntime } from "@/core/config/runtime";
+import { deleteWedding } from "../api/wedding.api";
+import type { WeddingSummary } from "../schemas/wedding.schema";
+import { Modal } from "@/shared/ui/modal";
+import { Input } from "@/shared/ui/input";
+import { weddingKeys } from "../api/wedding.keys";
 
 const WEDDING_PAGE_SIZE = 20;
 const SORT_OPTIONS: { value: WeddingListSort; key: string }[] = [
@@ -118,11 +128,48 @@ function WeddingCover({
 export function WeddingList({ requestedPlan }: { requestedPlan?: string } = {}) {
   const { t } = useTranslation("weddings");
   const { language } = useLocale();
+  const { api } = useRuntime();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<WeddingListSort>("weddingDate");
+  const [selectedWedding, setSelectedWedding] = useState<WeddingSummary | null>(null);
+  const [confirmationSlug, setConfirmationSlug] = useState("");
+  const [acknowledgePackageLoss, setAcknowledgePackageLoss] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const weddings = useWeddings({ page, pageSize: WEDDING_PAGE_SIZE, search, sort });
   const hasSearch = search.trim().length > 0;
+
+  const closeDeleteDialog = (force = false) => {
+    if (deletePending && !force) return;
+    setSelectedWedding(null);
+    setConfirmationSlug("");
+    setAcknowledgePackageLoss(false);
+    setDeleteError(null);
+  };
+
+  const submitDelete = async () => {
+    if (!selectedWedding || confirmationSlug !== selectedWedding.slug || !acknowledgePackageLoss)
+      return;
+    setDeletePending(true);
+    setDeleteError(null);
+    try {
+      await deleteWedding(api, selectedWedding.id, {
+        confirmationSlug,
+        expectedVersion: selectedWedding.version,
+        acknowledgePackageLoss: true,
+      });
+      await queryClient.invalidateQueries({ queryKey: weddingKeys.lists() });
+      closeDeleteDialog(true);
+    } catch (error) {
+      if (error && typeof error === "object" && "status" in error && error.status === 409)
+        void queryClient.invalidateQueries({ queryKey: weddingKeys.lists() });
+      setDeleteError(error instanceof Error ? error.message : t("deleteFailed"));
+    } finally {
+      setDeletePending(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-7 pb-10 sm:space-y-9">
@@ -348,6 +395,21 @@ export function WeddingList({ requestedPlan }: { requestedPlan?: string } = {}) 
                       {requestedPlan ? t("choosePlanForWedding") : t("openWorkspace")}
                       <ArrowUpRight className="size-4" aria-hidden="true" />
                     </Link>
+                    {wedding.isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmationSlug("");
+                          setAcknowledgePackageLoss(false);
+                          setDeleteError(null);
+                          setSelectedWedding(wedding);
+                        }}
+                        className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-destructive transition hover:bg-destructive/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                        {t("deleteWedding")}
+                      </button>
+                    )}
                   </div>
                 </article>
               );
@@ -365,6 +427,108 @@ export function WeddingList({ requestedPlan }: { requestedPlan?: string } = {}) 
           disabled={weddings.isFetching}
         />
       )}
+
+      <Modal
+        open={selectedWedding !== null}
+        onClose={() => closeDeleteDialog()}
+        title={t("deleteDialogTitle")}
+        description={t("deleteDialogDescription")}
+      >
+        <div className="space-y-5">
+          <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-4">
+            <div className="flex gap-3">
+              <ShieldAlert className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden="true" />
+              <div className="space-y-2 text-sm leading-6">
+                {selectedWedding && (
+                  <p className="font-display text-lg font-semibold text-foreground">
+                    {selectedWedding.title}
+                  </p>
+                )}
+                <p className="font-semibold text-foreground">{t("deletePermanentWarning")}</p>
+                <p className="text-muted-foreground">{t("deleteDataWarning")}</p>
+                <p className="font-medium text-foreground">{t("deletePackageWarning")}</p>
+              </div>
+            </div>
+          </div>
+
+          {selectedWedding ? (
+            <div className="rounded-xl border border-border bg-background p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t("currentWeddingPlan")}
+              </p>
+              {selectedWedding.activePlanName ? (
+                <>
+                  <p className="mt-1 font-semibold text-foreground">
+                    {selectedWedding.activePlanName}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">{t("planBenefitsEnd")}</p>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">{t("noActivePlan")}</p>
+              )}
+              <p className="mt-3 text-sm text-muted-foreground">
+                {t("typeWeddingUrl", { slug: selectedWedding.slug })}
+              </p>
+              <Input
+                autoComplete="off"
+                spellCheck={false}
+                value={confirmationSlug}
+                onChange={(event) => setConfirmationSlug(event.target.value)}
+                placeholder={selectedWedding.slug}
+                aria-label={t("confirmationUrlLabel")}
+                className="mt-2"
+              />
+            </div>
+          ) : null}
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-4 text-sm leading-6">
+            <input
+              type="checkbox"
+              checked={acknowledgePackageLoss}
+              onChange={(event) => setAcknowledgePackageLoss(event.target.checked)}
+              className="mt-1 size-4 accent-primary"
+            />
+            <span>{t("acknowledgePackageLoss")}</span>
+          </label>
+
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {deleteError}
+            </p>
+          )}
+
+          <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => closeDeleteDialog()}
+              disabled={deletePending}
+            >
+              {t("cancelDelete")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void submitDelete()}
+              disabled={
+                !selectedWedding ||
+                confirmationSlug !== selectedWedding.slug ||
+                !acknowledgePackageLoss ||
+                deletePending
+              }
+            >
+              {deletePending ? (
+                t("deletingWedding")
+              ) : (
+                <>
+                  <Check aria-hidden="true" />
+                  {t("confirmDeleteWedding")}
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -120,6 +120,9 @@ export const weddingSummarySchema = z.object({
   maxCapacity: z.number().int().nonnegative(),
   version: z.number().int().nonnegative(),
   coverImageUrl: z.string().nullable().optional(),
+  slug: z.string(),
+  isOwner: z.boolean().default(false),
+  activePlanName: z.string().nullable().default(null),
 });
 export const weddingListSchema = z.object({
   items: z.array(weddingSummarySchema),
