@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Camera, CameraOff } from "lucide-react";
+import { Camera, CameraOff, QrCode } from "lucide-react";
 import { Button } from "@/shared/ui/button";
+import styles from "./seat-lookup-counter.module.css";
 
 type DetectedCode = { rawValue: string };
 type BarcodeDetectorInstance = {
@@ -15,10 +16,12 @@ export function QrCameraScanner({
   disabled = false,
   autoStart = false,
   onDetected,
+  className,
 }: {
   disabled?: boolean;
   autoStart?: boolean;
   onDetected: (value: string) => void;
+  className?: string;
 }) {
   const { t } = useTranslation("guests", { keyPrefix: "reception.camera" });
   const [active, setActive] = useState(autoStart);
@@ -99,37 +102,55 @@ export function QrCameraScanner({
   }, [active, t]);
 
   return (
-    <div className="space-y-3">
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled}
-        onClick={() => {
-          setError("");
-          setActive((value) => !value);
-        }}
-        aria-pressed={active}
-      >
-        {active ? <CameraOff aria-hidden="true" /> : <Camera aria-hidden="true" />}
-        {active ? t("off") : t("on")}
-      </Button>
-      {active && (
-        <div className="space-y-2 rounded-xl border bg-black p-2">
+    <div className={`${styles.cameraScanner} ${className ?? ""}`}>
+      <div className={styles.cameraViewport} data-active={active}>
+        {active ? (
           <video
             ref={videoRef}
-            className="mx-auto max-h-72 w-full rounded-lg object-cover"
+            className={styles.cameraVideo}
             muted
             playsInline
             aria-label={t("videoAria")}
           />
-          <p className="text-center text-sm text-white">{t("hint")}</p>
-        </div>
-      )}
-      {error && (
-        <p
-          role="alert"
-          className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+        ) : (
+          <div className={styles.cameraIdle}>
+            <QrCode aria-hidden="true" />
+            <p>{t("idle")}</p>
+          </div>
+        )}
+        {active && (
+          <div className={styles.scanFrame} aria-hidden="true">
+            <span data-corner="top-left" />
+            <span data-corner="top-right" />
+            <span data-corner="bottom-left" />
+            <span data-corner="bottom-right" />
+            <span className={styles.scanLine} />
+          </div>
+        )}
+        <span className={styles.cameraStatus} data-active={active}>
+          <span aria-hidden="true" />
+          {active ? t("active") : t("ready")}
+        </span>
+      </div>
+      <div className={styles.cameraControls}>
+        <Button
+          type="button"
+          variant={active ? "outline" : "default"}
+          className={styles.cameraToggle}
+          disabled={disabled}
+          onClick={() => {
+            setError("");
+            setActive((value) => !value);
+          }}
+          aria-pressed={active}
         >
+          {active ? <CameraOff aria-hidden="true" /> : <Camera aria-hidden="true" />}
+          {active ? t("off") : t("on")}
+        </Button>
+        <p className={styles.cameraHint}>{t("hint")}</p>
+      </div>
+      {error && (
+        <p role="alert" className={styles.cameraError}>
           {error}
         </p>
       )}

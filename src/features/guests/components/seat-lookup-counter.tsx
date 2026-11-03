@@ -4,12 +4,16 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
+  ArrowLeft,
   Check,
   CircleCheck,
   CircleDashed,
+  ChevronDown,
+  QrCode,
   Search,
+  UserRoundCheck,
   UserPlus,
-  UserRound,
+  X,
 } from "lucide-react";
 import { ApiError } from "@/core/api/api-error";
 import { useRuntime } from "@/core/config/runtime";
@@ -17,6 +21,7 @@ import { ConfirmDialog } from "@/shared/feedback/confirm-dialog";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { useLocale } from "@/i18n/language-context";
+import styles from "./seat-lookup-counter.module.css";
 import {
   addReceptionWalkIn,
   checkInGuestPlaces,
@@ -47,19 +52,22 @@ function apiErrorMessage(
 ) {
   const actionKey = action.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
   if (!(error instanceof ApiError)) return t(`reception.errors.${actionKey}.network`);
+  if (error.status === 401) return t("reception.errors.unauthenticated");
   if (error.status === 403) return t("reception.errors.forbidden");
   if (error.status === 404) return t("reception.errors.notFound");
-  if (error.status === 400)
-    return action === "search"
-      ? t("reception.errors.searchQuery")
-      : t("reception.errors.invalidCode");
-  if (error.status === 429) return t("reception.errors.rateLimited");
   if (error.backendCode === "CHECKIN_EXCEPTION_REASON_REQUIRED")
     return t("reception.errors.exceptionRequired");
   if (error.backendCode === "PLACE_NOT_IN_INVITATION") return t("reception.errors.placeChanged");
   if (error.backendCode === "WALK_IN_OVER_CAPACITY") return t("reception.errors.overCapacity");
   if (error.backendCode === "IDEMPOTENCY_KEY_REUSED")
     return t("reception.errors.idempotencyConflict");
+  if (error.status === 400) {
+    if (action === "search") return t("reception.errors.searchQuery");
+    if (action === "lookup") return t("reception.errors.invalidCode");
+    return t(`reception.errors.${actionKey}.generic`);
+  }
+  if (error.status === 429) return t("reception.errors.rateLimited");
+  if (error.status === 409) return t("reception.errors.conflict");
   if (error.status === 422) return t("reception.errors.invalidState");
   return t(`reception.errors.${actionKey}.generic`);
 }
@@ -80,9 +88,19 @@ function friendlyTime(value: string, language: "vi" | "en") {
   return Number.isNaN(date.getTime())
     ? ""
     : new Intl.DateTimeFormat(language === "en" ? "en-US" : "vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
+        dateStyle: "short",
+        timeStyle: "short",
       }).format(date);
+}
+
+function guestInitials(value: string) {
+  return value
+    .trim()
+    .split(/\s+/)
+    .slice(-2)
+    .map((part) => Array.from(part)[0] ?? "")
+    .join("")
+    .toLocaleUpperCase();
 }
 
 export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
@@ -105,6 +123,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
   const [walkInPeople, setWalkInPeople] = useState("1");
   const [walkInNames, setWalkInNames] = useState("");
   const [walkInReason, setWalkInReason] = useState("");
+  const [showWalkInDetails, setShowWalkInDetails] = useState(false);
   const [walkInPending, setWalkInPending] = useState(false);
   const walkInAttempt = useRef<{ signature: string; key: string } | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -119,7 +138,9 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [forbidden, setForbidden] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const guestHeading = useRef<HTMLHeadingElement>(null);
+  const modeTabs = useRef<Array<HTMLButtonElement | null>>([]);
   const displayHeading = useRef<HTMLHeadingElement>(null);
   const lookupBusy = useRef(false);
 
@@ -143,7 +164,6 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     setForbidden(false);
     setAutoStartCamera(resumeCameraOnReturn);
     setResumeCameraOnReturn(false);
-    window.setTimeout(() => input.current?.focus(), 0);
   }, [resumeCameraOnReturn]);
 
   useEffect(() => {
@@ -159,39 +179,47 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     };
   }, [counterDisplay, returnToScanner]);
 
-  useEffect(() => input.current?.focus(), []);
+  const reloadCurrentGuestSnapshot = useCallback(async () => {
+    if (!guest || lookupBusy.current) return;
+    try {
+      const latest = lookupCode
+        ? await lookupGuestSeats(api, weddingId, lookupCode)
+        : activeSearchQuery
+          ? (await searchReceptionGuests(api, weddingId, activeSearchQuery)).find(
+              (item) => item.guestId === guest.guestId,
+            )
+          : undefined;
+      if (!latest || latest.guestId !== guest.guestId) return;
+      const checkedInIds = new Set(
+        latest.seats.filter((seat) => seat.checkedInAt).map((seat) => seat.placeId),
+      );
+      const staleSelectionCount = selectedIds.filter((id) => checkedInIds.has(id)).length;
+      setGuest(latest);
+      setOutcomes({});
+      setSelectedIds((current) => current.filter((id) => !checkedInIds.has(id)));
+      if (staleSelectionCount > 0) {
+        setMessage(t("reception.realtimeGuestUpdated", { count: staleSelectionCount }));
+      }
+    } catch {
+      // The current screen remains usable; a fresh lookup can be requested manually.
+    }
+  }, [activeSearchQuery, api, guest, lookupCode, selectedIds, t, weddingId]);
 
   useEffect(() => {
-    const refreshCurrentGuest = () => {
-      if (!guest || lookupBusy.current) return;
-      if (lookupCode) {
-        void lookupGuestSeats(api, weddingId, lookupCode)
-          .then((latest) =>
-            setGuest((current) => (current?.guestId === latest.guestId ? latest : current)),
-          )
-          .catch(() => undefined);
-      } else if (activeSearchQuery) {
-        void searchReceptionGuests(api, weddingId, activeSearchQuery)
-          .then((latest) =>
-            setGuest(latest.find((item) => item.guestId === guest.guestId) ?? guest),
-          )
-          .catch(() => undefined);
-      }
-    };
     const unsubscribe = realtime.onPlanningChange((change) => {
       if (
         (change.type === "GuestCheckedIn" || change.type === "GuestCheckInVoided") &&
         change.entityId === guest?.guestId
       ) {
-        refreshCurrentGuest();
+        void reloadCurrentGuestSnapshot();
       }
     });
-    const unsubscribeResync = realtime.onResync(refreshCurrentGuest);
+    const unsubscribeResync = realtime.onResync(() => void reloadCurrentGuestSnapshot());
     return () => {
       unsubscribe();
       unsubscribeResync();
     };
-  }, [activeSearchQuery, api, guest, lookupCode, realtime, weddingId]);
+  }, [guest?.guestId, realtime, reloadCurrentGuestSnapshot]);
 
   async function findGuest(value: string) {
     const normalized = value.trim();
@@ -224,7 +252,6 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     } finally {
       lookupBusy.current = false;
       setLookupPending(false);
-      input.current?.focus();
     }
   }
 
@@ -306,6 +333,9 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     } catch (cause) {
       setError(apiErrorMessage(cause, "check-in", t));
       if (cause instanceof ApiError && cause.status === 403) setForbidden(true);
+      if (cause instanceof ApiError && cause.status === 409) {
+        await reloadCurrentGuestSnapshot();
+      }
     } finally {
       setCheckInPending(false);
     }
@@ -351,6 +381,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     setError("");
     setMessage(t("reception.guestSelected"));
     setForbidden(false);
+    window.setTimeout(() => guestHeading.current?.focus(), 0);
   }
 
   function startCompanionWalkIn(result: ReceptionGuest) {
@@ -361,6 +392,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     setWalkInPeople("1");
     setWalkInNames("");
     setWalkInReason("");
+    setShowWalkInDetails(false);
     setError("");
     setMode("WALK_IN");
   }
@@ -457,6 +489,9 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     } catch (cause) {
       setError(apiErrorMessage(cause, "walk-in", t));
       if (cause instanceof ApiError && cause.status === 403) setForbidden(true);
+      if (cause instanceof ApiError && cause.backendCode === "WALK_IN_OVER_CAPACITY") {
+        setShowWalkInDetails(true);
+      }
     } finally {
       setWalkInPending(false);
     }
@@ -475,25 +510,17 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
 
     return (
       <section
-        role="dialog"
-        aria-modal="true"
         aria-labelledby="counter-result-heading"
-        className="fixed inset-0 z-[100] grid overflow-y-auto bg-slate-950 p-4 text-white sm:p-8"
+        role="region"
+        className={styles.resultScreen}
+        data-result={allAlreadyCheckedIn ? "already-checked-in" : "recorded"}
       >
-        <div className="m-auto w-full max-w-5xl space-y-6 text-center sm:space-y-8">
-          <div
-            className={`mx-auto grid size-20 place-items-center rounded-full sm:size-28 ${allAlreadyCheckedIn ? "bg-amber-400/15 text-amber-300" : "bg-emerald-400/15 text-emerald-300"}`}
-          >
-            {allAlreadyCheckedIn ? (
-              <AlertCircle className="size-12 sm:size-16" aria-hidden="true" />
-            ) : (
-              <CircleCheck className="size-12 sm:size-16" aria-hidden="true" />
-            )}
+        <div className={styles.resultContent}>
+          <div className={styles.resultMark} aria-hidden="true">
+            {allAlreadyCheckedIn ? <AlertCircle /> : <CircleCheck />}
           </div>
-          <div className="space-y-3">
-            <p
-              className={`text-sm font-bold uppercase tracking-[0.2em] sm:text-lg ${allAlreadyCheckedIn ? "text-amber-300" : "text-emerald-300"}`}
-            >
+          <div className={styles.resultHeading}>
+            <p>
               {allAlreadyCheckedIn
                 ? t("reception.resultAlreadyCheckedIn")
                 : counterDisplay.walkIn
@@ -504,12 +531,12 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
               ref={displayHeading}
               id="counter-result-heading"
               tabIndex={-1}
-              className="text-4xl font-bold leading-tight tracking-tight outline-none sm:text-6xl lg:text-7xl"
+              className={styles.resultName}
             >
               {counterDisplay.honorific ? `${counterDisplay.honorific} ` : ""}
               {counterDisplay.recipientName}
             </h1>
-            <p className="text-lg text-slate-300 sm:text-2xl">
+            <p className={styles.resultSummary}>
               {newlyCheckedIn > 0
                 ? t("reception.resultCounts", {
                     newly: newlyCheckedIn,
@@ -519,51 +546,32 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
             </p>
           </div>
 
-          <ul
-            aria-label={t("reception.resultList")}
-            className="mx-auto grid max-w-4xl gap-3 text-left sm:grid-cols-2"
-          >
+          <ul aria-label={t("reception.resultList")} className={styles.resultList}>
             {counterDisplay.places.map((place) => {
               const alreadyCheckedIn = place.result === "ALREADY_CHECKED_IN";
               return (
                 <li
                   key={place.placeId}
-                  className={`flex min-h-24 items-center justify-between gap-4 rounded-2xl border p-4 sm:min-h-28 sm:p-6 ${alreadyCheckedIn ? "border-amber-300/40 bg-amber-300/10" : "border-emerald-300/30 bg-white/5"}`}
+                  className={styles.resultRow}
+                  data-result={alreadyCheckedIn ? "already-checked-in" : "recorded"}
                 >
-                  <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                    {alreadyCheckedIn ? (
-                      <AlertCircle
-                        className="size-7 shrink-0 text-amber-300 sm:size-9"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <CircleCheck
-                        className="size-7 shrink-0 text-emerald-300 sm:size-9"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <p className="break-words text-xl font-semibold sm:text-3xl">
-                        {place.personName ?? t("guestNumber", { number: place.position })}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-300 sm:text-base">
-                        {alreadyCheckedIn
-                          ? t("reception.status.alreadyCheckedIn")
-                          : t("reception.status.justCheckedIn")}
-                      </p>
-                    </div>
+                  <span className={styles.resultRowMark} aria-hidden="true">
+                    {alreadyCheckedIn ? <AlertCircle /> : <CircleCheck />}
+                  </span>
+                  <div className={styles.resultPerson}>
+                    <p>{place.personName ?? t("guestNumber", { number: place.position })}</p>
+                    <span>
+                      {alreadyCheckedIn
+                        ? t("reception.status.alreadyCheckedIn")
+                        : t("reception.status.justCheckedIn")}
+                    </span>
+                    <small>{friendlyTime(place.checkedInAt, language)}</small>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs uppercase tracking-wider text-slate-400 sm:text-sm">
-                      {t("reception.tableNumber")}
-                    </p>
-                    <p className="mt-1 text-2xl font-bold sm:text-4xl">
-                      {place.table ?? t("reception.notAssigned")}
-                    </p>
+                  <div className={styles.resultTable}>
+                    <span>{t("reception.tableNumber")}</span>
+                    <strong>{place.table ?? t("reception.notAssigned")}</strong>
                     {place.table && place.seatNumber !== null && (
-                      <p className="text-sm text-slate-300 sm:text-base">
-                        {t("reception.seatNumber", { number: place.seatNumber })}
-                      </p>
+                      <small>{t("reception.seatNumber", { number: place.seatNumber })}</small>
                     )}
                   </div>
                 </li>
@@ -572,50 +580,119 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
           </ul>
 
           {counterDisplay.overCapacity && (
-            <p className="mx-auto max-w-3xl rounded-xl border border-amber-300/40 bg-amber-300/10 p-3 text-sm text-amber-100 sm:text-base">
-              {t("reception.overCapacityAccepted")}
-            </p>
+            <p className={styles.capacityNotice}>{t("reception.overCapacityAccepted")}</p>
           )}
 
-          <div className="space-y-3 pt-2">
-            <Button
-              type="button"
-              onClick={returnToScanner}
-              className="h-14 min-w-64 bg-white px-8 text-lg font-semibold text-slate-950 hover:bg-slate-200"
-            >
+          <div className={styles.resultActions}>
+            <Button type="button" onClick={returnToScanner} className={styles.nextGuestButton}>
               {t("reception.nextGuest")}
             </Button>
-            <p aria-live="off" className="text-sm text-slate-400">
-              {t("reception.returnCountdown", { count: returnCountdown })}
-            </p>
+            <p aria-live="off">{t("reception.returnCountdown", { count: returnCountdown })}</p>
+            <div className={styles.returnProgress} aria-hidden="true">
+              <span style={{ width: `${(returnCountdown / COUNTER_DISPLAY_SECONDS) * 100}%` }} />
+            </div>
           </div>
         </div>
       </section>
     );
   }
 
+  const selectedPeople =
+    guest?.seats
+      .filter((seat) => selectedIds.includes(seat.placeId))
+      .map((seat) => seat.personName ?? t("guestNumber", { number: seat.position })) ?? [];
+  const selectedNames =
+    selectedPeople.length > 3
+      ? selectedPeople.slice(0, 3).join(", ") +
+        " " +
+        t("reception.andMore", { count: selectedPeople.length - 3 })
+      : selectedPeople.join(", ");
+
+  function renderCheckInConfirmation(buttonClassName: string) {
+    const confirmationDescription = t("reception.confirmNamedDescription", {
+      names: selectedNames,
+      count: selectedIds.length,
+    });
+
+    return (
+      <ConfirmDialog
+        trigger={
+          <Button
+            type="button"
+            className={buttonClassName}
+            disabled={
+              selectedIds.length === 0 ||
+              checkInPending ||
+              (selectedUnused && !exceptionReason.trim())
+            }
+          >
+            <Check aria-hidden="true" />
+            {checkInPending
+              ? t("reception.recording")
+              : t("reception.confirmCheckInCount", { count: selectedIds.length })}
+          </Button>
+        }
+        title={t("reception.confirmTitle")}
+        description={confirmationDescription}
+        contentClassName={styles.confirmationDialog}
+        notice={
+          selectedUnused ? (
+            <p className={styles.confirmationNotice}>{t("reception.exceptionConfirmation")}</p>
+          ) : null
+        }
+        cancelLabel={t("reception.goBack")}
+        confirmLabel={t("reception.recordCheckIn")}
+        onConfirm={() => void confirmCheckIn()}
+      />
+    );
+  }
+
   return (
-    <section className="mx-auto max-w-3xl space-y-6 pb-8">
-      <header>
-        <p className="text-sm font-medium text-muted-foreground">{t("reception.checkInLabel")}</p>
-        <h1 className="mt-1 text-2xl font-semibold sm:text-3xl">{t("reception.title")}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{t("reception.description")}</p>
+    <section className={styles.counter}>
+      <header className={styles.pageHeader}>
+        <div>
+          <h1 className={styles.pageTitle}>{t("reception.title")}</h1>
+          <p className={styles.pageDescription}>{t("reception.description")}</p>
+        </div>
       </header>
 
-      <div className="space-y-4 rounded-2xl border bg-card p-4 sm:p-6">
-        <div role="tablist" aria-label={t("reception.modesLabel")} className="flex flex-wrap gap-2">
+      <div className={styles.workspace}>
+        <div role="tablist" aria-label={t("reception.modesLabel")} className={styles.modeTabs}>
           {(
             [
-              ["QR", t("reception.scanQr")],
-              ["SEARCH", t("reception.searchGuest")],
-              ["WALK_IN", t("reception.walkIn")],
+              ["QR", t("reception.scanQr"), QrCode],
+              ["SEARCH", t("reception.searchGuest"), Search],
+              ["WALK_IN", t("reception.walkIn"), UserPlus],
             ] as const
-          ).map(([value, label]) => (
+          ).map(([value, label, Icon], index) => (
             <button
               key={value}
+              ref={(element) => {
+                modeTabs.current[index] = element;
+              }}
+              id={"check-in-tab-" + value.toLowerCase()}
               type="button"
               role="tab"
               aria-selected={mode === value}
+              tabIndex={mode === value ? 0 : -1}
+              onKeyDown={(event) => {
+                const currentIndex = index;
+                let nextIndex = currentIndex;
+                if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % 3;
+                else if (event.key === "ArrowLeft") nextIndex = (currentIndex + 2) % 3;
+                else if (event.key === "Home") nextIndex = 0;
+                else if (event.key === "End") nextIndex = 2;
+                else return;
+                event.preventDefault();
+                const nextMode = (["QR", "SEARCH", "WALK_IN"] as const)[nextIndex];
+                if (!nextMode) return;
+                setMode(nextMode);
+                setError("");
+                setMessage("");
+                setResumeCameraOnReturn(false);
+                setAutoStartCamera(false);
+                modeTabs.current[nextIndex]?.focus();
+              }}
               onClick={() => {
                 setMode(value);
                 setError("");
@@ -623,16 +700,24 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                 setResumeCameraOnReturn(false);
                 setAutoStartCamera(false);
               }}
-              className={`min-h-10 rounded-lg border px-4 text-sm font-medium ${mode === value ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+              className={styles.modeTab}
+              data-active={mode === value}
             >
-              {label}
+              <Icon aria-hidden="true" />
+              <span>{label}</span>
             </button>
           ))}
         </div>
 
         {mode === "QR" && (
-          <div className="space-y-4">
+          <div
+            id="check-in-panel-qr"
+            role="tabpanel"
+            aria-labelledby="check-in-tab-qr"
+            className={styles.qrPanel}
+          >
             <QrCameraScanner
+              className={styles.scanner}
               disabled={lookupPending || checkInPending}
               autoStart={autoStartCamera}
               onDetected={(value) => {
@@ -641,103 +726,160 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                 void findGuest(value);
               }}
             />
-            <form onSubmit={submitLookup} className="flex flex-col gap-3 sm:flex-row">
-              <Input
-                ref={input}
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                autoComplete="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                aria-label={t("reception.codeLabel")}
-                placeholder={t("reception.codePlaceholder")}
-                className="h-12 min-w-0 flex-1"
-                disabled={lookupPending || checkInPending}
-              />
-              <Button
-                type="submit"
-                disabled={!code.trim() || lookupPending || checkInPending}
-                className="h-12 sm:min-w-36"
-              >
-                <Search aria-hidden="true" />
-                {lookupPending ? t("reception.lookupPending") : t("reception.lookup")}
-              </Button>
-            </form>
-            <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
-              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              <p>{t("reception.lookupHint")}</p>
+            <div className={styles.manualLookup}>
+              <h2>{t("reception.manualLookupTitle")}</h2>
+              <form onSubmit={submitLookup} className={styles.lookupForm}>
+                <label htmlFor="checkin-lookup-code">{t("reception.codeLabel")}</label>
+                <div className={styles.lookupControls}>
+                  <Input
+                    id="checkin-lookup-code"
+                    value={code}
+                    onChange={(event) => setCode(event.target.value)}
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    placeholder={t("reception.codePlaceholder")}
+                    className={styles.lookupInput}
+                    disabled={lookupPending || checkInPending}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={!code.trim() || lookupPending || checkInPending}
+                    className={styles.lookupButton}
+                  >
+                    <Search aria-hidden="true" />
+                    {lookupPending ? t("reception.lookupPending") : t("reception.lookup")}
+                  </Button>
+                </div>
+              </form>
+              <p className={styles.lookupHint}>
+                <AlertCircle aria-hidden="true" />
+                <span>{t("reception.lookupHint")}</span>
+              </p>
             </div>
           </div>
         )}
 
         {mode === "SEARCH" && (
-          <div className="space-y-4">
-            <form onSubmit={findReceptionGuests} className="flex flex-col gap-3 sm:flex-row">
-              <Input
-                value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
-                autoComplete="off"
-                aria-label={t("reception.searchLabel")}
-                placeholder={t("reception.searchPlaceholder")}
-                className="h-12 min-w-0 flex-1"
-                disabled={searchPending || checkInPending}
-              />
+          <div
+            id="check-in-panel-search"
+            role="tabpanel"
+            aria-labelledby="check-in-tab-search"
+            className={styles.searchPanel}
+          >
+            <form onSubmit={findReceptionGuests} className={styles.searchForm}>
+              <label className={styles.searchField} htmlFor="checkin-guest-search">
+                <Search aria-hidden="true" />
+                <Input
+                  id="checkin-guest-search"
+                  ref={searchInput}
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  autoComplete="off"
+                  aria-label={t("reception.searchLabel")}
+                  placeholder={t("reception.searchPlaceholder")}
+                  aria-describedby="check-in-search-hint"
+                  className="shadow-none"
+                  disabled={searchPending || checkInPending}
+                />
+              </label>
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label={t("reception.clearSearch")}
+                disabled={!searchText || searchPending || checkInPending}
+                onClick={() => {
+                  setSearchText("");
+                  setSearchQuery("");
+                  setSearchResults([]);
+                  setGuest(null);
+                  setSelectedIds([]);
+                  setOutcomes({});
+                  setActiveSearchQuery(null);
+                  setExceptionReason("");
+                  setError("");
+                  setForbidden(false);
+                  searchInput.current?.focus();
+                }}
+                className={styles.clearSearch}
+              >
+                <X aria-hidden="true" />
+              </Button>
               <Button
                 type="submit"
                 disabled={searchText.trim().length < 2 || searchPending || checkInPending}
-                className="h-12 sm:min-w-36"
+                className={styles.searchButton}
               >
                 <Search aria-hidden="true" />
-                {searchPending ? t("reception.searching") : t("reception.search")}
+                <span className="hidden sm:inline">
+                  {searchPending ? t("reception.searching") : t("reception.search")}
+                </span>
+                <span className="sr-only sm:hidden">{t("reception.search")}</span>
               </Button>
             </form>
-            {searchResults.length > 0 && (
-              <ul className="space-y-3" aria-label={t("reception.searchResultsLabel")}>
-                {searchResults.map((result) => (
-                  <li
-                    key={result.guestId}
-                    className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="break-words font-semibold">
-                        {result.honorific ? `${result.honorific} ` : ""}
-                        {result.recipientName}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {t(`planning.sideValues.${result.side}`, { defaultValue: result.side })} ·{" "}
-                        {t("reception.checkedInOfPlaces", {
-                          checkedIn: result.checkedIn,
-                          places: result.places,
-                        })}{" "}
-                        ·{" "}
-                        {result.tables.length
-                          ? result.tables.join(", ")
-                          : t("reception.notAssigned")}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => selectReceptionGuest(result)}
-                      >
-                        {t("reception.selectForCheckIn")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => startCompanionWalkIn(result)}
-                      >
-                        <UserPlus aria-hidden="true" />
-                        {t("reception.addCompanion")}
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            <p id="check-in-search-hint" className={styles.searchHint}>
+              {t("reception.searchMinChars")}
+            </p>
+            {searchResults.length > 0 && !guest && (
+              <>
+                <p className={styles.resultCount}>
+                  {t("reception.searchResults", { count: searchResults.length })}
+                </p>
+                <ul className={styles.searchResults} aria-label={t("reception.searchResultsLabel")}>
+                  {searchResults.map((result) => (
+                    <li key={result.guestId} className={styles.searchResult}>
+                      <div className={styles.searchGuestIdentity}>
+                        <span className={styles.guestInitials} aria-hidden="true">
+                          {guestInitials(result.recipientName)}
+                        </span>
+                        <div className={styles.searchGuestCopy}>
+                          <p>
+                            {result.honorific ? result.honorific + " " : ""}
+                            {result.recipientName}
+                          </p>
+                          <span>
+                            {t("planning.sideValues." + result.side, { defaultValue: result.side })}
+                          </span>
+                        </div>
+                      </div>
+                      <div className={styles.searchGuestMeta}>
+                        <span>
+                          {t("reception.checkedInOfPlaces", {
+                            checkedIn: result.checkedIn,
+                            places: result.places,
+                          })}
+                        </span>
+                        <span>
+                          {result.tables.length
+                            ? result.tables.join(", ")
+                            : t("reception.notAssigned")}
+                        </span>
+                      </div>
+                      <div className={styles.searchActions}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => selectReceptionGuest(result)}
+                        >
+                          <UserRoundCheck aria-hidden="true" />
+                          {t("reception.selectForCheckIn")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => startCompanionWalkIn(result)}
+                        >
+                          <UserPlus aria-hidden="true" />
+                          {t("reception.addCompanion")}
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
             {searchQuery && !searchPending && searchResults.length === 0 && (
-              <div className="rounded-xl border border-dashed p-4 text-sm">
+              <div className={styles.searchEmpty}>
                 <p>{t("reception.noSearchMatchHint")}</p>
                 <Button
                   type="button"
@@ -756,13 +898,22 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
         )}
 
         {mode === "WALK_IN" && (
-          <form onSubmit={submitWalkIn} className="space-y-4">
-            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
-              {t("reception.walkInHint")}
-            </div>
+          <form
+            id="check-in-panel-walk_in"
+            role="tabpanel"
+            aria-labelledby="check-in-tab-walk_in"
+            onSubmit={submitWalkIn}
+            className={styles.walkInPanel}
+          >
+            <header className={styles.walkInHeader}>
+              <div>
+                <h2>{t("reception.walkInTitle")}</h2>
+                <p>{t("reception.walkInImmediateHint")}</p>
+              </div>
+            </header>
             {walkInGuestId ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
-                <p className="text-sm">
+              <div className={styles.companionContext}>
+                <p>
                   {t("reception.addCompanionFor")}{" "}
                   <strong>
                     {searchResults.find((item) => item.guestId === walkInGuestId)?.recipientName ??
@@ -778,10 +929,11 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                   {t("reception.createNewGuest")}
                 </Button>
               </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="space-y-1 text-sm sm:col-span-2">
-                  <span className="font-medium">
+            ) : null}
+            <div className={styles.walkInFields}>
+              {!walkInGuestId && (
+                <label className={styles.walkInNameField}>
+                  <span>
                     {t("reception.primaryGuestName")} <span aria-hidden="true">*</span>
                   </span>
                   <Input
@@ -793,37 +945,9 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                     disabled={walkInPending}
                   />
                 </label>
-                <label className="space-y-1 text-sm">
-                  <span className="font-medium">{t("reception.honorific")}</span>
-                  <Input
-                    value={walkInHonorific}
-                    onChange={(event) => setWalkInHonorific(event.target.value)}
-                    maxLength={50}
-                    placeholder={t("reception.honorificPlaceholder")}
-                    disabled={walkInPending}
-                  />
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="font-medium">{t("reception.sideGroup")}</span>
-                  <select
-                    value={walkInSide}
-                    onChange={(event) =>
-                      setWalkInSide(event.target.value as NonNullable<WalkInInput["side"]>)
-                    }
-                    disabled={walkInPending}
-                    className="h-10 w-full rounded-lg border bg-background px-3"
-                  >
-                    <option value="UNSPECIFIED">{t("planning.sideValues.UNSPECIFIED")}</option>
-                    <option value="BRIDE">{t("planning.sideValues.BRIDE")}</option>
-                    <option value="GROOM">{t("planning.sideValues.GROOM")}</option>
-                    <option value="MUTUAL">{t("planning.sideValues.MUTUAL")}</option>
-                  </select>
-                </label>
-              </div>
-            )}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="space-y-1 text-sm">
-                <span className="font-medium">
+              )}
+              <label className={styles.walkInPartySize}>
+                <span>
                   {walkInGuestId ? t("reception.companionCount") : t("reception.totalPeople")}
                 </span>
                 <Input
@@ -836,37 +960,77 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                   required
                   disabled={walkInPending}
                 />
-                <span className="block text-xs text-muted-foreground">
+                <span>
                   {walkInGuestId
                     ? t("reception.allCompanionsCheckedIn")
                     : t("reception.totalPeopleHint")}
                 </span>
               </label>
-              <label className="space-y-1 text-sm">
-                <span className="font-medium">{t("reception.companionNames")}</span>
-                <textarea
-                  value={walkInNames}
-                  onChange={(event) => setWalkInNames(event.target.value)}
-                  rows={3}
-                  disabled={walkInPending}
-                  placeholder={t("reception.companionNamesPlaceholder")}
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
-                />
-              </label>
             </div>
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium">{t("reception.capacityOverrideReason")}</span>
-              <Input
-                value={walkInReason}
-                onChange={(event) => setWalkInReason(event.target.value)}
-                maxLength={500}
-                disabled={walkInPending}
-                placeholder={t("reception.capacityOverridePlaceholder")}
-              />
-            </label>
+            <details
+              open={showWalkInDetails || Boolean(walkInReason)}
+              onToggle={(event) => setShowWalkInDetails(event.currentTarget.open)}
+              className={styles.walkInDetails}
+            >
+              <summary>
+                <span>{t("reception.additionalDetails")}</span>
+                <ChevronDown aria-hidden="true" />
+              </summary>
+              <div className={styles.walkInDetailsContent}>
+                {!walkInGuestId && (
+                  <>
+                    <label>
+                      <span>{t("reception.honorific")}</span>
+                      <Input
+                        value={walkInHonorific}
+                        onChange={(event) => setWalkInHonorific(event.target.value)}
+                        maxLength={50}
+                        placeholder={t("reception.honorificPlaceholder")}
+                        disabled={walkInPending}
+                      />
+                    </label>
+                    <label>
+                      <span>{t("reception.sideGroup")}</span>
+                      <select
+                        value={walkInSide}
+                        onChange={(event) =>
+                          setWalkInSide(event.target.value as NonNullable<WalkInInput["side"]>)
+                        }
+                        disabled={walkInPending}
+                      >
+                        <option value="UNSPECIFIED">{t("planning.sideValues.UNSPECIFIED")}</option>
+                        <option value="BRIDE">{t("planning.sideValues.BRIDE")}</option>
+                        <option value="GROOM">{t("planning.sideValues.GROOM")}</option>
+                        <option value="MUTUAL">{t("planning.sideValues.MUTUAL")}</option>
+                      </select>
+                    </label>
+                  </>
+                )}
+                <label className={styles.companionNamesField}>
+                  <span>{t("reception.companionNames")}</span>
+                  <textarea
+                    value={walkInNames}
+                    onChange={(event) => setWalkInNames(event.target.value)}
+                    rows={2}
+                    disabled={walkInPending}
+                    placeholder={t("reception.companionNamesPlaceholder")}
+                  />
+                </label>
+                <label className={styles.capacityReasonField}>
+                  <span>{t("reception.capacityOverrideReason")}</span>
+                  <Input
+                    value={walkInReason}
+                    onChange={(event) => setWalkInReason(event.target.value)}
+                    maxLength={500}
+                    disabled={walkInPending}
+                    placeholder={t("reception.capacityOverridePlaceholder")}
+                  />
+                </label>
+              </div>
+            </details>
             <Button
               type="submit"
-              className="h-12 w-full sm:w-auto"
+              className={styles.walkInSubmit}
               disabled={walkInPending || checkInPending}
             >
               <UserPlus aria-hidden="true" />
@@ -881,157 +1045,188 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
       </div>
 
       {error && (
-        <div
-          role="alert"
-          className={`rounded-xl border p-4 text-sm ${forbidden ? "border-amber-300 bg-amber-50 text-amber-950" : "border-red-200 bg-red-50 text-red-900"}`}
-        >
+        <div role="alert" className={styles.notice} data-type={forbidden ? "warning" : "error"}>
           {error}
           {forbidden && <p className="mt-1">{t("reception.checkInPermissionRequired")}</p>}
         </div>
       )}
 
       {guest && (
-        <article className="space-y-5 rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
-          <div className="flex items-start gap-4">
-            <div className="grid size-12 shrink-0 place-items-center rounded-full bg-muted text-foreground">
-              <UserRound aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-muted-foreground">{t("reception.guestLabel")}</p>
-              <h2 className="break-words text-xl font-semibold sm:text-2xl">
-                {guest.honorific ? `${guest.honorific} ` : ""}
-                {guest.recipientName}
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("reception.peopleInvited", { count: guest.seats.length })}
-              </p>
-            </div>
-          </div>
-
-          {"published" in guest && !guest.published && (
-            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-              {t("reception.seatingNotPublishedCounter")}
-            </p>
-          )}
-
-          <section aria-labelledby="checkin-people-heading">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 id="checkin-people-heading" className="font-semibold">
-                {t("reception.eachInvitedPerson")}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {t("reception.selectedCount", { count: selectedIds.length })}
-              </p>
-            </div>
-            {guest.seats.length === 0 ? (
-              <p className="mt-3 rounded-lg border p-4 text-sm text-muted-foreground">
-                {t("reception.noPlacesToCheckIn")}
-              </p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {guest.seats.map((seat) => {
-                  const outcome = outcomes[seat.placeId];
-                  const checkedIn = Boolean(seat.checkedInAt) || outcome !== undefined;
-                  const statusText = attendanceLabel(seat, outcome, t);
-                  return (
-                    <li key={seat.placeId} className="rounded-xl border p-4">
-                      <label className="flex min-h-11 items-start gap-3">
-                        <input
-                          type="checkbox"
-                          className="mt-1 size-5 accent-primary"
-                          checked={selectedIds.includes(seat.placeId)}
-                          onChange={(event) => togglePlace(seat.placeId, event.target.checked)}
-                          disabled={checkedIn || checkInPending}
-                          aria-label={t("reception.selectPersonForCheckIn", {
-                            name: seat.personName ?? t("guestNumber", { number: seat.position }),
-                          })}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-medium">
-                            {seat.personName ?? t("guestNumber", { number: seat.position })}
-                          </span>
-                          <span className="mt-1 block text-sm text-muted-foreground">
-                            {seat.table
-                              ? `${t("reception.tableLabel")} ${seat.table}${seat.seatNumber !== null ? ` · ${t("reception.seatNumber", { number: seat.seatNumber })}` : ""}`
-                              : t("reception.notAssigned")}
-                            {` · ${t(`reception.attendance.${seat.status}`)}`}
-                          </span>
-                        </span>
-                      </label>
-                      <span
-                        className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${checkedIn ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950"}`}
-                      >
-                        {checkedIn ? (
-                          <CircleCheck className="size-4" aria-hidden="true" />
-                        ) : (
-                          <CircleDashed className="size-4" aria-hidden="true" />
-                        )}
-                        {statusText}
-                        {seat.checkedInAt &&
-                          !outcome &&
-                          ` · ${friendlyTime(seat.checkedInAt, language)}`}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-
-          {selectedUnused && (
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium">
-                {t("reception.exceptionReasonLabel")} <span aria-hidden="true">*</span>
-              </span>
-              <span className="block text-muted-foreground">
-                {t("reception.exceptionReasonHint")}
-              </span>
-              <Input
-                value={exceptionReason}
-                onChange={(event) => setExceptionReason(event.target.value)}
-                maxLength={500}
-                placeholder={t("reception.exceptionReasonPlaceholder")}
-                aria-required="true"
-                disabled={checkInPending}
-              />
-            </label>
-          )}
-
-          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">{t("reception.confirmationHint")}</p>
-            <ConfirmDialog
-              trigger={
+        <>
+          <article className={styles.guestCard}>
+            <div className={styles.guestSummary}>
+              <div className={styles.guestIdentity}>
+                <div className={styles.guestPortrait} aria-hidden="true">
+                  {guestInitials(guest.recipientName)}
+                </div>
+                <div className={styles.guestNameBlock}>
+                  <p>{t("reception.guestLabel")}</p>
+                  <h2 ref={guestHeading} tabIndex={-1} className={styles.guestName}>
+                    {guest.honorific ? guest.honorific + " " : ""}
+                    {guest.recipientName}
+                  </h2>
+                  {"side" in guest && (
+                    <span className={styles.guestSide}>
+                      {t("planning.sideValues." + guest.side, { defaultValue: guest.side })}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className={styles.guestStats}>
+                <div>
+                  <span>{t("reception.invitedCountLabel")}</span>
+                  <strong>{guest.seats.length}</strong>
+                </div>
+                <div>
+                  <span>{t("reception.checkedInCountLabel")}</span>
+                  <strong>{guest.seats.filter((seat) => seat.checkedInAt).length}</strong>
+                </div>
+              </div>
+              {activeSearchQuery && (
                 <Button
                   type="button"
-                  className="h-12 w-full sm:w-auto"
-                  disabled={
-                    selectedIds.length === 0 ||
-                    checkInPending ||
-                    (selectedUnused && !exceptionReason.trim())
-                  }
+                  variant="ghost"
+                  className={styles.returnToResults}
+                  onClick={() => {
+                    setGuest(null);
+                    setSelectedIds([]);
+                    setOutcomes({});
+                    setExceptionReason("");
+                    setError("");
+                    setMessage("");
+                    window.setTimeout(() => searchInput.current?.focus(), 0);
+                  }}
                 >
-                  <Check aria-hidden="true" />
-                  {checkInPending
-                    ? t("reception.recording")
-                    : t("reception.confirmCheckInCount", { count: selectedIds.length })}
+                  <ArrowLeft aria-hidden="true" />
+                  {t("reception.returnToResults")}
                 </Button>
-              }
-              title={t("reception.confirmTitle")}
-              description={t("reception.confirmDescription", { count: selectedIds.length })}
-              cancelLabel={t("reception.goBack")}
-              confirmLabel={t("reception.recordCheckIn")}
-              onConfirm={() => void confirmCheckIn()}
-            />
-          </div>
-        </article>
+              )}
+            </div>
+
+            {"published" in guest && !guest.published && (
+              <p className={styles.seatingNotice}>{t("reception.seatingNotPublishedCounter")}</p>
+            )}
+
+            <section className={styles.attendeeSection} aria-labelledby="checkin-people-heading">
+              <div className={styles.attendeeHeading}>
+                <h3 id="checkin-people-heading">{t("reception.eachInvitedPerson")}</h3>
+                <p>{t("reception.selectedCount", { count: selectedIds.length })}</p>
+              </div>
+              {guest.seats.length === 0 ? (
+                <p className={styles.emptyAttendees}>{t("reception.noPlacesToCheckIn")}</p>
+              ) : (
+                <ul className={styles.attendeeList}>
+                  {guest.seats.map((seat) => {
+                    const outcome = outcomes[seat.placeId];
+                    const checkedIn = Boolean(seat.checkedInAt) || outcome !== undefined;
+                    const statusText = attendanceLabel(seat, outcome, t);
+                    return (
+                      <li
+                        key={seat.placeId}
+                        className={styles.attendeeRow}
+                        data-selected={selectedIds.includes(seat.placeId)}
+                        data-check-in-status={
+                          outcome === "CHECKED_IN"
+                            ? "checked-in"
+                            : outcome === "ALREADY_CHECKED_IN" || seat.checkedInAt
+                              ? "already-checked-in"
+                              : "not-checked-in"
+                        }
+                        data-rsvp-status={seat.status}
+                      >
+                        <label className={styles.attendeeSelect}>
+                          <input
+                            type="checkbox"
+                            className={styles.attendeeCheckbox}
+                            checked={selectedIds.includes(seat.placeId)}
+                            onChange={(event) => togglePlace(seat.placeId, event.target.checked)}
+                            disabled={checkedIn || checkInPending}
+                            aria-label={t("reception.selectPersonForCheckIn", {
+                              name: seat.personName ?? t("guestNumber", { number: seat.position }),
+                            })}
+                          />
+                          <span className={styles.attendeeIdentity}>
+                            <span className={styles.attendeeName}>
+                              {seat.personName ?? t("guestNumber", { number: seat.position })}
+                            </span>
+                            <span className={styles.attendeeTable}>
+                              {seat.table ? (
+                                <>
+                                  <span>
+                                    {t("reception.tableLabel")} {seat.table}
+                                  </span>
+                                  {seat.seatNumber !== null && (
+                                    <span>
+                                      {t("reception.seatNumber", { number: seat.seatNumber })}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                t("reception.notAssigned")
+                              )}
+                            </span>
+                          </span>
+                          <span className={styles.attendeeRsvp} data-rsvp-status={seat.status}>
+                            {t("reception.attendance." + seat.status)}
+                          </span>
+                          <span className={styles.attendeeCheckIn}>
+                            {checkedIn ? (
+                              <CircleCheck aria-hidden="true" />
+                            ) : (
+                              <CircleDashed aria-hidden="true" />
+                            )}
+                            <span>{statusText}</span>
+                            {seat.checkedInAt && (
+                              <small>
+                                {t("reception.checkedInAt", {
+                                  time: friendlyTime(seat.checkedInAt, language),
+                                })}
+                              </small>
+                            )}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            {selectedUnused && (
+              <label className={styles.exceptionField}>
+                <span>
+                  {t("reception.exceptionReasonLabel")} <span aria-hidden="true">*</span>
+                </span>
+                <span>{t("reception.exceptionReasonHint")}</span>
+                <Input
+                  value={exceptionReason}
+                  onChange={(event) => setExceptionReason(event.target.value)}
+                  maxLength={500}
+                  placeholder={t("reception.exceptionReasonPlaceholder")}
+                  aria-required="true"
+                  disabled={checkInPending}
+                />
+              </label>
+            )}
+
+            <div className={styles.selectionFooter}>
+              <p>{t("reception.confirmationHint")}</p>
+              {renderCheckInConfirmation("h-12 w-full sm:w-auto")}
+            </div>
+          </article>
+          {selectedIds.length > 0 && (
+            <div className={styles.mobileSelectionFooter}>
+              <div>
+                <p>{t("reception.selectedCount", { count: selectedIds.length })}</p>
+                {renderCheckInConfirmation("h-12 flex-1")}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {message && (
-        <p
-          role="status"
-          aria-live="polite"
-          className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"
-        >
+        <p role="status" aria-live="polite" className={styles.statusMessage}>
           {message}
         </p>
       )}
