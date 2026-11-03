@@ -108,6 +108,7 @@ test("wedding list preserves maxCapacity zero so the UI can render it as not con
       {
         id: "c21debf9-388b-4f6b-b9f2-57f405f12345",
         title: "Đám cưới Minh & Lan",
+        slug: "dam-cuoi-minh-lan",
         weddingDate: "2027-04-12",
         participantCount: 0,
         maxCapacity: 0,

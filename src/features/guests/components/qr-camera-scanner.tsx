@@ -99,10 +99,11 @@ export function QrCameraScanner({
   }, [active, t]);
 
   return (
-    <div className="space-y-3">
+    <div className="mx-auto w-full max-w-2xl space-y-3">
       <Button
         type="button"
         variant="outline"
+        className="min-h-11"
         disabled={disabled}
         onClick={() => {
           setError("");
@@ -114,15 +115,23 @@ export function QrCameraScanner({
         {active ? t("off") : t("on")}
       </Button>
       {active && (
-        <div className="space-y-2 rounded-xl border bg-black p-2">
-          <video
-            ref={videoRef}
-            className="mx-auto max-h-72 w-full rounded-lg object-cover"
-            muted
-            playsInline
-            aria-label={t("videoAria")}
-          />
-          <p className="text-center text-sm text-white">{t("hint")}</p>
+        <div className="space-y-2 rounded-xl border bg-muted/40 p-2">
+          <div className="relative overflow-hidden rounded-lg bg-zinc-950">
+            <video
+              ref={videoRef}
+              className="aspect-video max-h-[26rem] w-full object-cover"
+              muted
+              playsInline
+              aria-label={t("videoAria")}
+            />
+            <div
+              className="pointer-events-none absolute inset-0 grid place-items-center"
+              aria-hidden="true"
+            >
+              <div className="h-[58%] w-[48%] rounded-2xl border-2 border-white/80" />
+            </div>
+          </div>
+          <p className="px-2 py-1 text-center text-sm text-muted-foreground">{t("hint")}</p>
         </div>
       )}
       {error && (
