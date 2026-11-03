@@ -1,3 +1,5 @@
+import { defaultGroups, findGroup } from "./group-catalog";
+
 export const coupleHeaders = [
   "Tên người nhận",
   "Danh xưng",
@@ -86,6 +88,19 @@ export function parseCoupleCsv(source: string): CoupleRow[] {
   }
   if (quoted) throw new Error("Có ô chưa đóng dấu ngoặc kép. Hãy kiểm tra và lưu lại file CSV.");
   if (cell || cells.length || closed) record();
+  return parseCoupleRecords(records);
+}
+
+// XLSX row indexes must not be shifted by multiline cells converted through CSV.
+export function parseCoupleSheet(data: string[][]): CoupleRow[] {
+  return parseCoupleRecords(
+    data
+      .map((cells, index) => ({ line: index + 1, cells }))
+      .filter(({ cells }) => cells.some((value) => value.trim())),
+  );
+}
+
+function parseCoupleRecords(records: { line: number; cells: string[] }[]): CoupleRow[] {
   const header = records.shift()?.cells.map((value) => value.trim());
   const oldHeaders = coupleHeaders.filter((name) => name !== "Email");
   const sevenHeaders = oldHeaders.filter((name) => name !== "Phía khách mời");
@@ -120,7 +135,10 @@ export function validateCoupleRows(rows: { line: number; values: string[] }[]): 
   const seenNames = new Set<string>(),
     seenPhones = new Set<string>();
   return rows.map(({ line, values: rawValues }) => {
-    const values = rawValues.map((value) => value.trim());
+    const values = rawValues.map((value, index) => {
+      const text = value.normalize("NFC").trim();
+      return [0, 1, 7].includes(index) ? text.replace(/\s+/g, " ") : text;
+    });
     // Existing templates have no Email column; missing optional trailing cells stay blank.
     if (values.length === 8) values.push("");
     const errors: string[] = [],
@@ -146,21 +164,35 @@ export function validateCoupleRows(rows: { line: number; values: string[] }[]): 
     )
       errors.push("Email không đúng định dạng hoặc vượt quá 254 ký tự.");
     if (!name) errors.push("Thiếu tên người nhận.");
+    if (name.length > 150) errors.push("Tên người nhận không được vượt quá 150 ký tự.");
+    if ((values[1] ?? "").length > 50) errors.push("Danh xưng không được vượt quá 50 ký tự.");
+    if ((values[7] ?? "").length > 2000) errors.push("Ghi chú không được vượt quá 2.000 ký tự.");
     const expected = rawCount === "" ? 1 : /^\d+$/.test(rawCount) ? Number(rawCount) : null;
-    if (expected === null || !Number.isSafeInteger(expected) || expected < 1)
-      errors.push("Tổng người dự kiến phải là số nguyên từ 1 trở lên.");
+    if (expected === null || !Number.isSafeInteger(expected) || expected < 1 || expected > 500)
+      errors.push(
+        rawCount
+          ? `Số suất phải từ 1 đến 500 (đang là ${rawCount})`
+          : "Tổng người dự kiến phải là số nguyên từ 1 đến 500.",
+      );
     const kind = ["Cá nhân", "Gia đình", "Nhóm"].find(
       (item) => item.toLocaleLowerCase("vi") === rawKind.toLocaleLowerCase("vi"),
     );
     if (rawKind && !kind) errors.push("Kiểu lời mời chọn Cá nhân, Gia đình hoặc Nhóm.");
-    values[2] = kind ?? "Cá nhân";
+    values[2] = kind ?? rawKind;
+    const rawGroup = values[5] ?? "";
+    const group = findGroup(rawGroup, defaultGroups);
+    if (rawGroup && !group)
+      errors.push(`Nhóm "${rawGroup}" chưa có trong danh sách nhóm của đám cưới`);
+    values[5] = group ?? rawGroup;
+    if (!rawGroup) warnings.push("Chưa chọn nhóm: đang dùng Khác.");
+    if (!rawCount) warnings.push("Chưa nhập số suất: đang dùng 1 suất.");
     const side = ["Nhà gái", "Nhà trai", "Chung"].find(
       (label) => label.toLocaleLowerCase("vi") === rawSide.toLocaleLowerCase("vi"),
     );
     if (rawSide && !side) errors.push("Phía khách mời chọn Nhà gái, Nhà trai hoặc Chung.");
     if (!rawSide) warnings.push("Chưa xác định phía khách mời; không mặc định là Chung.");
     values[4] = side ?? rawSide;
-    if (!rawKind && expected !== null && expected > 1)
+    if (!rawKind)
       warnings.push(
         "Chưa chọn kiểu lời mời: đang dùng Cá nhân. Chọn Gia đình nếu mời cả nhà; không suy từ số người.",
       );

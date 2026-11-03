@@ -63,7 +63,7 @@ test("download matches the displayed example: five recipients and ten expected p
   assert.ok(rows.every((row) => row.errors.length === 0));
 });
 test("empty headcount defaults visibly to one and keeps phone leading zeros", () => {
-  const [row] = parseCoupleCsv(`${header}\r\nAn,Bác,Gia đình,,Nhà gái,Họ ngoại,0900123456,`);
+  const [row] = parseCoupleCsv(`${header}\r\nAn,Bác,Gia đình,,Nhà gái,Họ hàng,0900123456,`);
   assert.equal(row?.expected, 1);
   assert.equal(row?.defaulted, true);
   assert.equal(row?.values[6], "0900123456");
@@ -73,7 +73,7 @@ test("quoted commas, linebreaks and escaped quotes do not create extra recipient
     `${header}\nAn,Bác,Gia đình,4,Nhà gái,Họ ngoại,,"Cần ghế, gần lối ra\nGọi \"\"An\"\""\nHoa,Cô,Gia đình,2,Nhà gái,Họ ngoại,,`,
   );
   assert.equal(rows.length, 2);
-  assert.equal(rows[0]?.values[7], 'Cần ghế, gần lối ra\nGọi "An"');
+  assert.equal(rows[0]?.values[7], 'Cần ghế, gần lối ra Gọi "An"');
   assert.equal(rows[1]?.line, 4);
 });
 test("invalid headcounts and row shapes are not included in expected totals", () => {
@@ -105,19 +105,19 @@ test("invitation type is explicit, validated and not inferred from headcount", (
   assert.equal(individual?.values[2], "Cá nhân");
   assert.equal(family?.values[2], "Gia đình");
   assert.equal(group?.values[2], "Nhóm");
-  assert.equal(missing?.values[2], "Cá nhân");
+  assert.equal(missing?.values[2], "");
   assert.ok(missing?.warnings.length);
   assert.ok(invalid?.errors.length);
 });
 
-test("previously downloaded six-column files stay readable and warn on unspecified multi-person invitations", () => {
+test("a non-catalog group remains invalid instead of silently becoming OTHER", () => {
   const [row] = parseCoupleCsv(
     "Tên người nhận,Danh xưng,Tổng người dự kiến,Nhóm khách,SĐT,Ghi chú\nAn,Bác,4,Họ ngoại,,",
   );
-  assert.equal(row?.expected, 4);
-  assert.equal(row?.values[2], "Cá nhân");
+  assert.equal(row?.expected, null);
+  assert.equal(row?.values[2], "");
   assert.equal(row?.values[4], "");
   assert.equal(row?.values[5], "Họ ngoại");
   assert.ok(row?.warnings.length);
-  assert.equal(row?.errors.length, 0);
+  assert.ok(row?.errors.length);
 });

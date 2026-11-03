@@ -10,7 +10,7 @@ import {
   archivePlanningGuest,
   createPlanningGuest,
   restorePlanningGuest,
-  importBody,
+  checkImportGuests,
   importGuests,
   listPlanningGuests,
   getPlanningGuest,
@@ -19,8 +19,8 @@ import {
   sideLabels,
   type PlanningGuestCreate,
   type PlanningGuestUpdate,
+  type PlanningImportCommit,
 } from "../api/planning.api";
-import type { CoupleRow } from "../utils/couple-import";
 import Link from "next/link";
 import { Copy, ExternalLink } from "lucide-react";
 import { PlanningGuestCreateForm } from "./planning-guest-create-form";
@@ -193,22 +193,28 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
       createAttempt.current = { serialized, key: crypto.randomUUID() };
     createGuest.mutate({ input, key: createAttempt.current.key });
   }
-  async function save(rows: CoupleRow[]) {
-    const body = importBody(rows),
-      serialized = JSON.stringify(body);
+  async function save(body: PlanningImportCommit) {
+    const serialized = JSON.stringify(body);
     if (attempt.current?.serialized !== serialized)
       attempt.current = { serialized, key: crypto.randomUUID() };
     const result = await importGuests(api, weddingId, body, attempt.current.key);
     setNotice(
-      `${t("imported", { guests: formatNumber(result.createdGuestCount, language), people: formatNumber(result.createdPlaceCount, language) })}${result.warnings.length ? ` ${t("importedDuplicateWarning", { count: formatNumber(result.warnings.length, language) })}` : ""}`,
+      `${t("imported", { guests: formatNumber(result.createdGuestCount, language), people: formatNumber(result.createdPlaceCount, language) })} · Bỏ qua ${result.skippedCount} dòng.`,
     );
     await cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] });
     setPage(1);
     setSearch("");
-    setImporting(false);
     attempt.current = null;
+    return result;
   }
-  if (importing) return <CoupleImport onClose={() => setImporting(false)} onImport={save} />;
+  if (importing)
+    return (
+      <CoupleImport
+        onClose={() => setImporting(false)}
+        onImport={save}
+        onCheck={(rows) => checkImportGuests(api, weddingId, rows)}
+      />
+    );
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">

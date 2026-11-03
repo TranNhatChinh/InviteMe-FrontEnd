@@ -45,15 +45,58 @@ const issue = z.object({
   code: z.string(),
   message: z.string(),
 });
-const result = z.object({
+export const importResultSchema = z.object({
   importId: z.string(),
   createdGuestCount: z.number(),
   createdPlaceCount: z.number(),
   items: z.array(
-    z.object({ rowNumber: z.number(), guestId: z.string(), expectedPeople: z.number() }),
+    z.object({
+      rowNumber: z.number(),
+      guestId: z.string(),
+      expectedPeople: z.number(),
+      action: z.literal("CREATE_SEPARATE"),
+    }),
   ),
   warnings: z.array(issue),
+  skippedCount: z.number(),
+  skipped: z.array(z.object({ rowNumber: z.number(), action: z.literal("SKIP") })),
 });
+export type PlanningImportResult = z.infer<typeof importResultSchema>;
+export const importPreviewSchema = z.object({
+  previewToken: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  quotaRemaining: z.number().nullable(),
+  proposedPlaces: z.number(),
+  errors: z.array(issue),
+  rows: z.array(
+    z.object({
+      rowNumber: z.number(),
+      status: z.enum(["NEW", "WARNING", "NEED_DECISION"]),
+      reasons: z.array(z.string()),
+      matchCount: z.number(),
+      matches: z.array(
+        z.object({
+          guestId: z.string().nullable(),
+          sourceRowNumber: z.number().nullable(),
+          recipientName: z.string(),
+          differences: z.array(
+            z.object({
+              field: z.string(),
+              existing: z.string().nullable(),
+              incoming: z.string().nullable(),
+            }),
+          ),
+        }),
+      ),
+    }),
+  ),
+});
+export type PlanningImportPreview = z.infer<typeof importPreviewSchema>;
+export type PlanningImportDecision = { rowNumber: number; action: "SKIP" | "CREATE_SEPARATE" };
+export type PlanningImportCommit = ReturnType<typeof importBody> & {
+  previewToken: string;
+  decisions: PlanningImportDecision[];
+};
 export type PlanningGuest = z.infer<typeof planningGuestSchema>;
 export type PlanningDetail = z.infer<typeof planningDetailSchema>;
 export type PlanningGuestValidationMessages = {
@@ -145,6 +188,8 @@ export const sideLabels = {
   UNSPECIFIED: "Chưa xác định",
 };
 export function importBody(rows: CoupleRow[]) {
+  if (rows.some((row) => row.errors.length))
+    throw new Error("Sửa hoặc loại các dòng lỗi trước khi kiểm tra.");
   return {
     rows: rows.map((r) => ({
       rowNumber: r.line,
@@ -159,7 +204,11 @@ export function importBody(rows: CoupleRow[]) {
         ({ "Nhà gái": "BRIDE", "Nhà trai": "GROOM", Chung: "MUTUAL" } as Record<string, string>)[
           r.values[4] ?? ""
         ] ?? "UNSPECIFIED",
-      group: Object.entries(groupLabels).find(([, label]) => label === r.values[5])?.[0] ?? "OTHER",
+      group: r.values[5]
+        ? groupKind.parse(
+            Object.entries(groupLabels).find(([, label]) => label === r.values[5])?.[0],
+          )
+        : "OTHER",
       phone: r.values[6] || null,
       email: r.values[8] || null,
       note: r.values[7] || null,
@@ -167,17 +216,19 @@ export function importBody(rows: CoupleRow[]) {
   };
 }
 const path = (id: string) => `/weddings/${encodeURIComponent(id)}/guest-planning`;
-export function importGuests(
-  api: ApiClient,
-  id: string,
-  body: ReturnType<typeof importBody>,
-  key: string,
-) {
+export function importGuests(api: ApiClient, id: string, body: PlanningImportCommit, key: string) {
   return api.request(`${path(id)}/imports`, {
     method: "POST",
     body,
     headers: { "Idempotency-Key": key },
-    schema: result,
+    schema: importResultSchema,
+  });
+}
+export function checkImportGuests(api: ApiClient, id: string, rows: CoupleRow[]) {
+  return api.request(`${path(id)}/imports/check`, {
+    method: "POST",
+    body: importBody(rows),
+    schema: importPreviewSchema,
   });
 }
 export function listPlanningGuests(
