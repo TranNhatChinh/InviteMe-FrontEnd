@@ -50,5 +50,6 @@
   "editWeddingWebsite": "Edit wedding website",
   "openWeddingWebsite": "Open wedding website",
   "weddingFallback": "Wedding",
-  "loadingWeddingAccess": "Loading wedding access and menu…"
+  "loadingWeddingAccess": "Loading wedding access and menu…",
+  "planFeatureLocked": "Some actions require a plan upgrade"
 }

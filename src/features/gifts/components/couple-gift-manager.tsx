@@ -22,14 +22,21 @@ import {
 } from "../api/gifts.api";
 import { useLocale } from "@/i18n/language-context";
 import { formatCurrency, formatDate, formatNumber } from "@/i18n/format";
+// eslint-disable-next-line architecture/boundaries -- Gift management renders the wedding plan's QR entitlement notice beside its existing ledger.
+import { FeatureLimitNotice, planEntitlementState, useWeddingPlan } from "@/features/plans";
 
 export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
   const { t } = useTranslation("gifts");
+  const { t: tPlans } = useTranslation("plans");
   const { language } = useLocale();
   const { api } = useRuntime();
   const queryClient = useQueryClient();
-  const { can, isWeddingWide } = usePermission();
+  const { can, isWeddingWide, isOwner } = usePermission();
   const editable = can("GIFT_EDIT") && isWeddingWide("GIFT_EDIT");
+  const weddingPlan = useWeddingPlan(weddingId, can("GIFT_VIEW"));
+  const giftQrGate = weddingPlan.data && !weddingPlan.isError
+    ? planEntitlementState(weddingPlan.data, "giftQr")
+    : null;
   const [pageNumber, setPageNumber] = useState(1);
   const [search, setSearch] = useState("");
   const [bankBin, setBankBin] = useState("");
@@ -134,6 +141,30 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
         <h1 className="text-2xl font-semibold">{t("ledgerTitle")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t("ledgerDescription")}</p>
       </header>
+      {weddingPlan.isError && (
+        <FeatureLimitNotice
+          status="unavailable"
+          title={tPlans("gate.unknownTitle")}
+          description={tPlans("gate.unknownDescription")}
+          retryLabel={tPlans("gate.retry")}
+          onRetry={() => void weddingPlan.refetch()}
+        />
+      )}
+      {giftQrGate?.locked && weddingPlan.data && !weddingPlan.isError && (
+        <FeatureLimitNotice
+          title={tPlans("gate.notIncludedTitle", {
+            feature: tPlans("gate.features.giftQr"),
+          })}
+          description={
+            isOwner
+              ? t("plan.giftQrOwnerDescription", { planName: weddingPlan.data.planName })
+              : t("plan.giftQrContactOwner", { planName: weddingPlan.data.planName })
+          }
+          variant="compact"
+          upgradeHref={isOwner ? `/weddings/${encodeURIComponent(weddingId)}/plan` : undefined}
+          upgradeLabel={isOwner ? tPlans("gate.viewPlans") : undefined}
+        />
+      )}
       {error && (
         <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
           {error}

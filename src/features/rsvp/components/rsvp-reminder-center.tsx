@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRing, CalendarClock, Mail, RefreshCw, Send } from "lucide-react";
+import { BellRing, CalendarClock, Mail, Send } from "lucide-react";
 import { ApiError } from "@/core/api/api-error";
 import { useRuntime } from "@/core/config/runtime";
 import { usePermission } from "@/shared/components/permission-guard";
@@ -14,6 +14,13 @@ import { LoadingState } from "@/shared/feedback/loading-state";
 import { PageHeader } from "@/shared/components/page-header";
 import { Button } from "@/shared/ui/button";
 import { useLocale } from "@/i18n/language-context";
+// eslint-disable-next-line architecture/boundaries -- RSVP reminder limits use the shared wedding plan entitlement contract.
+import {
+  canSendManualReminder,
+  FeatureLimitNotice,
+  planEntitlementState,
+  useWeddingPlan,
+} from "@/features/plans";
 import {
   getRsvpReminderSummary,
   listRsvpReminders,
@@ -40,6 +47,7 @@ function formatDate(value: string | null, timezone: string, language: "vi" | "en
 
 function errorMessage(error: unknown, t: (key: string) => string) {
   if (!(error instanceof ApiError)) return t("reminder.errors.generic");
+  if (error.backendCode === "PLAN_LIMIT_REACHED") return t("reminder.errors.planLimit");
   if (error.backendCode === "EMAIL_NOT_CONFIGURED") return t("reminder.errors.emailUnavailable");
   if (error.backendCode === "WEDDING_SCOPE_REQUIRED")
     return t("reminder.errors.weddingWideRequired");
@@ -53,9 +61,11 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
   const { language } = useLocale();
   const { api } = useRuntime();
   const cache = useQueryClient();
-  const { can, isWeddingWide } = usePermission();
+  const { can, isOwner, isWeddingWide } = usePermission();
+  const { t: tPlans } = useTranslation("plans");
   const hasWeddingWideRsvp = can("RSVP_VIEW") && isWeddingWide("RSVP_VIEW");
   const canManage = can("INVITATION_SEND") && isWeddingWide("INVITATION_SEND");
+  const plan = useWeddingPlan(weddingId, hasWeddingWideRsvp);
   const [status, setStatus] = useState<RsvpReminderStatus | "">("");
   const [kind, setKind] = useState<RsvpReminderKind | "">("");
   const [pageNumber, setPageNumber] = useState(1);
@@ -87,6 +97,19 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
   const summary = summaryQuery.data;
   const history = historyQuery.data;
   const selectedCount = selectedIds.length;
+  const planUnavailable = plan.isError || (!plan.isPending && !plan.data);
+  const automaticGate =
+    !planUnavailable && plan.data ? planEntitlementState(plan.data, "reminderRounds") : null;
+  const manualAllowed =
+    !planUnavailable && !plan.isPending && plan.data ? canSendManualReminder(plan.data) : false;
+  const manualLimit = plan.data?.limits.reminderRounds;
+  const manualUsage = plan.data?.usage.reminderRounds;
+  const manualUsageText =
+    !planUnavailable && plan.data && manualLimit === null
+      ? t("reminder.unlimitedManualQuota")
+      : !planUnavailable && plan.data && manualLimit !== undefined && manualLimit !== null
+        ? t("reminder.manualQuota", { used: manualUsage, limit: manualLimit })
+        : null;
 
   if (!hasWeddingWideRsvp)
     return (
@@ -105,6 +128,11 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
 
   async function toggleAutomatic() {
     if (!summary || !canManage || busy) return;
+    if (
+      !summary.autoEnabled &&
+      (plan.isPending || planUnavailable || !plan.data || automaticGate?.locked)
+    )
+      return;
     setBusy("settings");
     setActionError("");
     setNotice("");
@@ -115,6 +143,8 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
       await refreshAfterChange();
     } catch (error) {
       setActionError(errorMessage(error, t));
+      if (error instanceof ApiError && error.backendCode === "PLAN_LIMIT_REACHED")
+        await cache.invalidateQueries({ queryKey: ["wedding-plan", weddingId] });
     } finally {
       setBusy(null);
     }
@@ -131,13 +161,15 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
       setSelectedIds(result.eligible.map((guest) => guest.guestId));
     } catch (error) {
       setActionError(errorMessage(error, t));
+      if (error instanceof ApiError && error.backendCode === "PLAN_LIMIT_REACHED")
+        await cache.invalidateQueries({ queryKey: ["wedding-plan", weddingId] });
     } finally {
       setBusy(null);
     }
   }
 
   async function sendSelected() {
-    if (!canManage || !preview || selectedIds.length === 0 || busy) return;
+    if (!canManage || !manualAllowed || !preview || selectedIds.length === 0 || busy) return;
     setBusy("send");
     setActionError("");
     setNotice("");
@@ -161,6 +193,8 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
       await refreshAfterChange();
     } catch (error) {
       setActionError(errorMessage(error, t));
+      if (error instanceof ApiError && error.backendCode === "PLAN_LIMIT_REACHED")
+        await cache.invalidateQueries({ queryKey: ["wedding-plan", weddingId] });
     } finally {
       setBusy(null);
     }
@@ -184,18 +218,7 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title={t("reminder.title")}
-        description={t("reminder.description")}
-        action={
-          canManage ? (
-            <Button variant="outline" onClick={() => void loadPreview()} disabled={busy !== null}>
-              <RefreshCw aria-hidden="true" />
-              {busy === "preview" ? t("reminder.checking") : t("reminder.previewButton")}
-            </Button>
-          ) : undefined
-        }
-      />
+      <PageHeader title={t("reminder.title")} description={t("reminder.description")} />
 
       {actionError && (
         <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-900">
@@ -211,6 +234,20 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
           {notice}
         </p>
       )}
+      {planUnavailable && (
+        <FeatureLimitNotice
+          status="unavailable"
+          title={t("reminder.planUnknownTitle")}
+          description={t("reminder.planUnknownDescription")}
+          retryLabel={tPlans("gate.retry")}
+          onRetry={() => void plan.refetch()}
+        />
+      )}
+      {plan.isPending && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("reminder.checkingPlan")}
+        </p>
+      )}
       {summaryQuery.isPending && <LoadingState label={t("reminder.loadingSettings")} />}
       {summaryQuery.isError && (
         <ErrorState error={summaryQuery.error} retry={() => void summaryQuery.refetch()} />
@@ -218,6 +255,19 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
 
       {summary && (
         <>
+          {automaticGate?.locked && (
+            <FeatureLimitNotice
+              title={t("reminder.autoPlanTitle")}
+              description={
+                isOwner
+                  ? t("reminder.autoPlanOwnerDescription")
+                  : t("reminder.autoPlanContactOwner")
+              }
+              variant="compact"
+              upgradeHref={isOwner ? `/weddings/${encodeURIComponent(weddingId)}/plan` : undefined}
+              upgradeLabel={isOwner ? tPlans("gate.viewPlans") : undefined}
+            />
+          )}
           {!summary.emailConfigured && (
             <div
               role="status"
@@ -245,7 +295,14 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
                 <Button
                   variant={summary.autoEnabled ? "outline" : "default"}
                   onClick={() => void toggleAutomatic()}
-                  disabled={busy !== null}
+                  disabled={
+                    busy !== null ||
+                    (!summary.autoEnabled &&
+                      (plan.isPending ||
+                        planUnavailable ||
+                        !plan.data ||
+                        Boolean(automaticGate?.locked)))
+                  }
                 >
                   <BellRing aria-hidden="true" />
                   {busy === "settings"
@@ -261,14 +318,14 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
               )}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <dl className="grid grid-cols-2 divide-x divide-y rounded-xl border bg-muted/20 sm:grid-cols-3 sm:divide-y-0">
               <Metric label={t("reminder.notResponded")} value={summary.notResponded} />
               <Metric label={t("reminder.canRemindNow")} value={summary.canRemindNow} />
               <Metric label={t("reminder.pendingSending")} value={summary.counts.pending} />
               <Metric label={t("reminder.sentSuccessfully")} value={summary.counts.sent} />
               <Metric label={t("reminder.sendFailed")} value={summary.counts.failed} />
               <Metric label={t("reminder.cancelled")} value={summary.counts.cancelled} />
-            </div>
+            </dl>
 
             <div className="grid gap-4 border-t pt-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <div className="space-y-2">
@@ -332,7 +389,41 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
                 <p className="mt-1 text-sm text-muted-foreground">
                   {t("reminder.manualDescription")}
                 </p>
+                {manualUsageText && (
+                  <p className="mt-2 text-sm font-medium text-muted-foreground" role="status">
+                    {manualUsageText}
+                  </p>
+                )}
               </div>
+              {!manualAllowed &&
+                !planUnavailable &&
+                !plan.isPending &&
+                plan.data &&
+                automaticGate?.locked && (
+                  <p role="status" className="-mt-1 text-sm text-muted-foreground">
+                    {t("reminder.manualQuotaNotIncludedDescription")}
+                  </p>
+                )}
+              {!manualAllowed &&
+                !planUnavailable &&
+                !plan.isPending &&
+                plan.data &&
+                !automaticGate?.locked && (
+                  <FeatureLimitNotice
+                    title={t("reminder.manualQuotaReachedTitle")}
+                    description={
+                      isOwner
+                        ? t("reminder.manualQuotaOwnerDescription")
+                        : t("reminder.manualQuotaContactOwner")
+                    }
+                    usage={manualUsageText ?? undefined}
+                    variant="compact"
+                    upgradeHref={
+                      isOwner ? `/weddings/${encodeURIComponent(weddingId)}/plan` : undefined
+                    }
+                    upgradeLabel={isOwner ? tPlans("gate.viewPlans") : undefined}
+                  />
+                )}
               {!preview ? (
                 <Button
                   variant="outline"
@@ -455,7 +546,10 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
                       trigger={
                         <Button
                           disabled={
-                            !summary.emailConfigured || selectedCount === 0 || busy !== null
+                            !summary.emailConfigured ||
+                            !manualAllowed ||
+                            selectedCount === 0 ||
+                            busy !== null
                           }
                         >
                           <Send aria-hidden="true" />
@@ -538,8 +632,8 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
         )}
         {history && history.items.length > 0 && (
           <>
-            <div className="overflow-x-auto rounded-xl border">
-              <table className="w-full min-w-[760px] text-left text-sm">
+            <div className="hidden overflow-x-auto rounded-xl border xl:block">
+              <table className="w-full text-left text-sm">
                 <thead className="bg-muted/60 text-muted-foreground">
                   <tr>
                     <th className="p-3 font-medium">{t("reminder.guest")}</th>
@@ -560,11 +654,10 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
                       </td>
                       <td className="p-3">{t(`reminder.kind.${item.kind}`)}</td>
                       <td className="p-3">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.status === "SENT" ? "bg-green-100 text-green-900" : item.status === "FAILED" ? "bg-red-100 text-red-900" : item.status === "CANCELLED" ? "bg-muted text-muted-foreground" : "bg-amber-100 text-amber-950"}`}
-                        >
-                          {t(`reminder.status.${item.status}`)}
-                        </span>
+                        <StatusPill
+                          status={item.status}
+                          label={t(`reminder.status.${item.status}`)}
+                        />
                       </td>
                       <td className="p-3">
                         {formatDate(
@@ -585,6 +678,47 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
                 </tbody>
               </table>
             </div>
+            <ul className="space-y-3 xl:hidden">
+              {history.items.map((item) => (
+                <li key={item.id} className="space-y-3 rounded-xl border bg-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{item.recipientName}</p>
+                      <p className="break-all text-xs text-muted-foreground">
+                        {item.recipient ?? t("reminder.emailHidden")}
+                      </p>
+                    </div>
+                    <StatusPill status={item.status} label={t(`reminder.status.${item.status}`)} />
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-2 border-t pt-3 text-sm">
+                    <div>
+                      <dt className="text-xs text-muted-foreground">{t("reminder.kindLabel")}</dt>
+                      <dd className="mt-0.5">{t(`reminder.kind.${item.kind}`)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">{t("reminder.time")}</dt>
+                      <dd className="mt-0.5">
+                        {formatDate(
+                          item.sentAt ?? item.nextAttemptAt,
+                          summary?.timezone ?? "Asia/Ho_Chi_Minh",
+                          language,
+                          t("reminder.notSet"),
+                        )}
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="text-xs text-muted-foreground">{t("reminder.result")}</dt>
+                      <dd className="mt-0.5 break-words text-muted-foreground">
+                        {item.lastErrorCode ??
+                          (item.sentAt
+                            ? t("reminder.sentAttempts", { count: item.attemptCount })
+                            : t("reminder.waitingWorker"))}
+                      </dd>
+                    </div>
+                  </dl>
+                </li>
+              ))}
+            </ul>
             <div className="flex items-center justify-between gap-3 text-sm">
               <span>
                 {t("reminder.pageSummary", { page: history.page, count: history.totalCount })}
@@ -617,9 +751,25 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <article className="rounded-xl border bg-background p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
-    </article>
+    <div className="min-w-0 px-4 py-3">
+      <dt className="text-xs leading-5 text-muted-foreground sm:text-sm">{label}</dt>
+      <dd className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl">{value}</dd>
+    </div>
+  );
+}
+
+function StatusPill({ status, label }: { status: RsvpReminderStatus; label: string }) {
+  const color =
+    status === "SENT"
+      ? "bg-green-100 text-green-900"
+      : status === "FAILED"
+        ? "bg-red-100 text-red-900"
+        : status === "CANCELLED"
+          ? "bg-muted text-muted-foreground"
+          : "bg-amber-100 text-amber-950";
+  return (
+    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${color}`}>
+      {label}
+    </span>
   );
 }

@@ -19,6 +19,8 @@ import { weddingKeys } from "../api/wedding.keys";
 import { getWebsite } from "../api/website.api";
 import { useLocale } from "@/i18n/language-context";
 import { formatDate } from "@/i18n/format";
+// eslint-disable-next-line architecture/boundaries -- The sidebar mirrors full plan-based feature availability from the shared plan contract.
+import { planEntitlementState, useWeddingPlan, type PlanEntitlement } from "@/features/plans";
 
 type WeddingSection = {
   slug: string;
@@ -28,6 +30,7 @@ type WeddingSection = {
   icon: WorkspaceNavigationIcon;
   ownerOnly?: boolean;
   wideOnly?: boolean;
+  planEntitlement?: PlanEntitlement;
 };
 
 const navigationGroups: { label: string }[] = [
@@ -81,6 +84,7 @@ const sections: WeddingSection[] = [
     group: "Khách mời & RSVP",
     icon: "reminders",
     wideOnly: true,
+    planEntitlement: "reminderRounds",
   },
   {
     slug: "waitlist",
@@ -102,6 +106,7 @@ const sections: WeddingSection[] = [
     permission: "CHECKIN_MANAGE",
     group: "Tiệc cưới",
     icon: "checkin",
+    planEntitlement: "checkin",
   },
   {
     slug: "gifts",
@@ -109,6 +114,7 @@ const sections: WeddingSection[] = [
     permission: "GIFT_VIEW",
     group: "Tiệc cưới",
     icon: "gifts",
+    planEntitlement: "giftQr",
   },
   {
     slug: "gift-desk",
@@ -124,6 +130,7 @@ const sections: WeddingSection[] = [
     group: "Quản lý",
     icon: "thank-you",
     ownerOnly: true,
+    planEntitlement: "aiThankYouRuns",
   },
   {
     slug: "analytics",
@@ -163,6 +170,7 @@ const sections: WeddingSection[] = [
     group: "Quản lý",
     icon: "co-hosts",
     ownerOnly: true,
+    planEntitlement: "coHosts",
   },
 ];
 
@@ -188,8 +196,14 @@ function formatEventDate(value: string | null, timeZone: string, language: "vi" 
 }
 
 function haveSameSidebarGroups(
-  left: { label: string; items: { href: string; label: string; icon: string }[] }[],
-  right: { label: string; items: { href: string; label: string; icon: string }[] }[],
+  left: {
+    label: string;
+    items: { href: string; label: string; icon: string; locked?: boolean }[];
+  }[],
+  right: {
+    label: string;
+    items: { href: string; label: string; icon: string; locked?: boolean }[];
+  }[],
 ) {
   return (
     left.length === right.length &&
@@ -201,7 +215,8 @@ function haveSameSidebarGroups(
           (item, itemIndex) =>
             item.href === right[groupIndex]?.items[itemIndex]?.href &&
             item.label === right[groupIndex]?.items[itemIndex]?.label &&
-            item.icon === right[groupIndex]?.items[itemIndex]?.icon,
+            item.icon === right[groupIndex]?.items[itemIndex]?.icon &&
+            item.locked === right[groupIndex]?.items[itemIndex]?.locked,
         ),
     )
   );
@@ -212,6 +227,7 @@ export function WeddingNavigation({ weddingId }: { weddingId: string }) {
   const { language } = useLocale();
   const { api } = useRuntime();
   const { can, isOwner, isWeddingWide } = usePermission();
+  const plan = useWeddingPlan(weddingId, isOwner || can("CHECKIN_MANAGE"));
   const { setWedding, setWeddingNavigation } = useWorkspaceContext();
   const weddingPath = `/weddings/${encodeURIComponent(weddingId)}`;
   const wedding = useQuery({
@@ -244,10 +260,16 @@ export function WeddingNavigation({ weddingId }: { weddingId: string }) {
               href: `${weddingPath}/${section.slug}`,
               label: section.label,
               icon: section.icon,
+              locked: Boolean(
+                section.planEntitlement &&
+                !plan.isError &&
+                plan.data &&
+                planEntitlementState(plan.data, section.planEntitlement).locked,
+              ),
             })),
         }))
         .filter((group) => group.items.length > 0),
-    [available, weddingPath],
+    [available, plan.data, plan.isError, weddingPath],
   );
   const status = wedding.data
     ? statusPresentation(website.data?.status ?? wedding.data.status, website.data !== undefined, t)

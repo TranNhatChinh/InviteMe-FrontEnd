@@ -5,6 +5,17 @@
   "ownerOnlyDescription": "Bạn không có quyền gửi lời mời hoặc thay đổi phạm vi truy cập của thành viên.",
   "loadingMembers": "Đang tải thành viên và quyền truy cập…",
   "sendInvite": "Gửi lời mời co-host",
+  "inviteButton": "Mời Co-host",
+  "planChecking": "Đang kiểm tra quyền lợi gói…",
+  "planUnknown": "Chưa xác định được giới hạn Co-host. Hãy tải lại để kiểm tra trước khi mời.",
+  "quotaSummary": "Gói {{plan}} · đã dùng {{used}} / {{limit}} chỗ Co-host",
+  "unlimited": "không giới hạn",
+  "gate": {
+    "unsupportedTitle": "Gói hiện tại chưa hỗ trợ Co-host",
+    "unsupportedDescription": "Nâng cấp gói để mời thêm người cùng quản lý tiệc cưới.",
+    "limitTitle": "Đã đạt giới hạn Co-host",
+    "limitDescription": "Bạn đã sử dụng hết số lượng Co-host của gói hiện tại. Các thành viên hiện có vẫn có thể được quản lý."
+  },
   "inviteDescription": "Lời mời được gửi qua email và có hiệu lực trong 72 giờ.",
   "coHostEmail": "Email của co-host",
   "sendingInvite": "Đang tạo và gửi lời mời…",
@@ -66,6 +77,9 @@
     "actionFailedLater": "Chưa thể {{action}}. Vui lòng thử lại sau.",
     "network": "Không thể kết nối đến máy chủ. Hãy kiểm tra mạng và thử lại.",
     "ownerOnly": "Chỉ chủ tiệc mới có thể quản lý co-host.",
+    "planUnavailable": "Không thể kiểm tra quyền lợi gói. Tải lại trước khi gửi lời mời co-host.",
+    "forbidden": "Tài khoản này không có quyền thực hiện thao tác quản lý co-host.",
+    "planLimit": "Gói hiện tại chưa có chỗ cho co-host hoặc đã dùng hết số lượng cho phép. Hãy xem quyền lợi gói để biết cách mở thêm.",
     "conflict": "Thông tin đã thay đổi. Tải lại danh sách rồi thử lại.",
     "invalidScopes": "Một hoặc nhiều quyền/phạm vi chưa hợp lệ.",
     "notFound": "Không tìm thấy co-host hoặc nhóm khách đã chọn."

@@ -5,6 +5,17 @@
   "ownerOnlyDescription": "You don't have permission to invite members or change their access scope.",
   "loadingMembers": "Loading members and access…",
   "sendInvite": "Invite a co-host",
+  "inviteButton": "Invite co-host",
+  "planChecking": "Checking plan benefits…",
+  "planUnknown": "The co-host limit is unknown. Reload to check before inviting.",
+  "quotaSummary": "{{plan}} plan · {{used}} / {{limit}} co-host seats used",
+  "unlimited": "unlimited",
+  "gate": {
+    "unsupportedTitle": "Co-hosts aren't included in this plan",
+    "unsupportedDescription": "Upgrade to invite someone to help manage the wedding.",
+    "limitTitle": "Co-host limit reached",
+    "limitDescription": "This plan has used all its co-host seats. You can still manage existing members."
+  },
   "inviteDescription": "Invitations are sent by email and expire after 72 hours.",
   "coHostEmail": "Co-host email",
   "sendingInvite": "Creating and sending invitation…",
@@ -66,6 +77,9 @@
     "actionFailedLater": "Couldn't {{action}}. Please try again later.",
     "network": "Couldn't connect to the server. Check your connection and try again.",
     "ownerOnly": "Only the wedding owner can manage co-hosts.",
+    "planUnavailable": "Could not verify the plan benefits. Reload before inviting a co-host.",
+    "forbidden": "This account is not allowed to manage co-hosts.",
+    "planLimit": "The current plan does not include another co-host or has reached its limit. Review plan benefits to unlock more.",
     "conflict": "The information has changed. Reload the list and try again.",
     "invalidScopes": "One or more permissions or scopes are invalid.",
     "notFound": "The co-host or selected guest group could not be found."

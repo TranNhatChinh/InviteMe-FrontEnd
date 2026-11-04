@@ -315,6 +315,36 @@
     "pricingDescription": "InviteMe pricing for online wedding invitations and all-in-one wedding management.",
     "adminTitle": "Plans & orders — InviteMe Admin"
   },
+  "gate": {
+    "loading": "Checking plan benefits…",
+    "unknownTitle": "Plan benefits couldn't be checked",
+    "unknownDescription": "We couldn't confirm whether this plan includes the feature. Try again.",
+    "retry": "Try again",
+    "checkinTitle": "Check-in isn't included in this plan",
+    "checkinOwnerDescription": "Upgrade to scan QR codes and manage guests arriving at the wedding.",
+    "checkinContactOwner": "Please contact the wedding owner for help.",
+    "features": {
+      "coHosts": "co-host management",
+      "reminderRounds": "automatic RSVP reminders",
+      "aiThankYouRuns": "AI thank-you generation",
+      "checkin": "event check-in",
+      "giftQr": "QR wedding gifts",
+      "giftExport": "gift ledger export",
+      "customSlug": "custom wedding website links",
+      "publicSeatLookup": "public seating lookup",
+      "guestPlaces": "guest places",
+      "mediaImages": "wedding media images",
+      "emailInvites": "Email invitation sends",
+      "smsInvites": "SMS invitation sends",
+      "seatingTables": "seating tables"
+    },
+    "notIncludedTitle": "{{feature}} isn't included in this plan",
+    "notIncludedOwnerDescription": "The {{planName}} plan does not include {{feature}}. Upgrade to unlock it.",
+    "limitTitle": "{{feature}} limit reached",
+    "limitOwnerDescription": "The {{planName}} plan has used all of its {{feature}} entitlement. Upgrade to continue.",
+    "contactOwner": "The {{planName}} plan does not currently include {{feature}}. Contact the wedding owner for help.",
+    "viewPlans": "View plans"
+  },
   "page": {
     "noAccessTitle": "Access restricted",
     "noAccessDescription": "You do not have permission to view this wedding's plan.",

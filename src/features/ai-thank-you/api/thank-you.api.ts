@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
 import { loadAllMessageRecipients } from "@/shared/lib/message-recipients";
+import { groupKind, groupLabels } from "@/shared/lib/planning-groups";
 
 export const thankYouTemplateSchema = z.object({
   id: z.string(),
@@ -60,7 +61,14 @@ const thankYouGuestPageSchema = z.object({
       id: z.string(),
       recipientName: z.string(),
       side: z.string(),
-      group: z.object({ name: z.string() }).nullable(),
+      group: z
+        .union([groupKind, z.object({ name: z.string() })])
+        .nullable()
+        .transform((group) =>
+          typeof group === "string"
+            ? { name: groupLabels[group] }
+            : group,
+        ),
       email: z.string().nullable().optional(),
       phone: z.string().nullable(),
     }),

@@ -98,6 +98,15 @@
   "testAccepted": "Máy chủ đã nhận yêu cầu gửi thử đến tài khoản của bạn.",
   "sendInvitations": "Gửi thiệp",
   "sendDescription": "Chọn tất cả khách hoặc một nhóm cụ thể, chọn kênh và gửi thiệp trong một lần.",
+  "plan": {
+    "checking": "Đang kiểm tra lượt gửi còn lại…",
+    "unlimited": "Không giới hạn",
+    "channelQuota": "Còn {{remaining}} / {{limit}} lượt",
+    "channelNotIncludedTitle": "Kênh {{channel}} chưa có trong gói hiện tại",
+    "quotaInsufficientTitle": "Chưa đủ lượt {{channel}} cho danh sách đang chọn",
+    "quotaInsufficientDescription": "Gói hiện tại còn {{remaining}} lượt gửi nhưng bạn đang chọn {{requested}} khách. Hãy giảm số khách hoặc nâng cấp gói.",
+    "quotaUsage": "Đã sử dụng {{used}} / {{limit}} lượt"
+  },
   "chooseGuests": "Chọn khách",
   "chooseGroup": "Chọn nhóm",
   "guestListFailed": "Không tải được danh sách khách: {{error}}",

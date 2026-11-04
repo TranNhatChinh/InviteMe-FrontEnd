@@ -22,9 +22,13 @@ import {
 } from "lucide-react";
 import { useLocale } from "@/i18n/language-context";
 import { formatDate } from "@/i18n/format";
+// eslint-disable-next-line architecture/boundaries -- AI generation quota is the shared wedding plan entitlement, separate from template workflows.
+import { FeatureLimitNotice, planEntitlementState, useWeddingPlan } from "@/features/plans";
+import { usePermission } from "@/shared/components/permission-guard";
 import { ApiError } from "@/core/api/api-error";
 import { useRuntime } from "@/core/config/runtime";
 import { Button } from "@/shared/ui/button";
+import { EmptyState } from "@/shared/feedback/empty-state";
 import { MessageRecipientPicker } from "@/shared/components/message-recipient-picker";
 import { MAX_MESSAGE_RECIPIENTS, missingRecipientContacts } from "@/shared/lib/message-recipients";
 import {
@@ -43,6 +47,13 @@ import {
 type SendAttempt = { templateId: string; guestIds: string[]; channels: string[]; key: string };
 type Preview = { templateId: string; version: number; guestId: string; content: string };
 
+export function ThankYouPermissionFallback() {
+  const { t } = useTranslation("thankYou");
+  return (
+    <EmptyState title={t("permissionDeniedTitle")} description={t("permissionDeniedDescription")} />
+  );
+}
+
 function niceError(error: unknown, t: (key: string) => string) {
   if (error instanceof ApiError && error.backendCode === "AI_NOT_CONFIGURED")
     return t("errors.aiUnavailable");
@@ -52,13 +63,18 @@ function niceError(error: unknown, t: (key: string) => string) {
     return t("errors.contactRequired");
   if (error instanceof ApiError && error.backendCode === "THANK_YOU_CHANNEL_NOT_CONFIGURED")
     return t("errors.channelUnavailable");
+  if (error instanceof ApiError && error.backendCode === "PLAN_LIMIT_REACHED")
+    return t("errors.planLimit");
   return t("errors.generic");
 }
 
 export function ThankYouManager({ weddingId }: { weddingId: string }) {
   const { t } = useTranslation("thankYou");
+  const { t: tPlans } = useTranslation("plans");
   const { language } = useLocale();
   const { api } = useRuntime();
+  const { isOwner } = usePermission();
+  const plan = useWeddingPlan(weddingId);
   const client = useQueryClient();
   const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>([]);
   const [includeGiftAmount, setIncludeGiftAmount] = useState(false);
@@ -126,14 +142,21 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
     mutationFn: (input: { guestIds: string[]; includeGiftAmount: boolean }) =>
       generateThankYouTemplateOptions(api, weddingId, input),
     onSuccess: async (options) => {
-      await refreshTemplates();
+      await Promise.all([
+        refreshTemplates(),
+        client.invalidateQueries({ queryKey: ["wedding-plan", weddingId] }),
+      ]);
       setActiveTemplateId(options[0]?.id ?? "");
       setEdits(null);
       setPreviewContent(null);
       setError("");
       setConflict(false);
     },
-    onError: showError,
+    onError: async (reason) => {
+      showError(reason);
+      if (reason instanceof ApiError && reason.backendCode === "PLAN_LIMIT_REACHED")
+        await client.invalidateQueries({ queryKey: ["wedding-plan", weddingId] });
+    },
   });
   const save = useMutation({
     mutationFn: ({ template, value }: { template: ThankYouTemplate; value: string }) =>
@@ -206,6 +229,21 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
   });
   const busy = generate.isPending || save.isPending || approve.isPending || send.isPending;
   const locked = busy || Boolean(uncertainSend);
+  const planUnavailable = plan.isError || (!plan.isPending && !plan.data);
+  const generationGate =
+    !planUnavailable && plan.data ? planEntitlementState(plan.data, "aiThankYouRuns") : null;
+  const aiQuotaText =
+    !planUnavailable && plan.data
+      ? plan.data.legacy || plan.data.limits.aiThankYouRuns === null
+        ? t("unlimitedAiQuota")
+        : t("aiQuotaRemaining", {
+            remaining: Math.max(
+              0,
+              plan.data.limits.aiThankYouRuns - plan.data.usage.aiThankYouRuns,
+            ),
+            limit: plan.data.limits.aiThankYouRuns,
+          })
+      : null;
   const missingContacts = missingRecipientContacts(recipients, selectedGuestIds, sendChannels);
   const canSend =
     activeTemplate?.status === "APPROVED" &&
@@ -296,6 +334,33 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
           )}
         </div>
       )}
+      {plan.isPending && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("checkingPlan")}
+        </p>
+      )}
+      {planUnavailable && (
+        <FeatureLimitNotice
+          status="unavailable"
+          title={t("planUnknownTitle")}
+          description={t("planUnknownDescription")}
+          variant="compact"
+          retryLabel={tPlans("gate.retry")}
+          onRetry={() => void plan.refetch()}
+        />
+      )}
+      {generationGate?.locked && (
+        <FeatureLimitNotice
+          title={t("aiQuotaReachedTitle")}
+          description={
+            isOwner ? t("aiQuotaReachedOwnerDescription") : t("aiQuotaReachedContactOwner")
+          }
+          usage={aiQuotaText ?? undefined}
+          variant="compact"
+          upgradeHref={isOwner ? `/weddings/${encodeURIComponent(weddingId)}/plan` : undefined}
+          upgradeLabel={isOwner ? tPlans("gate.viewPlans") : undefined}
+        />
+      )}
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.9fr)]">
         <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <div className="border-b bg-muted/30 p-5 sm:p-6">
@@ -306,8 +371,17 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
               </div>
               <Button
                 type="button"
-                disabled={!selectedGuestIds.length || !guests.isSuccess || locked || conflict}
+                disabled={
+                  !selectedGuestIds.length ||
+                  !guests.isSuccess ||
+                  locked ||
+                  conflict ||
+                  plan.isPending ||
+                  planUnavailable ||
+                  Boolean(generationGate?.locked)
+                }
                 onClick={() => {
+                  if (planUnavailable || !plan.data || generationGate?.locked) return;
                   if (dirty && !window.confirm(t("discardEdits"))) return;
                   generate.mutate({ guestIds: [...selectedGuestIds], includeGiftAmount });
                 }}
@@ -320,6 +394,11 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
                     : t("generateButton")}
               </Button>
             </div>
+            {aiQuotaText && (
+              <p className="mt-3 text-xs text-muted-foreground" role="status">
+                {aiQuotaText}
+              </p>
+            )}
             <details className="mt-4">
               <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-muted-foreground">
                 {t("contentOptions")}

@@ -98,6 +98,15 @@
   "testAccepted": "The server accepted the test request for your account.",
   "sendInvitations": "Send invitations",
   "sendDescription": "Choose all guests or a specific group, select your channels, and send your invitations in one action.",
+  "plan": {
+    "checking": "Checking remaining sends…",
+    "unlimited": "Unlimited",
+    "channelQuota": "{{remaining}} / {{limit}} sends remaining",
+    "channelNotIncludedTitle": "{{channel}} is not included in this plan",
+    "quotaInsufficientTitle": "Not enough {{channel}} sends for this selection",
+    "quotaInsufficientDescription": "Your plan has {{remaining}} sends remaining, but {{requested}} guests are selected. Reduce the selection or upgrade the plan.",
+    "quotaUsage": "{{used}} / {{limit}} sends used"
+  },
   "chooseGuests": "Choose guests",
   "chooseGroup": "Choose a group",
   "guestListFailed": "Couldn't load the guest list: {{error}}",
