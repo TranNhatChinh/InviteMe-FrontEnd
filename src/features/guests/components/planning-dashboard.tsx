@@ -5,7 +5,6 @@ import { ApiError } from "@/core/api/api-error";
 import { useRuntime } from "@/core/config/runtime";
 import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
-import { ConfirmDialog } from "@/shared/feedback/confirm-dialog";
 import { CoupleImport } from "./couple-import";
 import { ImportCurrentGuests } from "./import-current-guests";
 import {
@@ -26,8 +25,8 @@ import {
 import type { CoupleRow } from "../utils/couple-import";
 import Link from "next/link";
 import { Copy, ExternalLink } from "lucide-react";
-import { PlanningGuestEditForm } from "./planning-guest-edit-form";
 import { PlanningGuestCreateForm } from "./planning-guest-create-form";
+import { GuestDetailDrawer } from "./guest-detail-drawer";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "@/i18n/format";
 import { useLocale } from "@/i18n/language-context";
@@ -287,7 +286,7 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
           </div>
         )}
       </div>
-      {notice && (
+      {notice && !selected && (
         <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
           {notice}
         </p>
@@ -429,12 +428,17 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
                   </thead>
                   <tbody>
                     {list.data.items.map((g) => (
-                      <tr key={g.id} className="border-t">
+                      <tr
+                        key={g.id}
+                        data-selected={selected === g.id ? "true" : undefined}
+                        className={`border-t transition-colors ${selected === g.id ? "bg-primary/5" : "hover:bg-muted/40"}`}
+                      >
                         <td className="p-3">
                           <button
                             className="text-left underline underline-offset-4"
                             onClick={() => {
                               setEditingGuest(false);
+                              setNotice("");
                               setSelected(g.id);
                             }}
                           >
@@ -508,105 +512,59 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
               </div>
             </>
           )}
-          {selected && (
-            <section className="space-y-3 rounded-xl border p-5" aria-label={t("detail")}>
-              <Button variant="outline" onClick={() => setSelected(null)}>
-                {t("closeDetails")}
-              </Button>
-              {detail.isPending && <p>{t("loading")}</p>}
-              {detail.isError && (
-                <p role="alert">
-                  {t("detailLoadFailed")}{" "}
-                  <button onClick={() => void detail.refetch()}>{t("retry")}</button>
-                </p>
-              )}
-              {detail.data && (
-                <>
-                  {can("GUEST_EDIT") && !editingGuest && !detail.data.archivedAt && (
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" onClick={() => setEditingGuest(true)}>
-                        {t("edit")}
-                      </Button>
-                      <ConfirmDialog
-                        trigger={
-                          <Button variant="destructive" disabled={archiveGuest.isPending}>
-                            {t("archive")}
-                          </Button>
-                        }
-                        title={t("archiveTitle")}
-                        description={t("archiveDescription")}
-                        cancelLabel={t("cancel")}
-                        confirmLabel={archiveGuest.isPending ? t("archiving") : t("archive")}
-                        onConfirm={() =>
-                          archiveGuest.mutate({
-                            guestId: detail.data.id,
-                            expectedVersion: detail.data.version,
-                          })
-                        }
-                      />
-                    </div>
-                  )}
-                  {can("GUEST_EDIT") && detail.data.archivedAt && !editingGuest && (
-                    <ConfirmDialog
-                      trigger={<Button disabled={restoreGuest.isPending}>{t("restore")}</Button>}
-                      title={t("restoreTitle")}
-                      description={t("restoreDescription")}
-                      cancelLabel={t("cancel")}
-                      confirmLabel={restoreGuest.isPending ? t("restoring") : t("restore")}
-                      onConfirm={() =>
-                        restoreGuest.mutate({
-                          guestId: detail.data.id,
-                          expectedVersion: detail.data.version,
-                        })
-                      }
-                    />
-                  )}
-                  {editingGuest && can("GUEST_EDIT") ? (
-                    groups.isPending ? (
-                      <p role="status">{t("loadingGroups")}</p>
-                    ) : groups.isError ? (
-                      <p role="alert">{t("groupsLoadFailed")}</p>
-                    ) : (
-                      <PlanningGuestEditForm
-                        key={`${detail.data.id}-${detail.data.version}`}
-                        guest={detail.data}
-                        groups={[
-                          ...(detail.data.group &&
-                          !groups.data.items.some((group) => group.id === detail.data.group?.id)
-                            ? [{ id: detail.data.group.id, name: detail.data.group.name }]
-                            : []),
-                          ...groups.data.items,
-                        ]}
-                        busy={updateGuest.isPending}
-                        onCancel={() => setEditingGuest(false)}
-                        onSave={(input) => updateGuest.mutate({ guestId: detail.data.id, input })}
-                      />
-                    )
-                  ) : (
-                    <>
-                      <h2 className="text-xl">{detail.data.recipientName}</h2>
-                      <p>
-                        {detail.data.phone || t("noPhone")} ·{" "}
-                        {formatNumber(detail.data.expectedPeople, language)} {t("expectedPeople")}
-                      </p>
-                      <p>{detail.data.note}</p>
-                      <ol className="list-inside list-decimal space-y-2">
-                        {detail.data.places.map((p) => (
-                          <li key={p.id}>
-                            {p.person
-                              ? `${p.person.fullName} · ${t(`attendance.${p.person.attendanceStatus}`, { defaultValue: p.person.attendanceStatus })}`
-                              : t("unnamedPlace")}
-                          </li>
-                        ))}
-                      </ol>
-                    </>
-                  )}
-                </>
-              )}
-            </section>
-          )}
         </>
       )}
+      <GuestDetailDrawer
+        open={Boolean(selected)}
+        guest={detail.data}
+        loading={detail.isPending && Boolean(selected)}
+        error={detail.error}
+        editing={editingGuest}
+        canEdit={can("GUEST_EDIT")}
+        canSendInvitation={can("INVITATION_SEND")}
+        groups={[
+          ...(detail.data?.group &&
+          !(groups.data?.items ?? []).some((group) => group.id === detail.data?.group?.id)
+            ? [{ id: detail.data.group.id, name: detail.data.group.name }]
+            : []),
+          ...(groups.data?.items ?? []),
+        ]}
+        groupsLoading={groups.isPending}
+        groupsError={groups.isError}
+        busy={updateGuest.isPending}
+        archiving={archiveGuest.isPending}
+        restoring={restoreGuest.isPending}
+        notice={notice}
+        onClose={() => {
+          setSelected(null);
+          setEditingGuest(false);
+        }}
+        onRetry={() => void detail.refetch()}
+        onRetryGroups={() => void groups.refetch()}
+        onStartEdit={() => {
+          setNotice("");
+          setEditingGuest(true);
+        }}
+        onCancelEdit={() => setEditingGuest(false)}
+        onSave={(input) => {
+          if (detail.data) updateGuest.mutate({ guestId: detail.data.id, input });
+        }}
+        onArchive={() => {
+          if (detail.data)
+            archiveGuest.mutate({
+              guestId: detail.data.id,
+              expectedVersion: detail.data.version,
+            });
+        }}
+        onRestore={() => {
+          if (detail.data)
+            restoreGuest.mutate({
+              guestId: detail.data.id,
+              expectedVersion: detail.data.version,
+            });
+        }}
+        onCopyInvitation={(path) => void copyInvitation(path)}
+      />
     </section>
   );
 }
