@@ -63,7 +63,7 @@ export function SeatingPersonDetails({
       <dl className="space-y-3 text-xs">
         <div>
           <dt className="text-muted-foreground">{t("details.groupRecipient")}</dt>
-          <dd className="mt-1">{formatRecipientLabel(party, t, language)}</dd>
+          <dd className="mt-1">{formatRecipientLabel(party, language)}</dd>
         </div>
         <div>
           <dt className="text-muted-foreground">{t("details.guestGroup")}</dt>

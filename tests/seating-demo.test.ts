@@ -12,7 +12,6 @@ const party = (id: string, count: number, group = "Họ ngoại"): SeatingParty 
   id,
   name: id,
   address: "Bác",
-  kind: "Gia đình",
   count,
   group,
   note: "",
@@ -108,8 +107,8 @@ test("full tables reject moves while moving a party to its own table remains val
   assert.ok(movePlaces(plan, "A", 0, 6, 2));
   assert.equal(movePlaces(plan, "A", 3, 6, 2), null);
 });
-test("recipient rendering follows explicit invitation type", () => {
-  assert.equal(recipientLabel(party("Nguyễn Văn An", 4)), "Gia đình bác Nguyễn Văn An");
-  assert.equal(recipientLabel({ ...party("An", 4), kind: "Cá nhân" }), "Bác An");
-  assert.equal(recipientLabel({ ...party("Nhóm bạn K45", 6), kind: "Nhóm" }), "Nhóm bạn K45");
+test("recipient rendering uses the guest honorific when present", () => {
+  assert.equal(recipientLabel(party("Nguyễn Văn An", 4)), "Bác Nguyễn Văn An");
+  assert.equal(recipientLabel(party("Nhóm bạn K45", 6)), "Bác Nhóm bạn K45");
+  assert.equal(recipientLabel({ ...party("Nhóm bạn K45", 6), address: "" }), "Nhóm bạn K45");
 });

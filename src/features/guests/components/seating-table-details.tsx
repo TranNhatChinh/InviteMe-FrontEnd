@@ -65,7 +65,7 @@ export function SeatingTableDetails({
                     {person?.fullName || t("notNamed")}
                   </span>
                   <span className="mt-1 block text-[11px] font-normal text-muted-foreground">
-                    {formatRecipientLabel(party, t, language)}
+                    {formatRecipientLabel(party, language)}
                   </span>
                   <span className="mt-2 block">
                     <RsvpBadge person={person} />

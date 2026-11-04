@@ -14,6 +14,7 @@ import { ApiError } from "@/core/api/api-error";
 import {
   importBody,
   type PlanningImportCommit,
+  type PlanningImportDecision,
   type PlanningImportPreview,
   type PlanningImportResult,
 } from "../api/planning.api";
@@ -26,23 +27,15 @@ const rowMessageKeys: Record<string, string> = {
   "Email không đúng định dạng hoặc vượt quá 254 ký tự.": "email",
   "Thiếu tên người nhận.": "name",
   "Tổng người dự kiến phải là số nguyên từ 1 trở lên.": "expected",
-  "Kiểu lời mời chọn Cá nhân, Gia đình hoặc Nhóm.": "kind",
   "Phía khách mời chọn Nhà gái, Nhà trai hoặc Chung.": "side",
   "Chưa xác định phía khách mời; không mặc định là Chung.": "sideMissing",
-  "Chưa chọn kiểu lời mời: đang dùng Cá nhân. Chọn Gia đình nếu mời cả nhà; không suy từ số người.":
-    "kindMissing",
   "Dùng văn bản hoặc số, không dùng công thức trong các ô.": "formula",
   "Tên hoặc SĐT trùng dòng trước. Kiểm tra lại; các dòng vẫn được giữ riêng.": "duplicate",
-  "Dòng cần đủ 9 ô, kể cả ô để trống.": "rowCells",
+  "Dòng cần đủ 8 ô, kể cả ô để trống.": "rowCells",
 };
 const importGuide = [
   ["Tên người nhận", "Bắt buộc, tối đa 150 ký tự.", "Nguyễn Văn An"],
   ["Danh xưng", "Không bắt buộc, tối đa 50 ký tự.", "Bác, Cô, Anh, Chị"],
-  [
-    "Kiểu lời mời",
-    "Cá nhân, Gia đình hoặc Nhóm. Để trống dùng Cá nhân; không tự suy từ số suất.",
-    "Gia đình",
-  ],
   [
     "Tổng người dự kiến",
     "Số nguyên từ 1–500, tính cả người nhận và người đi cùng. Để trống dùng 1.",
@@ -74,7 +67,10 @@ export function CoupleImport({
 }: {
   onClose: () => void;
   onImport?: (input: PlanningImportCommit) => Promise<PlanningImportResult>;
-  onCheck?: (rows: CoupleRow[]) => Promise<PlanningImportPreview>;
+  onCheck?: (
+    rows: CoupleRow[],
+    decisions?: PlanningImportDecision[],
+  ) => Promise<PlanningImportPreview>;
   weddingTitle?: string;
   isMock?: boolean;
   initialRows?: CoupleRow[];
@@ -105,14 +101,20 @@ export function CoupleImport({
   const [checking, setChecking] = useState(false);
   const [failedCheck, setFailedCheck] = useState<string | null>(null);
   const [actions, setActions] = useState<ImportActions>({});
+  const [updates, setUpdates] = useState<Record<number, PlanningImportDecision>>({});
   const [completed, setCompleted] = useState<PlanningImportResult | null>(null);
   const [uncertain, setUncertain] = useState(false);
   const submitted = useRef<PlanningImportCommit | null>(null);
   const activeRows = rows?.filter((row) => !excluded.has(row.line)) ?? [];
   const checkRows = activeRows.filter((row) => !row.errors.length);
-  const signature = JSON.stringify(
-    activeRows.map((row) => ({ line: row.line, values: row.values })),
-  );
+  const signatureFor = (nextActions: typeof actions, nextUpdates: typeof updates) =>
+    JSON.stringify({
+      rows: activeRows.map((row) => ({ line: row.line, values: row.values })),
+      decisions: activeRows.map((row) =>
+        nextActions[row.line] === "UPDATE" ? nextUpdates[row.line] : nextActions[row.line],
+      ),
+    });
+  const signature = signatureFor(actions, updates);
   const latestSignature = useRef(signature);
   useEffect(() => {
     latestSignature.current = signature;
@@ -143,7 +145,17 @@ export function CoupleImport({
     setFailedCheck(null);
     setError("");
     try {
-      const value = await onCheck(checkRows);
+      const value = await onCheck(
+        checkRows,
+        checkRows.flatMap((row): PlanningImportDecision[] => {
+          const action = actions[row.line];
+          if (action === "UPDATE") {
+            const decision = updates[row.line];
+            return decision ? [decision] : [];
+          }
+          return action ? [{ rowNumber: row.line, action }] : [];
+        }),
+      );
       if (latestSignature.current !== source) return;
       const next = importActions(value);
       // Preserve decisions only for rows whose candidates/diffs have not changed.
@@ -226,6 +238,10 @@ export function CoupleImport({
         previewToken: preview.previewToken,
         decisions: activeRows.flatMap((row) => {
           const action = actions[row.line];
+          if (action === "UPDATE") {
+            const decision = updates[row.line];
+            return decision ? [decision] : [];
+          }
           return action ? [{ rowNumber: row.line, action }] : [];
         }),
       };
@@ -316,7 +332,7 @@ export function CoupleImport({
           rows.map((row) => {
             if (row.line !== line) return row;
             const values = [...row.values];
-            values[4] = side;
+            values[3] = side;
             return { ...row, values };
           }),
         ),
@@ -324,7 +340,7 @@ export function CoupleImport({
   }
   const normalizedRows = rows?.map((row) => {
     const values = [...row.values];
-    values[5] = findGroup(values[5] ?? "", catalog) ?? values[5] ?? "";
+    values[4] = findGroup(values[4] ?? "", catalog) ?? values[4] ?? "";
     return { ...row, values };
   });
   const localizeRowMessage = (message: string) => {
@@ -334,7 +350,6 @@ export function CoupleImport({
   const headerLabels: Record<string, string> = {
     "Tên người nhận": t("fields.recipientName"),
     "Danh xưng": t("fields.honorific"),
-    "Kiểu lời mời": t("fields.invitationKind"),
     "Tổng người dự kiến": t("fields.expectedPeople"),
     "Phía khách mời": t("fields.side"),
     "Nhóm khách": t("fields.group"),
@@ -344,10 +359,6 @@ export function CoupleImport({
   };
   const translatedSide = (value: string) =>
     ({ "Nhà gái": t("enums.bride"), "Nhà trai": t("enums.groom"), Chung: t("enums.shared") })[
-      value
-    ] ?? value;
-  const translatedKind = (value: string) =>
-    ({ "Cá nhân": t("enums.individual"), "Gia đình": t("enums.family"), Nhóm: t("enums.group") })[
       value
     ] ?? value;
   if (completed)
@@ -360,13 +371,23 @@ export function CoupleImport({
         <h2 className="text-xl font-semibold">Import hoàn tất</h2>
         <p>
           Đã tạo {completed.createdGuestCount} lời mời / {completed.createdPlaceCount} suất; bỏ qua{" "}
-          {completed.skippedCount + excluded.size} dòng.
+          {completed.skippedCount + excluded.size} dòng; cập nhật {completed.updatedGuestCount ?? 0}{" "}
+          khách; không thay đổi {completed.noChangeCount ?? 0} dòng;{" "}
+          {(completed.tasks ?? []).length} việc cần xử lý.
         </p>
         <ul>
           {completed.items.map((item) => (
             <li key={item.rowNumber}>
               Dòng {item.rowNumber}: đã tạo lời mời — {item.expectedPeople} suất
             </li>
+          ))}
+          {(completed.updated ?? []).map((item) => (
+            <li key={item.rowNumber}>
+              Dòng {item.rowNumber}: đã cập nhật khách — {item.expectedPeople} suất
+            </li>
+          ))}
+          {(completed.noChange ?? []).map((item) => (
+            <li key={item.rowNumber}>Dòng {item.rowNumber}: không thay đổi</li>
           ))}
           {completed.skipped.map((item) => (
             <li key={item.rowNumber}>Dòng {item.rowNumber}: đã bỏ qua, guest cũ không đổi</li>
@@ -375,6 +396,25 @@ export function CoupleImport({
             <li key={line}>Dòng {line}: đã bỏ qua</li>
           ))}
         </ul>
+        {(completed.tasks ?? []).length > 0 && (
+          <div className="space-y-2">
+            <h3 className="font-semibold">Việc cần xử lý sau Import</h3>
+            {completed.tasks.map((task) => (
+              <div key={task.id} className="rounded border p-3">
+                <strong>{task.recipientName}</strong>
+                <p>{task.reason}</p>
+                <a className="underline" href={task.path}>
+                  Mở{" "}
+                  {task.kind === "SEATING"
+                    ? "xếp bàn"
+                    : task.kind === "RSVP"
+                      ? "RSVP"
+                      : "gửi thiệp"}
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
         <Button onClick={onClose}>Đóng và xem danh sách khách</Button>
       </section>
     );
@@ -402,6 +442,35 @@ export function CoupleImport({
           filename={filename}
           preview={preview}
           actions={actions}
+          updates={updates}
+          onUpdate={async (decision) => {
+            if (!onCheck) return ["Không thể kiểm tra thay đổi lúc này."];
+            const nextUpdates = { ...updates, [decision.rowNumber]: decision };
+            const nextActions = { ...actions, [decision.rowNumber]: "UPDATE" as const };
+            const decisions = checkRows.flatMap((row): PlanningImportDecision[] => {
+              const action = nextActions[row.line];
+              if (action === "UPDATE") {
+                const update = nextUpdates[row.line];
+                return update ? [update] : [];
+              }
+              return action ? [{ rowNumber: row.line, action }] : [];
+            });
+            const value = await onCheck(checkRows, decisions);
+            if (latestSignature.current !== signature)
+              return ["Danh sách đã thay đổi. Vui lòng thử lại."];
+            const errors = value.errors
+              .filter((issue) => issue.rowNumber === decision.rowNumber || issue.rowNumber === 0)
+              .map((issue) => issue.message);
+            if (errors.length) return [...new Set(errors)];
+            if (!value.previewToken) return ["Không thể kiểm tra thay đổi. Vui lòng thử lại."];
+            setUpdates(nextUpdates);
+            setActions(nextActions);
+            setChecked({ signature: signatureFor(nextActions, nextUpdates), value });
+            setServerErrors({});
+            setFailedCheck(null);
+            setError("");
+            return [];
+          }}
           excluded={excluded}
           serverErrors={serverErrors}
           checking={checking}
@@ -480,6 +549,7 @@ export function CoupleImport({
             setChecked(null);
             setExcluded(new Set());
             setActions({});
+            setUpdates({});
             setServerErrors({});
             setFailedCheck(null);
             setError("");
@@ -578,7 +648,7 @@ export function CoupleImport({
         </summary>
         <div className="space-y-4 border-t p-4">
           <p className="text-sm text-muted-foreground">
-            Giữ nguyên tên và thứ tự 9 cột trong mẫu. Mỗi dòng là một lời mời; thay các dòng ví dụ
+            Giữ nguyên tên và thứ tự 8 cột trong mẫu. Mỗi dòng là một lời mời; thay các dòng ví dụ
             bằng danh sách của bạn. File CSV/XLSX tối đa 5 MB và 500 dòng khách.
           </p>
           <div className="overflow-x-auto">
@@ -671,18 +741,18 @@ export function CoupleImport({
                     </td>
                     {coupleHeaders.map((h, i) => (
                       <td key={h} className="max-w-64 break-words p-3">
-                        {i === 4 ? (
+                        {i === 3 ? (
                           <select
                             className="h-9 rounded-lg border bg-background px-2 text-xs"
                             aria-label={`${t("fields.side")} ${formatNumber(row.line, language)}`}
-                            value={row.values[4] ?? ""}
+                            value={row.values[3] ?? ""}
                             onChange={(e) => setSide(row.line, e.target.value)}
                           >
                             <option value="">{t("unknownSide")}</option>
-                            {row.values[4] &&
-                              !["Nhà gái", "Nhà trai", "Chung"].includes(row.values[4]) && (
-                                <option value={row.values[4]}>
-                                  {translatedSide(row.values[4])} {t("invalidValue")}
+                            {row.values[3] &&
+                              !["Nhà gái", "Nhà trai", "Chung"].includes(row.values[3]) && (
+                                <option value={row.values[3]}>
+                                  {translatedSide(row.values[3])} {t("invalidValue")}
                                 </option>
                               )}
                             {["Nhà gái", "Nhà trai", "Chung"].map((label) => (
@@ -691,42 +761,7 @@ export function CoupleImport({
                               </option>
                             ))}
                           </select>
-                        ) : onImport && i === 2 ? (
-                          <select
-                            aria-label={`${headerLabels[h] ?? h} ${formatNumber(row.line, language)}`}
-                            value={row.values[2]}
-                            className="rounded border bg-background p-2"
-                            onChange={(e) =>
-                              setRows(
-                                validateCoupleRows(
-                                  rows.map((r) =>
-                                    r.line === row.line
-                                      ? {
-                                          ...r,
-                                          values: r.values.map((v, index) =>
-                                            index === 2 ? e.target.value : v,
-                                          ),
-                                        }
-                                      : r,
-                                  ),
-                                ),
-                              )
-                            }
-                          >
-                            <option value="">Cá nhân (mặc định)</option>
-                            {row.values[2] &&
-                              !["Cá nhân", "Gia đình", "Nhóm"].includes(row.values[2]) && (
-                                <option value={row.values[2]}>
-                                  {row.values[2]} — không hợp lệ
-                                </option>
-                              )}
-                            {["Cá nhân", "Gia đình", "Nhóm"].map((label) => (
-                              <option key={label} value={label}>
-                                {translatedKind(label)}
-                              </option>
-                            ))}
-                          </select>
-                        ) : onImport && i === 5 ? (
+                        ) : onImport && i === 4 ? (
                           <select
                             aria-label={`${headerLabels[h] ?? h} ${formatNumber(row.line, language)}`}
                             className="w-36 rounded border bg-background p-2"
@@ -739,7 +774,7 @@ export function CoupleImport({
                                       ? {
                                           ...r,
                                           values: r.values.map((value, index) =>
-                                            index === 5 ? event.target.value : value,
+                                            index === 4 ? event.target.value : value,
                                           ),
                                         }
                                       : r,
@@ -749,8 +784,8 @@ export function CoupleImport({
                             }
                           >
                             <option value="">Khác (mặc định)</option>
-                            {row.values[5] && !findGroup(row.values[5], catalog) && (
-                              <option value={row.values[5]}>{row.values[5]} — không hợp lệ</option>
+                            {row.values[4] && !findGroup(row.values[4], catalog) && (
+                              <option value={row.values[4]}>{row.values[4]} — không hợp lệ</option>
                             )}
                             {catalog.map((label) => (
                               <option key={label} value={label}>
@@ -781,7 +816,7 @@ export function CoupleImport({
                               setServerErrors((current) => ({ ...current, [row.line]: [] }));
                             }}
                           />
-                        ) : i === 3 && row.defaulted ? (
+                        ) : i === 2 && row.defaulted ? (
                           t("defaultValue")
                         ) : (
                           row.values[i] || "—"
@@ -818,14 +853,14 @@ export function CoupleImport({
                           {localizeRowMessage(message)}
                         </p>
                       ))}
-                      {row.values[5] && !findGroup(row.values[5], catalog) && (
+                      {row.values[4] && !findGroup(row.values[4], catalog) && (
                         <p className="text-amber-800">{t("unknownGroup")}</p>
                       )}
                       {!onImport &&
                         !row.errors.length &&
                         !serverErrors[row.line]?.length &&
                         !row.warnings.length &&
-                        (!row.values[5] || !!findGroup(row.values[5], catalog)) && (
+                        (!row.values[4] || !!findGroup(row.values[4], catalog)) && (
                           <span className="text-emerald-700">{t("valid")}</span>
                         )}
                     </td>

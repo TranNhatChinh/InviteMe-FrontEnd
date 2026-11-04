@@ -28,13 +28,13 @@ test("only six fixed groups are selectable", () => {
 });
 test("invalid sides fail validation; blank stays unknown; editing side clears only its validation error", () => {
   const rows = parseCoupleCsv(
-    `${coupleHeaders.join(",")}\nAn,Bác,Gia đình,4,Nhà sai,Họ hàng,,\nHoa,Cô,Cá nhân,1,,Họ hàng,,`,
+    `${coupleHeaders.join(",")}\nAn,Bác,4,Nhà sai,Họ hàng,,\nHoa,Cô,1,,Họ hàng,,`,
   );
   assert.ok(rows[0]?.errors.some((error) => error.includes("Phía khách mời")));
-  assert.equal(rows[1]?.values[4], "");
+  assert.equal(rows[1]?.values[3], "");
   assert.ok(rows[1]?.warnings.length);
   const edited = rows.map((row) => ({ ...row, values: [...row.values] }));
-  if (edited[0]) edited[0].values[4] = "Nhà gái";
+  if (edited[0]) edited[0].values[3] = "Nhà gái";
   const checked = validateCoupleRows(edited);
   assert.equal(checked[0]?.errors.length, 0);
   assert.equal(checked[0]?.expected, 4);
@@ -55,12 +55,12 @@ test("all sample counts remain correct and all non-test groups are known", () =>
       rows.reduce((sum, row) => sum + (row.expected ?? 0), 0),
       count,
     );
-    assert.ok(rows.every((row) => !row.values[5] || !!findGroup(row.values[5], defaultGroups)));
+    assert.ok(rows.every((row) => !row.values[4] || !!findGroup(row.values[4], defaultGroups)));
   }
 });
 test("the same group label on opposite wedding sides never becomes one affinity group or table", () => {
   const rows = parseCoupleCsv(
-    `${coupleHeaders.join(",")}\nAn,Bác,Gia đình,4,Nhà gái,Họ hàng,,\nHoa,Cô,Gia đình,2,Nhà trai,Họ hàng,,`,
+    `${coupleHeaders.join(",")}\nAn,Bác,4,Nhà gái,Họ hàng,,\nHoa,Cô,2,Nhà trai,Họ hàng,,`,
   );
   const parties = seatingParties(rows);
   assert.equal(recommendedTableCount(parties, 10), 2);
@@ -80,5 +80,5 @@ test("Excel template can be read directly and has the same five contacts and ten
     rows.reduce((sum, row) => sum + (row.expected ?? 0), 0),
     10,
   );
-  assert.equal(rows.filter((row) => !findGroup(row.values[5] ?? "", defaultGroups)).length, 0);
+  assert.equal(rows.filter((row) => !findGroup(row.values[4] ?? "", defaultGroups)).length, 0);
 });

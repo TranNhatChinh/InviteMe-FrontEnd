@@ -2,7 +2,20 @@ import type { PlanningImportDecision, PlanningImportPreview } from "../api/plann
 import type { CoupleRow } from "./couple-import";
 
 export type ImportActions = Record<number, PlanningImportDecision["action"]>;
-export type ImportRowStatus = "VALID" | "WARNING" | "DECISION" | "ERROR" | "SKIPPED" | "PENDING";
+export function unresolvedContactErrors(
+  checked: PlanningImportPreview["rows"][number] | undefined,
+  action: ImportActions[number] | undefined,
+) {
+  if (action || !checked) return [];
+  const errors: string[] = [];
+  if (checked.reasons.includes("SHARED_PHONE"))
+    errors.push("SĐT trùng với lời mời khác. Sửa hoặc bỏ trống SĐT để tạo riêng.");
+  if (checked.reasons.includes("SHARED_EMAIL"))
+    errors.push("Email trùng với lời mời khác. Sửa hoặc bỏ trống email để tạo riêng.");
+  return errors;
+}
+export type ImportRowStatus =
+  "VALID" | "WARNING" | "DECISION" | "ERROR" | "SKIPPED" | "UPDATE" | "PENDING";
 export function importRowStatus(
   row: CoupleRow,
   preview: PlanningImportPreview | null,
@@ -11,14 +24,16 @@ export function importRowStatus(
   serverErrors: Record<number, string[]> = {},
 ): ImportRowStatus {
   if (excluded.has(row.line)) return "SKIPPED";
+  const checked = preview?.rows.find((item) => item.rowNumber === row.line);
   if (
     row.errors.length ||
+    unresolvedContactErrors(checked, actions[row.line]).length ||
     serverErrors[row.line]?.length ||
     preview?.errors.some((issue) => issue.rowNumber === row.line)
   )
     return "ERROR";
   if (actions[row.line] === "SKIP") return "SKIPPED";
-  const checked = preview?.rows.find((item) => item.rowNumber === row.line);
+  if (actions[row.line] === "UPDATE") return "UPDATE";
   if (!checked) return "PENDING";
   if (checked.status === "NEED_DECISION" && actions[row.line] !== "CREATE_SEPARATE")
     return "DECISION";
@@ -38,9 +53,14 @@ export function importSummary(
   actions: ImportActions,
 ) {
   const selected = rows.filter((row) => actions[row.line] === "CREATE_SEPARATE");
-  const places = selected.reduce((sum, row) => sum + (row.expected ?? 1), 0);
+  const places =
+    selected.reduce((sum, row) => sum + (row.expected ?? 1), 0) +
+    (preview.updates ?? [])
+      .filter((x) => actions[x.rowNumber] === "UPDATE")
+      .reduce((sum, x) => sum + x.placeDelta, 0);
   return {
     created: selected.length,
+    updated: rows.filter((row) => actions[row.line] === "UPDATE").length,
     skipped: rows.filter((row) => actions[row.line] === "SKIP").length,
     unresolved: preview.rows.filter((row) => !actions[row.rowNumber]).length,
     places,
@@ -56,7 +76,6 @@ export const importReasonLabels: Record<string, string> = {
   SAME_NAME_OTHER_SIDE_GROUP: "Cùng tên nhưng khác phía hoặc nhóm khách",
   SHARED_PHONE: "Dùng chung SĐT với một khách khác",
   SHARED_EMAIL: "Dùng chung email với một khách khác",
-  DEFAULTED_KIND: "Chưa chọn kiểu lời mời: dùng Cá nhân.",
   DEFAULTED_SIDE: "Chưa chọn phía: dùng Chưa xác định.",
   DEFAULTED_GROUP: "Chưa chọn nhóm: dùng Khác.",
   DEFAULTED_COUNT: "Chưa nhập số suất: dùng 1 suất.",

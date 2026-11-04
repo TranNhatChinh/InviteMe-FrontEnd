@@ -5,6 +5,7 @@ import { ApiError } from "@/core/api/api-error";
 import { useRuntime } from "@/core/config/runtime";
 import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
+import { PlanningImportTasks } from "./planning-import-tasks";
 import { CoupleImport } from "./couple-import";
 import {
   archivePlanningGuest,
@@ -28,6 +29,17 @@ import { GuestDetailDrawer } from "./guest-detail-drawer";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "@/i18n/format";
 import { useLocale } from "@/i18n/language-context";
+
+const sideBadgeStyles: Record<string, string> = {
+  BRIDE: "bg-[#fae3e8] text-[#852848]",
+  GROOM: "bg-[#e4edf8] text-[#194975]",
+};
+const groupBadgeStyles: Record<string, string> = {
+  RELATIVES: "bg-[#ffeed8] text-[#774000]",
+  FRIENDS: "bg-[#e0f0e6] text-[#20563a]",
+};
+const badgeStyle = "inline-flex rounded-full px-3 py-1 text-sm font-medium";
+const neutralBadgeStyle = "bg-muted text-foreground";
 
 export function PlanningDashboard({ weddingId }: { weddingId: string }) {
   const { t } = useTranslation("guestPlanning");
@@ -199,9 +211,11 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
       attempt.current = { serialized, key: crypto.randomUUID() };
     const result = await importGuests(api, weddingId, body, attempt.current.key);
     setNotice(
-      `${t("imported", { guests: formatNumber(result.createdGuestCount, language), people: formatNumber(result.createdPlaceCount, language) })} · Bỏ qua ${result.skippedCount} dòng.`,
+      `${t("imported", { guests: formatNumber(result.createdGuestCount, language), people: formatNumber(result.createdPlaceCount, language) })} · Cập nhật ${result.updatedGuestCount} khách · Không thay đổi ${result.noChangeCount} dòng · Bỏ qua ${result.skippedCount} dòng · ${result.tasks.length} việc cần xử lý.`,
     );
     await cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] });
+    await cache.invalidateQueries({ queryKey: ["guest-planning-detail", weddingId] });
+    await cache.invalidateQueries({ queryKey: ["guest-import-tasks", weddingId] });
     setPage(1);
     setSearch("");
     attempt.current = null;
@@ -212,16 +226,19 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
       <CoupleImport
         onClose={() => setImporting(false)}
         onImport={save}
-        onCheck={(rows) => checkImportGuests(api, weddingId, rows)}
+        onCheck={(rows, decisions) => checkImportGuests(api, weddingId, rows, decisions)}
       />
     );
   return (
     <section className="space-y-5">
+      {can("GUEST_VIEW") && can("GUEST_EDIT") && groups.data?.isWeddingWide && (
+        <PlanningImportTasks weddingId={weddingId} />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-3xl">{t("title")}</h1>
         {can("SEATING_VIEW") && (
           <Button variant="outline" asChild>
-            <Link href={`/weddings/${weddingId}/seating`}>{t("seating")}</Link>
+            <Link href={`/weddings/${weddingId}/seating`}>{t("seating.title")}</Link>
           </Button>
         )}
         {can("GUEST_EDIT") && !archivedOnly && (
@@ -316,11 +333,11 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
               setPage(1);
             }}
           />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm">
+          <div className="grid items-end gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,17rem)_minmax(0,17rem)_1fr]">
+            <label className="grid gap-2 text-sm text-muted-foreground">
               {t("side")}
               <select
-                className="h-10 rounded-lg border bg-background px-3"
+                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-base text-foreground"
                 value={side}
                 onChange={(event) => {
                   setSide(event.target.value);
@@ -335,10 +352,10 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
                 ))}
               </select>
             </label>
-            <label className="grid gap-1 text-sm">
+            <label className="grid gap-2 text-sm text-muted-foreground">
               {t("group")}
               <select
-                className="h-10 rounded-lg border bg-background px-3"
+                className="h-11 w-full rounded-xl border border-border bg-card px-3 text-base text-foreground"
                 value={groupId}
                 onChange={(event) => {
                   setGroupId(event.target.value);
@@ -353,6 +370,12 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
                 ))}
               </select>
             </label>
+            {list.data && (
+              <p className="pb-3 text-sm text-muted-foreground sm:col-span-2 lg:col-span-1 lg:text-right">
+                {formatNumber(list.data.totalItems, language)}{" "}
+                {archivedOnly ? t("archivedCount") : t("recipientsCount")}
+              </p>
+            )}
           </div>
           {groups.isError && (
             <p role="alert" className="text-sm text-destructive">
@@ -370,92 +393,115 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
           )}
           {list.data && (
             <>
-              <p className="text-sm">
-                {formatNumber(list.data.totalItems, language)}{" "}
-                {archivedOnly ? t("archivedCount") : t("recipientsCount")}
-              </p>
               {!list.data.items.length && <p>{t("noMatches")}</p>}
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[600px] text-left text-sm">
-                  <thead>
-                    <tr>
-                      {[t("recipient"), t("expected"), t("sideColumn"), t("group")].map((x) => (
-                        <th key={x} className="p-3">
-                          {x}
+              {!!list.data.items.length && (
+                <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+                  <table className="w-full min-w-[600px] text-left text-sm">
+                    <thead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th scope="col" className="px-5 py-4">
+                          {t("recipient")}
                         </th>
-                      ))}
-                      {can("INVITATION_SEND") && <th className="p-3">{t("personalInvitation")}</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {list.data.items.map((g) => (
-                      <tr
-                        key={g.id}
-                        data-selected={selected === g.id ? "true" : undefined}
-                        className={`border-t transition-colors ${selected === g.id ? "bg-primary/5" : "hover:bg-muted/40"}`}
-                      >
-                        <td className="p-3">
-                          <button
-                            className="text-left underline underline-offset-4"
-                            onClick={() => {
-                              setEditingGuest(false);
-                              setNotice("");
-                              setSelected(g.id);
-                            }}
-                          >
-                            {g.invitationKind === "FAMILY"
-                              ? `${t("family")} `
-                              : g.invitationKind === "GROUP"
-                                ? `${t("groupPrefix")} `
-                                : ""}
-                            {g.honorific ? `${g.honorific} ` : ""}
-                            {g.recipientName}
-                          </button>
-                          {g.archivedAt && (
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {t("archived")}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3">{g.expectedPeople}</td>
-                        <td className="p-3">{sideLabels[g.side]}</td>
-                        <td className="p-3">{g.group?.name ?? t("notGrouped")}</td>
+                        <th scope="col" className="px-5 py-4 text-center">
+                          {t("expected")}
+                        </th>
+                        <th scope="col" className="px-5 py-4">
+                          {t("sideColumn")}
+                        </th>
+                        <th scope="col" className="px-5 py-4">
+                          {t("group")}
+                        </th>
                         {can("INVITATION_SEND") && (
-                          <td className="p-3">
-                            {g.invitationPath ? (
-                              <div className="flex items-center gap-2 whitespace-nowrap">
-                                <Button variant="outline" size="sm" asChild>
-                                  <a
-                                    href={g.invitationPath}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    <ExternalLink className="size-4" aria-hidden="true" />
-                                    {t("openInvitation")}
-                                  </a>
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={t("copyInvitationFor", { name: g.recipientName })}
-                                  title={t("copyInvitation")}
-                                  onClick={() => {
-                                    if (g.invitationPath) void copyInvitation(g.invitationPath);
-                                  }}
-                                >
-                                  <Copy className="size-4" aria-hidden="true" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">{t("noInvitationLink")}</span>
-                            )}
-                          </td>
+                          <th scope="col" className="px-5 py-4 text-right">
+                            {t("personalInvitation")}
+                          </th>
                         )}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {list.data.items.map((g) => (
+                        <tr
+                          key={g.id}
+                          data-selected={selected === g.id ? "true" : undefined}
+                          className={`border-t border-border transition-colors ${selected === g.id ? "bg-primary/5" : "hover:bg-muted/30"}`}
+                        >
+                          <td className="px-5 py-3">
+                            <button
+                              className="text-left font-serif text-lg font-semibold hover:text-primary focus-visible:underline"
+                              onClick={() => {
+                                setEditingGuest(false);
+                                setSelected(g.id);
+                              }}
+                            >
+                              {g.honorific ? `${g.honorific} ` : ""}
+                              {g.recipientName}
+                            </button>
+                            {g.archivedAt && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                {t("archived")}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 text-center text-base tabular-nums">
+                            {formatNumber(g.expectedPeople, language)}
+                          </td>
+                          <td className="px-5 py-3">
+                            <span
+                              className={`${badgeStyle} ${sideBadgeStyles[g.side] ?? neutralBadgeStyle}`}
+                            >
+                              {t(`sideValues.${g.side}`, { defaultValue: sideLabels[g.side] })}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span
+                              className={`${badgeStyle} ${groupBadgeStyles[g.group?.id ?? ""] ?? neutralBadgeStyle}`}
+                            >
+                              {g.group?.name ?? t("notGrouped")}
+                            </span>
+                          </td>
+                          {can("INVITATION_SEND") && (
+                            <td className="px-5 py-3">
+                              {g.invitationPath ? (
+                                <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                                  <Button
+                                    variant="ghost"
+                                    className="h-11 rounded-xl bg-primary/10 px-4 text-primary hover:bg-primary/15 hover:text-primary"
+                                    asChild
+                                  >
+                                    <a
+                                      href={g.invitationPath}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <ExternalLink className="size-4" aria-hidden="true" />
+                                      {t("openInvitation")}
+                                    </a>
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={t("copyInvitationFor", { name: g.recipientName })}
+                                    title={t("copyInvitation")}
+                                    onClick={() => {
+                                      if (g.invitationPath) void copyInvitation(g.invitationPath);
+                                    }}
+                                  >
+                                    <Copy className="size-4" aria-hidden="true" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="block text-right text-muted-foreground">
+                                  {t("noInvitationLink")}
+                                </span>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <div className="flex items-center gap-3">
                 <Button variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>
                   {t("previous")}

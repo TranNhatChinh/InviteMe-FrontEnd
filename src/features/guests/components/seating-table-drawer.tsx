@@ -157,10 +157,8 @@ export function SeatingTableDrawer({
               ? (attendanceLabels[place.person?.attendanceStatus ?? "PENDING"] ?? "Chưa xác nhận")
               : "";
             const household =
-              assigned &&
-              (guest.invitationKind !== "INDIVIDUAL" ||
-                plan.places.filter((p) => p.guestId === guest.id).length > 1)
-                ? `${guest.invitationKind === "FAMILY" ? "Gia đình" : "Nhóm"} ${guest.honorific ? guest.honorific.toLocaleLowerCase("vi") + " " : ""}${guest.recipientName}`
+              assigned && plan.places.filter((p) => p.guestId === guest.id).length > 1
+                ? `${guest.honorific ? guest.honorific.toLocaleLowerCase("vi") + " " : ""}${guest.recipientName}`
                 : guest?.group?.name;
             const adjacent =
               assigned &&

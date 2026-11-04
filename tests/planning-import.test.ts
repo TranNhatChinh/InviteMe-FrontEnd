@@ -11,7 +11,7 @@ test("contact columns are mapped to backend and email errors retain spreadsheet 
   const rows = validateCoupleRows([
     {
       line: 17,
-      values: ["Nam", "Anh", "Cá nhân", "1", "Chung", "", "0900123456", "", "nam@example.com"],
+      values: ["Nam", "Anh", "1", "Chung", "", "0900123456", "", "nam@example.com"],
     },
   ]);
   const row = importBody(rows).rows[0];
@@ -27,7 +27,7 @@ test("import maps expected places including primary, explicit side and family wi
   const rows = validateCoupleRows([
     {
       line: 8,
-      values: ["Nguyễn Văn An", "Bác", "Gia đình", "4", "Nhà gái", "Họ hàng", "", "Hai trẻ nhỏ"],
+      values: ["Nguyễn Văn An", "Bác", "4", "Nhà gái", "Họ hàng", "", "Hai trẻ nhỏ"],
     },
   ]);
   assert.deepEqual(importBody(rows), {
@@ -36,7 +36,7 @@ test("import maps expected places including primary, explicit side and family wi
         rowNumber: 8,
         recipientName: "Nguyễn Văn An",
         honorific: "Bác",
-        invitationKind: "FAMILY",
+
         expectedPeople: 4,
         side: "BRIDE",
         group: "RELATIVES",
@@ -48,11 +48,11 @@ test("import maps expected places including primary, explicit side and family wi
   });
 });
 test("missing side stays unspecified, group optional, count includes representative", () => {
-  const rows = validateCoupleRows([{ line: 2, values: ["Hoa", "", "", "", "", "", "", ""] }]);
+  const rows = validateCoupleRows([{ line: 2, values: ["Hoa", "", "", "", "", "", ""] }]);
   const row = importBody(rows).rows[0];
-  assert.equal(row?.side, "UNSPECIFIED");
-  assert.equal(row?.expectedPeople, 1);
-  assert.equal(row?.group, "OTHER");
+  assert.equal(row?.side, null);
+  assert.equal(row?.expectedPeople, null);
+  assert.equal(row?.group, null);
 });
 test("row errors preserve only allowed row and field metadata, never backend message", () => {
   const error = normalizeHttpError(422, {
@@ -69,7 +69,7 @@ test("manual create and edit share the backend phone validation rules", () => {
   const create = {
     recipientName: "Khách",
     honorific: null,
-    invitationKind: "INDIVIDUAL" as const,
+
     expectedPeople: 1,
     side: "UNSPECIFIED" as const,
     groupId: null,

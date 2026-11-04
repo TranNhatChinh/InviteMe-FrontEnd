@@ -60,7 +60,6 @@ export function normalizeHttpError(status: number, body: unknown): ApiError {
       const allowed = [
         "recipientName",
         "honorific",
-        "invitationKind",
         "expectedPeople",
         "side",
         "group",
@@ -71,6 +70,8 @@ export function normalizeHttpError(status: number, body: unknown): ApiError {
         "rowNumber",
         "rows",
         "row",
+        "targetGuestId",
+        "selectedFields",
       ];
       const rowIssues: ApiRowIssue[] = [];
       for (const issue of body.errors) {

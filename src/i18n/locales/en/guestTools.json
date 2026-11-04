@@ -30,7 +30,7 @@
     "previewTitle": "Preview with a guest",
     "previewHelp": "Uses the wording being edited. Previewing does not save changes.",
     "variables": {
-      "recipientLabel": "Invitation type + honorific + name",
+      "recipientLabel": "Honorific + name",
       "recipientName": "Recipient name",
       "honorific": "Honorific",
       "senderPronoun": "How the hosts refer to themselves"
@@ -41,8 +41,6 @@
     "loadingGuests": "Loading guests…",
     "chooseGuest": "Choose a guest",
     "chooseRecipient": "Choose a recipient",
-    "familySuffix": " · Family",
-    "groupSuffix": " · Group",
     "noGuests": "No matching guests. Import your guest list or try another search.",
     "pagePrevious": "Previous",
     "pageNext": "Next",

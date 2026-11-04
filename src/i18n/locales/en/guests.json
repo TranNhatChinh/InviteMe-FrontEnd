@@ -86,7 +86,6 @@
     "honorificPlaceholder": "Mr., Ms., Dr.…",
     "email": "Email",
     "phone": "Phone number",
-    "invitationKind": "Invitation type",
     "expectedPeople": "Expected party size",
     "side": "Guest side",
     "group": "Guest group",
@@ -97,7 +96,6 @@
     "saving": "Saving…",
     "save": "Save changes",
     "cancel": "Cancel",
-    "kind": { "INDIVIDUAL": "Individual", "FAMILY": "Family", "GROUP": "Group" },
     "sideValues": {
       "BRIDE": "Bride's side",
       "GROOM": "Groom's side",

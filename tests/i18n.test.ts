@@ -63,17 +63,10 @@ test("seating preview translates interface labels while preserving guest-provide
     })[key] ?? key;
 
   assert.equal(
-    formatRecipientLabel(
-      { name: "Nguyễn Văn An", address: "Bác", kind: "Gia đình" },
-      translate,
-      "en",
-    ),
-    "Family bác Nguyễn Văn An",
+    formatRecipientLabel({ name: "Nguyễn Văn An", address: "Bác" }, "en"),
+    "Bác Nguyễn Văn An",
   );
-  assert.equal(
-    formatRecipientLabel({ name: "Nhóm bạn K45", address: "", kind: "Nhóm" }, translate, "en"),
-    "Nhóm bạn K45",
-  );
+  assert.equal(formatRecipientLabel({ name: "Nhóm bạn K45", address: "" }, "en"), "Nhóm bạn K45");
   assert.equal(formatGuestSide("BRIDE", translate), "Bride's side");
   assert.equal(seatingStrategyLabel("affinity", translate), "Keep familiar groups together");
 });

@@ -238,7 +238,7 @@ function GroupCard({
   const selected = ids.length > 0 && ids.every((id) => selection.includes(id));
   const assignedCount = places.filter((p) => tablesByPlace.has(p.id)).length;
   const tableCount = new Set(places.flatMap((p) => tablesByPlace.get(p.id)?.id ?? [])).size;
-  const name = `${t(guest.invitationKind === "FAMILY" ? "family" : "group")} ${guest.honorific ? guest.honorific.toLocaleLowerCase(language === "en" ? "en-US" : "vi-VN") + " " : ""}${guest.recipientName}`;
+  const name = `${guest.honorific ? guest.honorific.toLocaleLowerCase(language === "en" ? "en-US" : "vi-VN") + " " : ""}${guest.recipientName}`;
   return (
     <article
       ref={setNodeRef}
@@ -517,9 +517,7 @@ export function SeatingQueue({
           const outOfScope =
             allowedGroupIds != null &&
             (!entry.guest.group?.id || !allowedGroupIds.has(entry.guest.group.id));
-          return entry.guest.invitationKind === "INDIVIDUAL" &&
-            entry.places.length === 1 &&
-            firstPlace ? (
+          return entry.places.length === 1 && firstPlace ? (
             <GuestRow
               key={entry.guest.id}
               guest={entry.guest}

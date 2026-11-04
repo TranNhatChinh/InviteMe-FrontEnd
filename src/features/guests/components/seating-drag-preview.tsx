@@ -19,7 +19,7 @@ export function SeatingDragPreview({
   if (!place || !guest) return null;
   const group = ids.length > 1;
   const title = group
-    ? `${guest.invitationKind === "FAMILY" ? "Gia đình" : "Nhóm"} ${guest.honorific ? guest.honorific.toLocaleLowerCase("vi") + " " : ""}${guest.recipientName}`
+    ? `${guest.honorific ? guest.honorific.toLocaleLowerCase("vi") + " " : ""}${guest.recipientName}`
     : queuePlaceName(place, guest);
   const initial = title.trim().split(/\s+/).at(-1)?.slice(0, 1);
   const Icon = group ? UsersRound : UserRound;

@@ -410,11 +410,6 @@ function WordingEditor({
                       <option key={guest.id} value={guest.id}>
                         {guest.honorific ? `${guest.honorific} ` : ""}
                         {guest.recipientName}
-                        {guest.invitationKind === "FAMILY"
-                          ? t("familySuffix")
-                          : guest.invitationKind === "GROUP"
-                            ? t("groupSuffix")
-                            : ""}
                       </option>
                     ))}
                   </select>

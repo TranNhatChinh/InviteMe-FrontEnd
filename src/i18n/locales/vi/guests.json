@@ -86,7 +86,6 @@
     "honorificPlaceholder": "Anh, Chị, Bác…",
     "email": "Email",
     "phone": "Số điện thoại",
-    "invitationKind": "Loại lời mời",
     "expectedPeople": "Số người dự kiến",
     "side": "Phía khách mời",
     "group": "Nhóm khách",
@@ -97,7 +96,6 @@
     "saving": "Đang lưu…",
     "save": "Lưu thay đổi",
     "cancel": "Hủy",
-    "kind": { "INDIVIDUAL": "Cá nhân", "FAMILY": "Gia đình", "GROUP": "Nhóm" },
     "sideValues": {
       "BRIDE": "Nhà gái",
       "GROOM": "Nhà trai",

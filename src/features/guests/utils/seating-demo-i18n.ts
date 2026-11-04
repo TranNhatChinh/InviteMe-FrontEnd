@@ -9,16 +9,10 @@ export function formatSeatingNumber(value: number, language: Language) {
 }
 
 export function formatRecipientLabel(
-  party: Pick<SeatingParty, "name" | "address" | "kind">,
-  t: Translate,
+  party: Pick<SeatingParty, "name" | "address">,
   language: Language,
 ) {
   const address = party.address ? `${party.address.toLocaleLowerCase(language)} ` : "";
-  if (party.kind === "Gia đình" || party.kind === "Family")
-    return `${t("family")} ${address}${party.name}`;
-  if (party.kind === "Nhóm" || party.kind === "Group") {
-    return /^(nhóm|group)\s/i.test(party.name) ? party.name : `${t("groupPrefix")} ${party.name}`;
-  }
   const label = `${address}${party.name}`;
   return label.charAt(0).toLocaleUpperCase(language) + label.slice(1);
 }

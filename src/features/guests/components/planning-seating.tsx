@@ -188,14 +188,8 @@ function DropTarget({
     </div>
   );
 }
-function recipient(g: PlanningGuest, familyLabel: string, groupLabel: string) {
-  const prefix =
-    g.invitationKind === "FAMILY"
-      ? `${familyLabel} `
-      : g.invitationKind === "GROUP"
-        ? `${groupLabel} `
-        : "";
-  return `${prefix}${g.honorific ? `${g.honorific.toLocaleLowerCase("vi")} ` : ""}${g.recipientName}`;
+function recipient(g: PlanningGuest) {
+  return `${g.honorific ? `${g.honorific.toLocaleLowerCase("vi")} ` : ""}${g.recipientName}`;
 }
 
 export function PlanningSeating({ weddingId }: { weddingId: string }) {
@@ -207,9 +201,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   const isAllGroupsSeating = isWeddingWide("SEATING_EDIT");
   const allowedGroupIds = useMemo(
     () =>
-      isAllGroupsSeating
-        ? null
-        : new Set(scope("SEATING_EDIT")?.groups.map((g) => g.id) ?? []),
+      isAllGroupsSeating ? null : new Set(scope("SEATING_EDIT")?.groups.map((g) => g.id) ?? []),
     [isAllGroupsSeating, scope],
   );
   const cache = useQueryClient();
@@ -457,9 +449,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       p?.person?.fullName ??
       t("seating.plannedPlace", {
         position: p?.position ?? "",
-        guest: g
-          ? recipient(g, t("seating.family"), t("seating.groupPrefix"))
-          : t("seating.noName"),
+        guest: g ? recipient(g) : t("seating.noName"),
       })
     );
   };
@@ -994,11 +984,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       </p>
                       <p>
                         {t("seating.invitation", {
-                          guest: recipient(
-                            inspectedGuest,
-                            t("seating.family"),
-                            t("seating.groupPrefix"),
-                          ),
+                          guest: recipient(inspectedGuest),
                         })}
                       </p>
                       <p>

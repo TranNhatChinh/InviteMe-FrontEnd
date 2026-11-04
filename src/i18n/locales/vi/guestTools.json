@@ -30,7 +30,7 @@
     "previewTitle": "Xem trước với khách mời",
     "previewHelp": "Dùng nội dung đang chỉnh sửa. Xem trước không lưu thay đổi.",
     "variables": {
-      "recipientLabel": "Kiểu lời mời + danh xưng + tên",
+      "recipientLabel": "Danh xưng + tên",
       "recipientName": "Tên người nhận",
       "honorific": "Danh xưng",
       "senderPronoun": "Người mời tự xưng"
@@ -41,8 +41,6 @@
     "loadingGuests": "Đang tải khách…",
     "chooseGuest": "Chọn khách",
     "chooseRecipient": "Chọn người nhận",
-    "familySuffix": " · Gia đình",
-    "groupSuffix": " · Nhóm",
     "noGuests": "Chưa có khách phù hợp. Hãy nhập danh sách khách hoặc đổi từ khóa.",
     "pagePrevious": "Trước",
     "pageNext": "Sau",

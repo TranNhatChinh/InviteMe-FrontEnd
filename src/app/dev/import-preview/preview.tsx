@@ -2,20 +2,48 @@
 
 import { useRouter } from "next/navigation";
 import { CoupleImport } from "@/features/guests";
-import { validateCoupleRows, type CoupleRow } from "@/features/guests/utils/couple-import";
-import type { PlanningImportCommit, PlanningImportPreview, PlanningImportResult } from "@/features/guests/api/planning.api";
+import { validateCoupleRows } from "@/features/guests";
+import type {
+  PlanningImportCommit,
+  PlanningImportPreview,
+  PlanningImportResult,
+} from "@/features/guests";
 
 const mockInitialRaw = [
-  { line: 2, values: ["Nguyễn Văn An", "Bác", "Gia đình", "5", "Nhà gái", "Họ hàng", "0901111111", "Có trẻ nhỏ", ""] },
-  { line: 3, values: ["Trần Thị Hoa", "Cô", "Gia đình", "2", "Nhà gái", "Họ hàng", "", "Muốn ngồi gần lối ra", ""] },
-  { line: 4, values: ["Lê Minh Anh", "Bạn", "Nhóm", "2", "Nhà gái", "Bạn bè", "", "Đại diện nhóm hai người", ""] },
-  { line: 5, values: ["Phạm Thu Hà", "Bạn", "Cá nhân", "1", "Nhà gái", "Bạn bè", "", "", ""] },
-  { line: 6, values: ["Hoàng Quốc Nam", "Anh", "Cá nhân", "1", "Nhà trai", "Đồng nghiệp", "", "", ""] },
-  { line: 7, values: ["Nguyễn Văn An", "Bác", "Gia đình", "4", "Nhà gái", "Họ hàng", "0901111111", "Khách của bố", ""] },
-  { line: 8, values: ["Hoàng Văn Đức", "Anh", "Cá nhân", "0", "Nhà trai", "Đồng nghiệp", "", "", ""] },
-  { line: 9, values: ["Trần Thị Lan", "Chị", "Cá nhân", "1", "Nhà gái", "Bạn bè", "0903333333", "", ""] },
-  { line: 10, values: ["Đặng Quốc Huy", "Ông", "Gia đình", "3", "Nhà trai", "Họ hàng", "0987 654 321", "", ""] },
-  { line: 11, values: ["Ngô Thị Thu", "Cô", "Gia đình", "2", "Nhà gái", "Họ ngoại", "", "", ""] },
+  {
+    line: 2,
+    values: ["Nguyễn Văn An", "Bác", "5", "Nhà gái", "Họ hàng", "0901111111", "Có trẻ nhỏ", ""],
+  },
+  {
+    line: 3,
+    values: ["Trần Thị Hoa", "Cô", "2", "Nhà gái", "Họ hàng", "", "Muốn ngồi gần lối ra", ""],
+  },
+  {
+    line: 4,
+    values: ["Lê Minh Anh", "Bạn", "2", "Nhà gái", "Bạn bè", "", "Đại diện nhóm hai người", ""],
+  },
+  { line: 5, values: ["Phạm Thu Hà", "Bạn", "1", "Nhà gái", "Bạn bè", "", "", ""] },
+  {
+    line: 6,
+    values: ["Hoàng Quốc Nam", "Anh", "1", "Nhà trai", "Đồng nghiệp", "", "", ""],
+  },
+  {
+    line: 7,
+    values: ["Nguyễn Văn An", "Bác", "4", "Nhà gái", "Họ hàng", "0901111111", "Khách của bố", ""],
+  },
+  {
+    line: 8,
+    values: ["Hoàng Văn Đức", "Anh", "0", "Nhà trai", "Đồng nghiệp", "", "", ""],
+  },
+  {
+    line: 9,
+    values: ["Trần Thị Lan", "Chị", "1", "Nhà gái", "Bạn bè", "0903333333", "", ""],
+  },
+  {
+    line: 10,
+    values: ["Đặng Quốc Huy", "Ông", "3", "Nhà trai", "Họ hàng", "0987 654 321", "", ""],
+  },
+  { line: 11, values: ["Ngô Thị Thu", "Cô", "2", "Nhà gái", "Họ ngoại", "", "", ""] },
 ];
 
 const mockRows = validateCoupleRows(mockInitialRaw);
@@ -120,12 +148,17 @@ const mockPreview: PlanningImportPreview = {
 export function ImportPreview() {
   const router = useRouter();
 
-  async function handleCheck(_rows: CoupleRow[]): Promise<PlanningImportPreview> {
+  async function handleCheck(): Promise<PlanningImportPreview> {
     return mockPreview;
   }
 
   async function handleImport(input: PlanningImportCommit): Promise<PlanningImportResult> {
     return {
+      updatedGuestCount: 0,
+      noChangeCount: 0,
+      updated: [],
+      noChange: [],
+      tasks: [],
       importId: "mock-import-id",
       createdGuestCount: input.decisions.filter((d) => d.action === "CREATE_SEPARATE").length,
       createdPlaceCount: 11,

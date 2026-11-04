@@ -359,7 +359,7 @@ export function CoupleSeatingPreview({ rows, onBack }: { rows: CoupleRow[]; onBa
                         <ul className="mt-3 space-y-1 text-xs leading-5">
                           {assigned.map((party) => (
                             <li key={party.id}>
-                              {formatRecipientLabel(party, t, language)} · {number(party.count)}{" "}
+                              {formatRecipientLabel(party, language)} · {number(party.count)}{" "}
                               {t("seats")}
                             </li>
                           ))}
@@ -469,7 +469,7 @@ export function CoupleSeatingPreview({ rows, onBack }: { rows: CoupleRow[]; onBa
                     <GripVertical className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <p className="break-words text-sm font-medium">
-                        {formatRecipientLabel(party, t, language)}
+                        {formatRecipientLabel(party, language)}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {party.group} · {formatGuestSide(party.side, t)}
@@ -713,7 +713,7 @@ export function CoupleSeatingPreview({ rows, onBack }: { rows: CoupleRow[]; onBa
               ) : (
                 <>
                   <h2 className="mt-4 break-words font-serif text-xl">
-                    {formatRecipientLabel(selected, t, language)}
+                    {formatRecipientLabel(selected, language)}
                   </h2>
                   <p className="mt-2 text-xs text-muted-foreground">{selected.group}</p>
                 </>
@@ -754,7 +754,7 @@ export function CoupleSeatingPreview({ rows, onBack }: { rows: CoupleRow[]; onBa
                 <div className="rounded-xl bg-background p-3">
                   <p className="text-xs text-muted-foreground">{t("invitationSalutation")}</p>
                   <p className="mt-2 text-sm">
-                    {t("greeting", { name: formatRecipientLabel(selected, t, language) })}
+                    {t("greeting", { name: formatRecipientLabel(selected, language) })}
                   </p>
                 </div>
               )}
