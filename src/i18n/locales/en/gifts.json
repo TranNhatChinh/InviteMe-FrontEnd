@@ -143,5 +143,9 @@
     "notAdded": "Linked, but account {{accounts}} was not added (two receiving accounts at most). Remove one and link again.",
     "notConfigured": "Bank linking is not enabled on this server.",
     "failed": "Could not reach SePay. Please try again later."
+  },
+  "plan": {
+    "giftQrOwnerDescription": "The {{planName}} plan does not include QR gifts. You can still view the gift ledger and record gifts manually.",
+    "giftQrContactOwner": "The {{planName}} plan does not include QR gifts. You can still view the ledger; contact the wedding owner if you need an upgrade."
   }
 }

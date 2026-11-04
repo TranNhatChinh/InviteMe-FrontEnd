@@ -38,6 +38,10 @@ import {
 import { z } from "zod";
 import { useTranslation } from "react-i18next";
 import { countSmsSegments } from "../utils/sms-segments";
+// eslint-disable-next-line architecture/boundaries -- Invitation batch controls use the wedding plan's email and SMS quotas.
+import { FeatureLimitNotice, useWeddingPlan } from "@/features/plans";
+import { useLocale } from "@/i18n/language-context";
+import { formatNumber } from "@/i18n/format";
 
 const recipientSchema = z.object({
   id: z.string(),
@@ -144,9 +148,12 @@ export function InvitationMessaging({
   isPublished: boolean;
 }) {
   const { t } = useTranslation("invitations");
+  const { t: tPlans } = useTranslation("plans");
   const { api } = useRuntime();
-  const { can } = usePermission();
+  const { can, isOwner } = usePermission();
+  const { language } = useLocale();
   const canViewGuests = can("GUEST_VIEW");
+  const plan = useWeddingPlan(weddingId, can("INVITATION_SEND"));
   const queryClient = useQueryClient();
   const draftQuery = useQuery({
     queryKey: draftKey(weddingId),
@@ -305,6 +312,24 @@ export function InvitationMessaging({
       : selectedIds;
   const missingContacts = missingRecipientContacts(allRecipients, recipientIds, channels);
   const selectionCount = recipientIds.length;
+  const quotaFor = (channel: InvitationChannel) => {
+    if (!plan.data) return null;
+    const isEmail = channel === "EMAIL";
+    const limit = isEmail ? plan.data.limits.emailInvites : plan.data.limits.smsInvites;
+    const used = isEmail ? plan.data.usage.emailInvites : plan.data.usage.smsInvites;
+    return {
+      limit,
+      used,
+      remaining: limit === null ? null : Math.max(0, limit - used),
+      feature: isEmail ? "emailInvites" : "smsInvites",
+    };
+  };
+  const quotaIssue = plan.data && !plan.isError
+    ? channels
+        .map((channel) => ({ channel, quota: quotaFor(channel) }))
+        .find(({ quota }) => quota && quota.remaining !== null && quota.remaining < selectionCount)
+    : undefined;
+  const planUnavailable = plan.isError || (!plan.isPending && !plan.data);
   const canSend = Boolean(
     draftQuery.data &&
     isPublished &&
@@ -314,6 +339,8 @@ export function InvitationMessaging({
     recipientsQuery.isSuccess &&
     templateErrors.length === 0 &&
     channels.length &&
+    !plan.isPending &&
+    (!plan.data || !quotaIssue) &&
     !dirty &&
     !generateMutation.isPending &&
     !saveMutation.isPending &&
@@ -654,6 +681,63 @@ export function InvitationMessaging({
             <h2 className="font-display text-xl">{t("sendInvitations")}</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{t("sendDescription")}</p>
+          {plan.isPending && (
+            <p role="status" className="mt-3 text-xs text-muted-foreground">
+              {t("plan.checking")}
+            </p>
+          )}
+          {planUnavailable && (
+            <div className="mt-3">
+              <FeatureLimitNotice
+                status="unavailable"
+                title={tPlans("gate.unknownTitle")}
+                description={tPlans("gate.unknownDescription")}
+                retryLabel={tPlans("gate.retry")}
+                onRetry={() => void plan.refetch()}
+              />
+            </div>
+          )}
+          {quotaIssue?.quota && plan.data && !plan.isError && (
+            <div className="mt-3">
+              <FeatureLimitNotice
+                title={t(
+                  quotaIssue.quota.limit === 0
+                    ? "plan.channelNotIncludedTitle"
+                    : "plan.quotaInsufficientTitle",
+                  { channel: quotaIssue.channel },
+                )}
+                description={
+                  quotaIssue.quota.limit === 0
+                    ? isOwner
+                      ? tPlans("gate.notIncludedOwnerDescription", {
+                          feature: tPlans(`gate.features.${quotaIssue.quota.feature}`),
+                          planName: plan.data.planName,
+                        })
+                      : tPlans("gate.contactOwner", {
+                          feature: tPlans(`gate.features.${quotaIssue.quota.feature}`),
+                          planName: plan.data.planName,
+                        })
+                    : t("plan.quotaInsufficientDescription", {
+                        remaining:
+                          quotaIssue.quota.remaining === null
+                            ? t("plan.unlimited")
+                            : formatNumber(quotaIssue.quota.remaining, language),
+                        requested: formatNumber(selectionCount, language),
+                      })
+                }
+                usage={t("plan.quotaUsage", {
+                  used: formatNumber(quotaIssue.quota.used, language),
+                  limit:
+                    quotaIssue.quota.limit === null
+                      ? t("plan.unlimited")
+                      : formatNumber(quotaIssue.quota.limit, language),
+                })}
+                variant="compact"
+                upgradeHref={isOwner ? `/weddings/${encodeURIComponent(weddingId)}/plan` : undefined}
+                upgradeLabel={isOwner ? tPlans("gate.viewPlans") : undefined}
+              />
+            </div>
+          )}
           <div className="mt-4 flex gap-2">
             {(["GUESTS", "GROUP"] as const).map((mode) => (
               <button
@@ -720,11 +804,18 @@ export function InvitationMessaging({
             <legend className="text-sm font-medium">{t("deliveryChannels")}</legend>
             <div className="mt-2 flex flex-wrap gap-4">
               {(["EMAIL", "SMS"] as const).map((channel) => (
-                <label key={channel} className="flex items-center gap-2 text-sm">
+                <label key={channel} className="flex min-h-11 items-start gap-2 text-sm">
                   <input
                     type="checkbox"
                     checked={channels.includes(channel)}
-                    disabled={sendMutation.isPending || Boolean(uncertainSend)}
+                    disabled={
+                      sendMutation.isPending ||
+                      Boolean(uncertainSend) ||
+                      plan.isPending ||
+                      Boolean(
+                        quotaFor(channel)?.remaining === 0 && !channels.includes(channel),
+                      )
+                    }
                     onChange={(event) =>
                       setChannels((current) =>
                         event.target.checked
@@ -738,7 +829,23 @@ export function InvitationMessaging({
                   ) : (
                     <MessageSquareText className="size-4" />
                   )}
-                  {channel}
+                  <span>
+                    <span className="flex items-center gap-2">{channel}</span>
+                    {quotaFor(channel) && (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {t("plan.channelQuota", {
+                          remaining:
+                            quotaFor(channel)?.remaining === null
+                              ? t("plan.unlimited")
+                              : formatNumber(quotaFor(channel)?.remaining ?? 0, language),
+                          limit:
+                            quotaFor(channel)?.limit === null
+                              ? t("plan.unlimited")
+                              : formatNumber(quotaFor(channel)?.limit ?? 0, language),
+                        })}
+                      </span>
+                    )}
+                  </span>
                 </label>
               ))}
             </div>

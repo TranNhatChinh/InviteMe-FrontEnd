@@ -143,5 +143,9 @@
     "notAdded": "Đã liên kết nhưng chưa thêm được tài khoản {{accounts}} (tối đa hai tài khoản nhận). Xoá bớt một tài khoản rồi bấm liên kết lại.",
     "notConfigured": "Tính năng liên kết ngân hàng chưa được bật trên hệ thống.",
     "failed": "Chưa kết nối được SePay. Vui lòng thử lại sau."
+  },
+  "plan": {
+    "giftQrOwnerDescription": "Gói {{planName}} chưa mở nhận quà qua QR. Bạn vẫn có thể xem sổ mừng và ghi nhận quà thủ công.",
+    "giftQrContactOwner": "Gói {{planName}} chưa mở nhận quà qua QR. Bạn vẫn có thể xem sổ mừng; hãy liên hệ chủ tiệc nếu cần nâng cấp."
   }
 }

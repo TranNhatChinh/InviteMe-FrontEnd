@@ -15,6 +15,7 @@ import {
   HeartHandshake,
   Home,
   LayoutDashboard,
+  LockKeyhole,
   Mail,
   Menu,
   PanelLeftClose,
@@ -43,7 +44,12 @@ import {
 } from "./workspace-context";
 
 export type NavigationIcon = WorkspaceNavigationIcon;
-export type NavigationItem = { href: string; label: string; icon: NavigationIcon };
+export type NavigationItem = {
+  href: string;
+  label: string;
+  icon: NavigationIcon;
+  locked?: boolean;
+};
 export type NavigationGroup = { label: string; items: NavigationItem[] };
 
 const navigationIcons: Record<NavigationIcon, LucideIcon> = {
@@ -426,10 +432,7 @@ function DashboardShellFrame({
           className="min-h-0 flex-1 space-y-6 overflow-y-auto pb-3"
         >
           {navigation.map((group) => (
-            <section
-              key={group.label}
-              aria-label={localizeNavigationLabel(group.label, t)}
-            >
+            <section key={group.label} aria-label={localizeNavigationLabel(group.label, t)}>
               <h2
                 className={cn(
                   "mb-2 px-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground",
@@ -447,7 +450,13 @@ function DashboardShellFrame({
                       key={item.href}
                       href={item.href}
                       aria-current={active ? "page" : undefined}
-                      title={collapsed ? localizeNavigationLabel(item.label, t) : undefined}
+                      title={
+                        collapsed
+                          ? `${localizeNavigationLabel(item.label, t)}${item.locked ? ` · ${t("planFeatureLocked")}` : ""}`
+                          : item.locked
+                            ? t("planFeatureLocked")
+                            : undefined
+                      }
                       onClick={() => setOpen(false)}
                       className={cn(
                         "flex min-h-11 items-center gap-3 rounded-xl border-l-2 border-transparent px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -462,6 +471,12 @@ function DashboardShellFrame({
                       <span className={cn(collapsed && "md:sr-only")}>
                         {localizeNavigationLabel(item.label, t)}
                       </span>
+                      {item.locked && (
+                        <LockKeyhole
+                          className="ml-auto size-4 shrink-0 text-primary-hover"
+                          aria-label={t("planFeatureLocked")}
+                        />
+                      )}
                     </Link>
                   );
                 })}
@@ -502,10 +517,7 @@ function DashboardShellFrame({
               {contextualNavigation ? (
                 <div className="space-y-5">
                   {contextualNavigation.groups.map((group) => (
-                    <section
-                      key={group.label}
-                      aria-label={localizeNavigationLabel(group.label, t)}
-                    >
+                    <section key={group.label} aria-label={localizeNavigationLabel(group.label, t)}>
                       <h3
                         className={cn(
                           "mb-2 px-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground",
@@ -523,7 +535,11 @@ function DashboardShellFrame({
                               key={item.href}
                               href={item.href}
                               aria-current={active ? "page" : undefined}
-                              title={collapsed ? localizeNavigationLabel(item.label, t) : undefined}
+                              title={
+                                collapsed
+                                  ? `${localizeNavigationLabel(item.label, t)}${item.locked ? ` · ${t("planFeatureLocked")}` : ""}`
+                                  : undefined
+                              }
                               onClick={() => setOpen(false)}
                               className={cn(
                                 "flex min-h-11 items-center gap-3 rounded-xl border-l-2 border-transparent px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -537,6 +553,12 @@ function DashboardShellFrame({
                               <span className={cn("truncate", collapsed && "md:sr-only")}>
                                 {localizeNavigationLabel(item.label, t)}
                               </span>
+                              {item.locked && (
+                                <LockKeyhole
+                                  className="ml-auto size-4 shrink-0 text-primary-hover"
+                                  aria-label={t("planFeatureLocked")}
+                                />
+                              )}
                             </Link>
                           );
                         })}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, UserPlus } from "lucide-react";
 import { z } from "zod";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
@@ -36,6 +36,8 @@ import { ScopeEditor } from "./scope-editor";
 import { PERMISSION_AREAS, PERMISSION_LABELS } from "../utils/scopes";
 import { useLocale } from "@/i18n/language-context";
 import { formatDate, formatNumber } from "@/i18n/format";
+// eslint-disable-next-line architecture/boundaries -- Wedding plan entitlements are shared by all wedding workspace features.
+import { FeatureLimitNotice, planEntitlementState, useWeddingPlan } from "@/features/plans";
 
 type InviteInput = { email: string };
 
@@ -46,7 +48,9 @@ function friendlyError(
 ) {
   if (!(error instanceof ApiError)) return t("errors.actionFailed", { action });
   if (error.code === "network") return t("errors.network");
-  if (error.status === 403) return t("errors.ownerOnly");
+  if (error.backendCode === "PLAN_LIMIT_REACHED") return t("errors.planLimit");
+  if (error.backendCode === "OWNER_ONLY") return t("errors.ownerOnly");
+  if (error.status === 403) return t("errors.forbidden");
   if (error.status === 409) return t("errors.conflict");
   if (error.status === 422 || error.status === 400) return t("errors.invalidScopes");
   if (error.status === 404) return t("errors.notFound");
@@ -68,9 +72,11 @@ function scopeDescription(
 
 export function CoHostManagement({ weddingId }: { weddingId: string }) {
   const { t } = useTranslation("cohost");
+  const { t: tPlans } = useTranslation("plans");
   const { language } = useLocale();
   const { api } = useRuntime();
   const { isOwner } = usePermission();
+  const plan = useWeddingPlan(weddingId, isOwner);
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -124,9 +130,16 @@ export function CoHostManagement({ weddingId }: { weddingId: string }) {
           : t("inviteQueuedButEmailFailed", { email: result.email }),
       );
       setActionError("");
-      await queryClient.invalidateQueries({ queryKey: coHostKeys.invitations(weddingId) });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: coHostKeys.invitations(weddingId) }),
+        queryClient.invalidateQueries({ queryKey: ["wedding-plan", weddingId] }),
+      ]);
     },
-    onError: (error) => setActionError(friendlyError(error, t("actions.sendInvite"), t)),
+    onError: async (error) => {
+      setActionError(friendlyError(error, t("actions.sendInvite"), t));
+      if (error instanceof ApiError && error.backendCode === "PLAN_LIMIT_REACHED")
+        await queryClient.invalidateQueries({ queryKey: ["wedding-plan", weddingId] });
+    },
   });
   const revokeInvitation = useMutation({
     mutationFn: (id: string) => revokeCoHostInvitation(api, weddingId, id),
@@ -171,16 +184,58 @@ export function CoHostManagement({ weddingId }: { weddingId: string }) {
   const openInvitations = invitations.data.filter((invitation) =>
     ["PENDING", "SENT"].includes(invitation.status),
   );
+  const planUnavailable = plan.isError || (!plan.isPending && !plan.data);
+  const coHostGate =
+    !planUnavailable && plan.data ? planEntitlementState(plan.data, "coHosts") : null;
+  const invitationAvailable = Boolean(
+    !planUnavailable && !plan.isPending && plan.data && coHostGate && !coHostGate.locked,
+  );
+  const quotaLimit = !planUnavailable ? plan.data?.limits.coHosts : undefined;
+  const quotaLimitLabel =
+    plan.data?.legacy || quotaLimit === null
+      ? t("unlimited")
+      : quotaLimit === undefined
+        ? "—"
+        : formatNumber(quotaLimit, language);
+  const packageStatusText = planUnavailable
+    ? t("planUnknown")
+    : plan.isPending
+      ? t("planChecking")
+      : plan.data
+        ? t("quotaSummary", {
+            used: formatNumber(plan.data.usage.coHosts, language),
+            limit: quotaLimitLabel,
+            plan: plan.data.planName,
+          })
+        : t("planUnknown");
+
+  function scrollToInviteForm() {
+    document
+      .getElementById("co-host-invitation")
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} description={t("description")} />
-      <p className="text-sm text-muted-foreground">
-        {t("summaryLine", {
-          members: formatNumber(activeMembers.length, language),
-          invites: formatNumber(openInvitations.length, language),
-        })}
-      </p>
+      <section className="flex flex-col gap-3 rounded-2xl border border-border/80 bg-card px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">
+            {t("summaryLine", {
+              members: formatNumber(activeMembers.length, language),
+              invites: formatNumber(openInvitations.length, language),
+            })}
+          </p>
+          <p id="co-host-package-status" className="mt-1 text-sm text-muted-foreground">
+            {packageStatusText}
+          </p>
+        </div>
+        {plan.data && !planUnavailable && (
+          <span className="inline-flex min-h-9 shrink-0 items-center rounded-full bg-petal/70 px-3 text-sm font-medium text-primary-hover">
+            {formatNumber(plan.data.usage.coHosts, language)} / {quotaLimitLabel}
+          </span>
+        )}
+      </section>
       {notice && (
         <p role="status" className="rounded-lg bg-success/10 px-4 py-3 text-sm text-foreground">
           {notice}
@@ -191,22 +246,66 @@ export function CoHostManagement({ weddingId }: { weddingId: string }) {
           {actionError}
         </p>
       )}
+      {coHostGate?.locked && (
+        <FeatureLimitNotice
+          title={t(
+            coHostGate.reason === "limit-reached" ? "gate.limitTitle" : "gate.unsupportedTitle",
+          )}
+          description={t(
+            coHostGate.reason === "limit-reached"
+              ? "gate.limitDescription"
+              : "gate.unsupportedDescription",
+          )}
+          usage={coHostGate.reason === "limit-reached" ? packageStatusText : undefined}
+          variant="compact"
+          upgradeHref={`/weddings/${encodeURIComponent(weddingId)}/plan`}
+          upgradeLabel={tPlans("gate.viewPlans")}
+        />
+      )}
+      {planUnavailable && (
+        <div className="flex flex-col gap-3 rounded-xl border border-border/80 bg-muted/25 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p role="status" className="text-sm text-muted-foreground">
+            {t("errors.planUnavailable")}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void plan.refetch()}>
+            <RefreshCw aria-hidden="true" /> {t("refresh")}
+          </Button>
+        </div>
+      )}
+      {plan.isPending && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("planChecking")}
+        </p>
+      )}
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
+      <div
+        className={`grid gap-8 ${invitationAvailable ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start" : "grid-cols-1"}`}
+      >
         <div className="space-y-8">
           <section aria-labelledby="co-host-members" className="space-y-3">
-            <h2 id="co-host-members" className="text-lg font-semibold">
-              {t("activeMembers")}{" "}
-              <span className="font-normal text-muted-foreground">
-                {formatNumber(activeMembers.length, language)}
-              </span>
-            </h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 id="co-host-members" className="text-lg font-semibold">
+                {t("activeMembers")}{" "}
+                <span className="font-normal text-muted-foreground">
+                  {formatNumber(activeMembers.length, language)}
+                </span>
+              </h2>
+              <Button
+                type="button"
+                className="min-h-10 w-full rounded-xl sm:w-auto"
+                disabled={!invitationAvailable}
+                aria-describedby="co-host-package-status"
+                onClick={scrollToInviteForm}
+              >
+                <UserPlus aria-hidden="true" /> {t("inviteButton")}
+              </Button>
+            </div>
             {activeMembers.length === 0 ? (
               <p className="rounded-xl border border-dashed border-foreground/15 px-4 py-6 text-sm text-muted-foreground">
                 {t("noCoHostsDescription")}
               </p>
             ) : (
-              <ul className="divide-y divide-foreground/10 rounded-xl border border-foreground/10 bg-card">
+              <ul className="space-y-3">
                 {activeMembers.map((member) => (
                   <CoHostRow
                     key={member.userId}
@@ -245,11 +344,11 @@ export function CoHostManagement({ weddingId }: { weddingId: string }) {
                 {t("noPendingInvitesDescription")}
               </p>
             ) : (
-              <ul className="divide-y divide-foreground/10 rounded-xl border border-foreground/10 bg-card">
+              <ul className="space-y-3">
                 {openInvitations.map((invitation) => (
                   <li
                     key={invitation.id}
-                    className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
+                    className="flex flex-col gap-3 rounded-xl border border-foreground/10 bg-card px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
                   >
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -293,41 +392,44 @@ export function CoHostManagement({ weddingId }: { weddingId: string }) {
           </section>
         </div>
 
-        <section
-          aria-labelledby="co-host-invite-form"
-          className="space-y-5 rounded-xl border border-foreground/10 bg-card p-5 lg:sticky lg:top-6"
-        >
-          <div>
-            <h2 id="co-host-invite-form" className="text-lg font-semibold">
-              {t("sendInvite")}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t("inviteDescription")}</p>
-          </div>
-          <FormField control={form.control} name="email" label={t("coHostEmail")}>
-            {(field) => (
-              <Input
-                {...field}
-                value={String(field.value ?? "")}
-                type="email"
-                autoComplete="email"
-                placeholder="linh.nguyen@gmail.com"
-              />
+        {invitationAvailable && (
+          <section
+            aria-labelledby="co-host-invite-form"
+            id="co-host-invitation"
+            className="space-y-5 rounded-xl border border-foreground/10 bg-card p-5 lg:sticky lg:top-6"
+          >
+            <div>
+              <h2 id="co-host-invite-form" className="text-lg font-semibold">
+                {t("sendInvite")}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">{t("inviteDescription")}</p>
+            </div>
+            <FormField control={form.control} name="email" label={t("coHostEmail")}>
+              {(field) => (
+                <Input
+                  {...field}
+                  value={String(field.value ?? "")}
+                  type="email"
+                  autoComplete="email"
+                  placeholder="linh.nguyen@gmail.com"
+                />
+              )}
+            </FormField>
+            <ScopeEditor
+              groups={groups.data}
+              submitLabel={t("sendInvite")}
+              busy={invite.isPending}
+              onSubmit={(grants) =>
+                void form.handleSubmit((values) => invite.mutate({ email: values.email, grants }))()
+              }
+            />
+            {invite.isPending && (
+              <p role="status" className="text-sm text-muted-foreground">
+                {t("sendingInvite")}
+              </p>
             )}
-          </FormField>
-          <ScopeEditor
-            groups={groups.data}
-            submitLabel={t("sendInvite")}
-            busy={invite.isPending}
-            onSubmit={(grants) =>
-              void form.handleSubmit((values) => invite.mutate({ email: values.email, grants }))()
-            }
-          />
-          {invite.isPending && (
-            <p role="status" className="text-sm text-muted-foreground">
-              {t("sendingInvite")}
-            </p>
-          )}
-        </section>
+          </section>
+        )}
       </div>
     </div>
   );
@@ -378,7 +480,7 @@ function CoHostRow({
       ];
     });
   return (
-    <li className="space-y-4 px-4 py-4">
+    <li className="space-y-4 rounded-xl border border-foreground/10 bg-card px-4 py-4">
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"

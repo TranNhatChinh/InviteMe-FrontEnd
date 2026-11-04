@@ -37,6 +37,7 @@ export type WorkspaceSidebarItem = {
   href: string;
   label: string;
   icon: WorkspaceNavigationIcon;
+  locked?: boolean;
 };
 
 export type WorkspaceSidebarGroup = {

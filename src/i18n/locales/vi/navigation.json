@@ -50,5 +50,6 @@
   "editWeddingWebsite": "Chỉnh sửa trang cưới",
   "openWeddingWebsite": "Mở trang cưới",
   "weddingFallback": "Đám cưới",
-  "loadingWeddingAccess": "Đang tải quyền truy cập và menu đám cưới…"
+  "loadingWeddingAccess": "Đang tải quyền truy cập và menu đám cưới…",
+  "planFeatureLocked": "Một số thao tác cần gói cao hơn"
 }

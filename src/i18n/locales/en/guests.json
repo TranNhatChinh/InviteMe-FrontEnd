@@ -135,9 +135,22 @@
     "expected": "Expected"
   },
   "reminder": {
+    "planUnknownTitle": "Plan access couldn't be checked",
+    "planUnknownDescription": "Your reminder history and preview are still available. Try again to check which plan actions are available.",
+    "checkingPlan": "Checking plan access…",
+    "autoPlanTitle": "Automatic RSVP reminders aren't included",
+    "autoPlanOwnerDescription": "Upgrade this wedding's plan to enable automatic reminders. An existing schedule can still be turned off.",
+    "autoPlanContactOwner": "Automatic reminders aren't included in this wedding's plan. Contact the wedding owner for help.",
+    "manualQuota": "Manual reminder usage: {{used}}/{{limit}} rounds",
+    "unlimitedManualQuota": "Manual reminder rounds: unlimited",
+    "manualQuotaNotIncludedDescription": "This plan has no manual reminder rounds. Guest preview and reminder history are still available.",
+    "manualQuotaReachedTitle": "Manual reminder limit reached",
+    "manualQuotaOwnerDescription": "This wedding has used its manual reminder rounds. You can still preview eligible guests and review reminder history.",
+    "manualQuotaContactOwner": "The manual reminder allowance has been used. Contact the wedding owner for plan changes.",
     "errors": {
       "generic": "Couldn't complete the action. Please try again.",
       "emailUnavailable": "SMTP isn't configured in the backend, so RSVP reminder emails can't be sent yet.",
+      "planLimit": "The current plan does not include RSVP reminders or has used all manual reminder rounds.",
       "weddingWideRequired": "RSVP reminders require wedding-wide access.",
       "forbidden": "You don't have permission to manage RSVP reminders for this wedding.",
       "invalidRequest": "The wedding is closed or this request is no longer valid."

@@ -9,6 +9,9 @@ import { createWeddingSlugSchema, normalizeWeddingSlug } from "../schemas/weddin
 import { checkWeddingSlug } from "../api/wedding.api";
 import { weddingKeys } from "../api/wedding.keys";
 import { Input } from "@/shared/ui/input";
+// eslint-disable-next-line architecture/boundaries -- Wedding setup gates slug edits using the plan entitlement from the plans feature.
+import { FeatureLimitNotice, planEntitlementState, useWeddingPlan } from "@/features/plans";
+import { usePermission } from "@/shared/components/permission-guard";
 
 export function WeddingSlugField({
   value,
@@ -24,7 +27,12 @@ export function WeddingSlugField({
   error?: string;
 }) {
   const { t } = useTranslation("weddings");
+  const { t: tPlans } = useTranslation("plans");
   const { api } = useRuntime();
+  const { isOwner } = usePermission();
+  const plan = useWeddingPlan(weddingId ?? "", Boolean(weddingId));
+  const slugGate = plan.data && !plan.isError ? planEntitlementState(plan.data, "customSlug") : null;
+  const customSlugBlocked = Boolean(weddingId && (plan.isPending || plan.isError || !plan.data || slugGate?.locked));
   const slugSchema = useMemo(
     () =>
       createWeddingSlugSchema({
@@ -88,19 +96,50 @@ export function WeddingSlugField({
           value={value}
           required
           aria-required="true"
+          readOnly={customSlugBlocked}
           onChange={(event) => onChange(event.target.value.toLowerCase())}
           onBlur={() => onChange(normalized)}
           autoComplete="off"
           maxLength={80}
           aria-invalid={Boolean(error || (valid && availability.data?.available === false))}
           aria-describedby="wedding-slug-help wedding-slug-status wedding-slug-error"
-          className="h-12 rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+          className="h-12 rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 read-only:cursor-not-allowed read-only:bg-muted/40"
           placeholder="minh-lan-2026"
         />
       </div>
       <p id="wedding-slug-help" className="text-xs leading-5 text-muted-foreground">
         {t("slug.help")}
       </p>
+      {weddingId && plan.isError && (
+        <FeatureLimitNotice
+          status="unavailable"
+          title={tPlans("gate.unknownTitle")}
+          description={tPlans("gate.unknownDescription")}
+          retryLabel={tPlans("gate.retry")}
+          onRetry={() => void plan.refetch()}
+        />
+      )}
+      {slugGate?.locked && plan.data && !plan.isError && (
+        <FeatureLimitNotice
+          title={tPlans("gate.notIncludedTitle", {
+            feature: tPlans("gate.features.customSlug"),
+          })}
+          description={
+            isOwner
+              ? tPlans("gate.notIncludedOwnerDescription", {
+                  feature: tPlans("gate.features.customSlug"),
+                  planName: plan.data.planName,
+                })
+              : tPlans("gate.contactOwner", {
+                  feature: tPlans("gate.features.customSlug"),
+                  planName: plan.data.planName,
+                })
+          }
+          variant="compact"
+          upgradeHref={isOwner ? `/weddings/${encodeURIComponent(weddingId ?? "")}/plan` : undefined}
+          upgradeLabel={isOwner ? tPlans("gate.viewPlans") : undefined}
+        />
+      )}
       {baseUrl && valid && (
         <p className="break-all text-xs text-muted-foreground">
           {t("slug.preview", { url: `${baseUrl}/wedding/${normalized}` })}

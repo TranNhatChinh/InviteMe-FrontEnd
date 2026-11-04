@@ -135,9 +135,22 @@
     "expected": "Dự kiến"
   },
   "reminder": {
+    "planUnknownTitle": "Chưa kiểm tra được quyền lợi gói",
+    "planUnknownDescription": "Bạn vẫn có thể xem trước và mở lịch sử nhắc. Hãy thử lại để kiểm tra các thao tác được phép theo gói.",
+    "checkingPlan": "Đang kiểm tra quyền lợi gói…",
+    "autoPlanTitle": "Gói hiện tại chưa hỗ trợ nhắc RSVP tự động",
+    "autoPlanOwnerDescription": "Nâng cấp gói đám cưới để bật nhắc tự động. Nếu lịch đang bật, bạn vẫn có thể tắt lịch đó.",
+    "autoPlanContactOwner": "Gói đám cưới chưa hỗ trợ nhắc tự động. Vui lòng liên hệ chủ tiệc để được hỗ trợ.",
+    "manualQuota": "Lượt nhắc thủ công đã dùng: {{used}}/{{limit}}",
+    "unlimitedManualQuota": "Lượt nhắc thủ công: không giới hạn",
+    "manualQuotaNotIncludedDescription": "Gói hiện tại không có lượt nhắc thủ công. Bạn vẫn có thể xem trước khách và theo dõi lịch sử.",
+    "manualQuotaReachedTitle": "Đã dùng hết lượt nhắc thủ công",
+    "manualQuotaOwnerDescription": "Đám cưới đã dùng hết lượt nhắc thủ công. Bạn vẫn có thể xem trước khách đủ điều kiện và mở lịch sử nhắc.",
+    "manualQuotaContactOwner": "Đã dùng hết lượt nhắc thủ công. Vui lòng liên hệ chủ tiệc để thay đổi gói.",
     "errors": {
       "generic": "Không hoàn tất được thao tác. Vui lòng thử lại.",
       "emailUnavailable": "BE chưa cấu hình SMTP nên chưa thể gửi email nhắc RSVP.",
+      "planLimit": "Gói hiện tại chưa mở lượt nhắc RSVP hoặc đã dùng hết lượt gửi thủ công.",
       "weddingWideRequired": "Tính năng nhắc RSVP cần quyền trên toàn wedding.",
       "forbidden": "Bạn không có quyền quản lý nhắc RSVP trong wedding này.",
       "invalidRequest": "Wedding đã đóng hoặc yêu cầu không còn hợp lệ."

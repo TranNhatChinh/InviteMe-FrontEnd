@@ -315,6 +315,36 @@
     "pricingDescription": "Bảng giá các gói thiệp cưới online và quản lý tiệc cưới trọn gói của InviteMe.",
     "adminTitle": "Quản lý Gói cước & Đơn hàng — Admin InviteMe"
   },
+  "gate": {
+    "loading": "Đang kiểm tra quyền lợi gói…",
+    "unknownTitle": "Chưa kiểm tra được quyền lợi gói",
+    "unknownDescription": "Tạm thời chưa thể xác định tính năng này có trong gói hay không. Hãy thử tải lại.",
+    "retry": "Thử lại",
+    "checkinTitle": "Tính năng Check-in chưa có trong gói hiện tại",
+    "checkinOwnerDescription": "Nâng cấp gói để sử dụng quét QR và quản lý khách đến tham dự.",
+    "checkinContactOwner": "Vui lòng liên hệ chủ tiệc để được hỗ trợ.",
+    "features": {
+      "coHosts": "quản lý co-host",
+      "reminderRounds": "nhắc RSVP tự động",
+      "aiThankYouRuns": "tạo thư cảm ơn bằng AI",
+      "checkin": "check-in tại tiệc",
+      "giftQr": "nhận quà mừng qua QR",
+      "giftExport": "xuất sổ quà mừng",
+      "customSlug": "đổi đường dẫn website cưới",
+      "publicSeatLookup": "công khai tra cứu chỗ ngồi",
+      "guestPlaces": "chỗ khách mời",
+      "mediaImages": "ảnh trong thư viện cưới",
+      "emailInvites": "lượt gửi thiệp Email",
+      "smsInvites": "lượt gửi thiệp SMS",
+      "seatingTables": "bàn tiệc"
+    },
+    "notIncludedTitle": "Tính năng {{feature}} chưa có trong gói hiện tại",
+    "notIncludedOwnerDescription": "Gói {{planName}} chưa bao gồm {{feature}}. Nâng cấp gói để mở tính năng này.",
+    "limitTitle": "Đã đạt giới hạn {{feature}}",
+    "limitOwnerDescription": "Gói {{planName}} đã dùng hết quyền lợi {{feature}}. Nâng cấp gói để tiếp tục.",
+    "contactOwner": "Gói {{planName}} hiện chưa mở {{feature}}. Vui lòng liên hệ chủ tiệc để được hỗ trợ.",
+    "viewPlans": "Xem các gói"
+  },
   "page": {
     "noAccessTitle": "Không có quyền truy cập",
     "noAccessDescription": "Bạn không có quyền xem thông tin gói dịch vụ của đám cưới này.",
