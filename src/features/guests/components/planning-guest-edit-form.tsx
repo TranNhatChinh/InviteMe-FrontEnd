@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,12 +17,14 @@ export function PlanningGuestEditForm({
   guest,
   groups,
   busy,
+  onDirtyChange,
   onCancel,
   onSave,
 }: {
   guest: PlanningDetail;
   groups: { id: string; name: string }[];
   busy: boolean;
+  onDirtyChange: (dirty: boolean) => void;
   onCancel: () => void;
   onSave: (input: PlanningGuestUpdate) => void;
 }) {
@@ -56,6 +58,12 @@ export function PlanningGuestEditForm({
       email: guest.email ?? "",
     },
   });
+  const { isDirty } = form.formState;
+
+  useEffect(() => {
+    onDirtyChange(isDirty);
+    return () => onDirtyChange(false);
+  }, [isDirty, onDirtyChange]);
 
   return (
     <form
@@ -134,7 +142,7 @@ export function PlanningGuestEditForm({
           </FormField>
         </div>
       </fieldset>
-      <div className="flex flex-wrap gap-2">
+      <div className="sticky bottom-0 -mx-4 flex flex-wrap justify-end gap-2 border-t bg-card/95 px-4 py-3 backdrop-blur">
         <Button type="submit" disabled={busy}>
           {busy ? t("planning.saving") : t("planning.save")}
         </Button>
