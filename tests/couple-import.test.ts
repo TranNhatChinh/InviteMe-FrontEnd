@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   coupleExamples,
   coupleHeaders,
+  coupleCsv,
   parseCoupleCsv,
   validateCoupleRows,
 } from "../src/features/guests/utils/couple-import";
@@ -63,7 +64,7 @@ test("download matches the displayed example: five recipients and ten expected p
   assert.ok(rows.every((row) => row.errors.length === 0));
 });
 test("empty headcount defaults visibly to one and keeps phone leading zeros", () => {
-  const [row] = parseCoupleCsv(`${header}\r\nAn,Bác,,Nhà gái,Họ ngoại,0900123456,`);
+  const [row] = parseCoupleCsv(`${header}\r\nAn,Bác,,Nhà gái,Họ hàng,0900123456,`);
   assert.equal(row?.expected, 1);
   assert.equal(row?.defaulted, true);
   assert.equal(row?.values[5], "0900123456");
@@ -73,7 +74,7 @@ test("quoted commas, linebreaks and escaped quotes do not create extra recipient
     `${header}\nAn,Bác,4,Nhà gái,Họ ngoại,,"Cần ghế, gần lối ra\nGọi \"\"An\"\""\nHoa,Cô,2,Nhà gái,Họ ngoại,,`,
   );
   assert.equal(rows.length, 2);
-  assert.equal(rows[0]?.values[6], 'Cần ghế, gần lối ra\nGọi "An"');
+  assert.equal(rows[0]?.values[6], 'Cần ghế, gần lối ra Gọi "An"');
   assert.equal(rows[1]?.line, 4);
 });
 test("invalid headcounts and row shapes are not included in expected totals", () => {
@@ -98,32 +99,45 @@ test("wrong templates, broken quoting and empty data are rejected", () => {
   assert.throws(() => parseCoupleCsv(header));
 });
 
-test("legacy nine-column files with Kiểu lời mời strip the column automatically", () => {
-  const [individual, family, group] = parseCoupleCsv(
-    `Tên người nhận,Danh xưng,Kiểu lời mời,Tổng người dự kiến,Phía khách mời,Nhóm khách,SĐT,Ghi chú,Email\nAn,Bác,Cá nhân,4,Nhà gái,,0900123456,,\nBình,Bác,Gia đình,4,Nhà gái,,,,\nLớp K45,,Nhóm,6,Nhà gái,,,,`,
+test("a legacy invitation type column is ignored without shifting the other fields", () => {
+  const columns = [...coupleHeaders.slice(0, 2), "Kiểu lời mời", ...coupleHeaders.slice(2)];
+  const [row] = parseCoupleCsv(
+    coupleCsv([
+      columns,
+      [
+        "An",
+        "Bác",
+        "Giá trị cũ",
+        4,
+        "Nhà gái",
+        "Họ hàng",
+        "0900123456",
+        "Ghi chú",
+        "an@example.com",
+      ],
+    ]),
   );
-  assert.equal(individual?.values[0], "An");
-  assert.equal(individual?.values[2], "4");
-  assert.equal(individual?.values[3], "Nhà gái");
-  assert.equal(individual?.values[5], "0900123456");
-  assert.equal(individual?.expected, 4);
-  assert.equal(individual?.errors.length, 0);
-
-  assert.equal(family?.values[0], "Bình");
-  assert.equal(family?.values[2], "4");
-  assert.equal(group?.values[0], "Lớp K45");
-  assert.equal(group?.values[2], "6");
+  assert.deepEqual(row?.errors, []);
+  assert.deepEqual(row?.values, [
+    "An",
+    "Bác",
+    "4",
+    "Nhà gái",
+    "Họ hàng",
+    "0900123456",
+    "Ghi chú",
+    "an@example.com",
+  ]);
 });
 
-test("previously downloaded six-column files stay readable and warn on unspecified multi-person invitations", () => {
+test("a non-catalog group remains invalid instead of silently becoming OTHER", () => {
   const [row] = parseCoupleCsv(
     "Tên người nhận,Danh xưng,Tổng người dự kiến,Nhóm khách,SĐT,Ghi chú\nAn,Bác,4,Họ ngoại,,",
   );
-  assert.equal(row?.expected, 4);
+  assert.equal(row?.expected, null);
   assert.equal(row?.values[2], "4");
   assert.equal(row?.values[3], "");
   assert.equal(row?.values[4], "Họ ngoại");
-  assert.equal(row?.values[7], "");
   assert.ok(row?.warnings.length);
-  assert.equal(row?.errors.length, 0);
+  assert.ok(row?.errors.length);
 });

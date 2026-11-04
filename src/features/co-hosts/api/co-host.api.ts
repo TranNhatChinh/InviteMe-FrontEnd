@@ -1,9 +1,10 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
+import { groupKind, groupLabels } from "@/shared/lib/planning-groups";
 
 const planningGroupsSchema = z.object({
   isWeddingWide: z.boolean(),
-  items: z.array(z.object({ id: z.string(), name: z.string() })),
+  items: z.array(groupKind.transform((id) => ({ id, name: groupLabels[id] }))),
 });
 
 export const CO_HOST_PERMISSIONS = [

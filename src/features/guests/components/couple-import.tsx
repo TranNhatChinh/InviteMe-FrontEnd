@@ -1,51 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "@/i18n/format";
 import { useLanguage } from "@/i18n/language-context";
-import {
-  ArrowLeft,
-  Download,
-  FileSpreadsheet,
-  Upload,
-  Users,
-  Mail,
-  Armchair,
-  ChevronDown,
-} from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Upload, Armchair, ChevronDown } from "lucide-react";
 import { Button } from "@/shared/ui/button";
-import {
-  coupleExamples,
-  coupleHeaders,
-  parseCoupleCsv,
-  validateCoupleRows,
-  type CoupleRow,
-} from "../utils/couple-import";
+import { coupleHeaders, validateCoupleRows, type CoupleRow } from "../utils/couple-import";
 import { CoupleSeatingPreview } from "./couple-seating-preview";
-import { ImportGroupReview } from "./import-group-review";
-import {
-  addGroup,
-  defaultGroups,
-  findGroup,
-  resolveGroupRows,
-  unknownGroups,
-} from "../utils/group-catalog";
+import { defaultGroups, findGroup } from "../utils/group-catalog";
 import { readCoupleFile } from "../utils/read-couple-file";
-import { issuesByRow } from "../utils/import-issues";
 import { ApiError } from "@/core/api/api-error";
-import type { ImportCheckResult } from "../api/planning.api";
-
-const columns = [
-  ["recipient", "Nguyễn Văn An"],
-  ["honorific", "Bác, Cô, Anh, Chị, Bạn, Dì…"],
-  ["expected", "4"],
-  ["side", "Nhà gái"],
-  ["group", "Bạn đại học"],
-  ["phone", "Để trống nếu chưa có"],
-  ["note", "Muốn ngồi gần lối ra"],
-  ["email", "nam@example.com"],
-];
+import {
+  importBody,
+  type PlanningImportCommit,
+  type PlanningImportDecision,
+  type PlanningImportPreview,
+  type PlanningImportResult,
+} from "../api/planning.api";
+import { importActions, importSummary, type ImportActions } from "../utils/planning-import-review";
+import { PlanningImportReview } from "./planning-import-review";
 
 const rowMessageKeys: Record<string, string> = {
   "SĐT cần 7–15 chữ số; chỉ dùng dấu + ở đầu, khoảng trắng, dấu chấm, gạch nối hoặc ngoặc.":
@@ -59,181 +33,229 @@ const rowMessageKeys: Record<string, string> = {
   "Tên hoặc SĐT trùng dòng trước. Kiểm tra lại; các dòng vẫn được giữ riêng.": "duplicate",
   "Dòng cần đủ 8 ô, kể cả ô để trống.": "rowCells",
 };
+const importGuide = [
+  ["Tên người nhận", "Bắt buộc, tối đa 150 ký tự.", "Nguyễn Văn An"],
+  ["Danh xưng", "Không bắt buộc, tối đa 50 ký tự.", "Bác, Cô, Anh, Chị"],
+  [
+    "Tổng người dự kiến",
+    "Số nguyên từ 1–500, tính cả người nhận và người đi cùng. Để trống dùng 1.",
+    "Gia đình 4 người nhập 4",
+  ],
+  ["Phía khách mời", "Nhà gái, Nhà trai hoặc Chung. Để trống là Chưa xác định.", "Nhà gái"],
+  [
+    "Nhóm khách",
+    "Họ hàng, Bạn bè, Đồng nghiệp, Đối tác, Hàng xóm hoặc Khác. Để trống dùng Khác.",
+    "Họ hàng",
+  ],
+  [
+    "SĐT",
+    "Không bắt buộc. Có 7–15 chữ số; nên để ô dạng văn bản để giữ số 0 đầu.",
+    "0912 345 678 hoặc +84912345678",
+  ],
+  ["Ghi chú", "Không bắt buộc, tối đa 2.000 ký tự.", "Gia đình có trẻ nhỏ"],
+  ["Email", "Không bắt buộc; nếu có phải đúng định dạng, tối đa 254 ký tự.", "an@example.com"],
+];
 
 export function CoupleImport({
   onClose,
   onImport,
   onCheck,
-  groups,
-  groupsState = "ready",
-  onRetryGroups,
-  currentGuests,
+  weddingTitle,
+  isMock,
+  initialRows,
+  initialFilename,
 }: {
   onClose: () => void;
-  onImport?: (rows: CoupleRow[]) => Promise<void>;
-  onCheck?: (rows: CoupleRow[], signal?: AbortSignal) => Promise<ImportCheckResult>;
-  /** Group names already in the wedding, so rows naming them are not reported as unknown. */
-  groups?: readonly string[];
-  /** Until the wedding's groups are loaded, every existing group would look unknown, so nothing is asked or imported. */
-  groupsState?: "loading" | "error" | "ready";
-  onRetryGroups?: () => void;
-  /** The wedding's current guests, shown next to the file check to compare duplicates. */
-  currentGuests?: ReactNode;
+  onImport?: (input: PlanningImportCommit) => Promise<PlanningImportResult>;
+  onCheck?: (
+    rows: CoupleRow[],
+    decisions?: PlanningImportDecision[],
+  ) => Promise<PlanningImportPreview>;
+  weddingTitle?: string;
+  isMock?: boolean;
+  initialRows?: CoupleRow[];
+  initialFilename?: string;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "importPage" });
-  const { t: tx } = useTranslation("guestTools", { keyPrefix: "importPage" });
   const { language } = useLanguage();
   const input = useRef<HTMLInputElement>(null);
   const request = useRef(0);
-  const [rows, setRows] = useState<CoupleRow[] | null>(null);
-  // Attention level of each line when the file was read (0 = error, 1 = warning): keeps the list order stable while
-  // the couple fixes rows in place, so a row does not jump away mid-edit.
-  const [fileLevels, setFileLevels] = useState<Record<number, number>>({});
-  const [filename, setFilename] = useState("");
+  const [rows, setRows] = useState<CoupleRow[] | null>(initialRows ?? null);
+  const [filename, setFilename] = useState(initialFilename ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [seating, setSeating] = useState(false);
-  const [addedGroups, setAddedGroups] = useState<string[]>([]);
-  const catalog = useMemo(
-    () =>
-      [...defaultGroups, ...(groups ?? []), ...addedGroups].reduce<string[]>(
-        (list, label) => (findGroup(label, list) ? list : [...list, label]),
-        [],
-      ),
-    [groups, addedGroups],
-  );
+  const catalog = defaultGroups;
   const [saving, setSaving] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<number, string[]>>({});
-  const [checkState, setCheckState] = useState<{
-    key: string;
-    result: ImportCheckResult | null;
-    failed: boolean;
-  }>({
-    key: "",
-    result: null,
-    failed: false,
-  });
-
-  const normalizedRows = useMemo(() => {
-    return rows?.map((row) => {
-      const values = [...row.values];
-      values[4] = findGroup(values[4] ?? "", catalog) ?? values[4] ?? "";
-      return { ...row, values };
+  const [excluded, setExcluded] = useState<Set<number>>(new Set());
+  const [checked, setChecked] = useState<{
+    signature: string;
+    value: PlanningImportPreview;
+  } | null>(null);
+  const previousCheck = useRef<{
+    rowValues: Record<number, string>;
+    value: PlanningImportPreview;
+  } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [failedCheck, setFailedCheck] = useState<string | null>(null);
+  const [actions, setActions] = useState<ImportActions>({});
+  const [updates, setUpdates] = useState<Record<number, PlanningImportDecision>>({});
+  const [completed, setCompleted] = useState<PlanningImportResult | null>(null);
+  const [uncertain, setUncertain] = useState(false);
+  const submitted = useRef<PlanningImportCommit | null>(null);
+  const activeRows = rows?.filter((row) => !excluded.has(row.line)) ?? [];
+  const checkRows = activeRows.filter((row) => !row.errors.length);
+  const signatureFor = (nextActions: typeof actions, nextUpdates: typeof updates) =>
+    JSON.stringify({
+      rows: activeRows.map((row) => ({ line: row.line, values: row.values })),
+      decisions: activeRows.map((row) =>
+        nextActions[row.line] === "UPDATE" ? nextUpdates[row.line] : nextActions[row.line],
+      ),
     });
-  }, [rows, catalog]);
-
-  const rowsWithoutFormatErrors = useMemo(
-    () => normalizedRows?.filter((r) => !r.errors.length) ?? [],
-    [normalizedRows],
-  );
-
-  const checkKey = useMemo(
-    () =>
-      rowsWithoutFormatErrors.length
-        ? JSON.stringify(rowsWithoutFormatErrors.map((r) => r.values))
-        : "",
-    [rowsWithoutFormatErrors],
-  );
-
-  const checking = Boolean(
-    onCheck && rowsWithoutFormatErrors.length > 0 && checkKey !== checkState.key,
-  );
-  const checkResult = checkKey && checkKey === checkState.key ? checkState.result : null;
-
-  // The dry run is what reports duplicates against the wedding; without it the import is not offered.
-  const checkFailed =
-    Boolean(onCheck) && checkKey !== "" && checkKey === checkState.key && checkState.failed;
-
+  const signature = signatureFor(actions, updates);
+  const latestSignature = useRef(signature);
   useEffect(() => {
-    // No reset when every row has a format error: checkKey is then "", so an older result is never shown.
-    if (!onCheck || !rowsWithoutFormatErrors.length || checkKey === checkState.key) return;
-
-    const key = checkKey;
-
-    const controller = new AbortController();
-    onCheck(rowsWithoutFormatErrors, controller.signal)
-      .then((res) => {
-        if (!controller.signal.aborted) {
-          setCheckState({ key, result: res, failed: false });
+    latestSignature.current = signature;
+  }, [signature]);
+  const preview = checked?.signature === signature ? checked.value : null;
+  const summary = preview ? importSummary(activeRows, preview, actions) : null;
+  const canCheck = checkRows.length > 0;
+  const hasLocalErrors = activeRows.some((row) => row.errors.length > 0);
+  function rowStatus(row: CoupleRow) {
+    if (excluded.has(row.line)) return "Đã loại";
+    if (
+      row.errors.length ||
+      preview?.errors.some((issue) => issue.rowNumber === row.line) ||
+      serverErrors[row.line]?.length
+    )
+      return "Lỗi";
+    if (!preview) return canCheck ? "Đang kiểm tra" : "Chờ sửa dữ liệu";
+    if (actions[row.line] === "SKIP") return "Bỏ qua";
+    const check = preview.rows.find((item) => item.rowNumber === row.line);
+    if (check?.status === "NEED_DECISION")
+      return actions[row.line] ? "Đã chọn tạo riêng" : "Cần quyết định";
+    return check?.status === "WARNING" || row.warnings.length ? "Cảnh báo" : "Khách mới";
+  }
+  async function check() {
+    if (!onCheck || !canCheck || checking) return;
+    const source = signature;
+    setChecking(true);
+    setFailedCheck(null);
+    setError("");
+    try {
+      const value = await onCheck(
+        checkRows,
+        checkRows.flatMap((row): PlanningImportDecision[] => {
+          const action = actions[row.line];
+          if (action === "UPDATE") {
+            const decision = updates[row.line];
+            return decision ? [decision] : [];
+          }
+          return action ? [{ rowNumber: row.line, action }] : [];
+        }),
+      );
+      if (latestSignature.current !== source) return;
+      const next = importActions(value);
+      // Preserve decisions only for rows whose candidates/diffs have not changed.
+      const rowValues = Object.fromEntries(
+        checkRows.map((row) => [row.line, JSON.stringify(row.values)]),
+      );
+      if (previousCheck.current)
+        for (const row of value.rows) {
+          const action = actions[row.rowNumber];
+          if (
+            previousCheck.current.rowValues[row.rowNumber] === rowValues[row.rowNumber] &&
+            JSON.stringify(row) ===
+              JSON.stringify(
+                previousCheck.current.value.rows.find((old) => old.rowNumber === row.rowNumber),
+              ) &&
+            action
+          )
+            next[row.rowNumber] = action;
         }
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setCheckState({ key, result: null, failed: true });
-        }
-      });
-    return () => {
-      controller.abort();
-    };
-  }, [onCheck, rowsWithoutFormatErrors, checkKey, checkState.key]);
-
-  const skippedByRow = useMemo(() => issuesByRow(checkResult?.skipped, t), [checkResult, t]);
-  const checkErrorsByRow = useMemo(() => issuesByRow(checkResult?.errors, t), [checkResult, t]);
-  const checkWarningsByRow = useMemo(() => issuesByRow(checkResult?.warnings, t), [checkResult, t]);
-  const countRows = (map: Record<number, string[]>) =>
-    Object.keys(map).filter((row) => row !== "0").length;
-  // Row 0 = issues about the whole file (for example more than 500 rows), not about one line.
-  const fileIssues = [...new Set([...(checkErrorsByRow[0] ?? []), ...(serverErrors[0] ?? [])])];
-
-  const importableRows = useMemo(() => {
-    if (!normalizedRows) return [];
-    return normalizedRows.filter((row) => {
-      if (row.errors.length > 0) return false;
-      if (checkErrorsByRow[row.line]?.length) return false;
-      if (serverErrors[row.line]?.length) return false;
-      if (row.values[4] && !findGroup(row.values[4], catalog)) return false;
-      return true;
-    });
-  }, [normalizedRows, checkErrorsByRow, serverErrors, catalog]);
-
-  const toCreateRows = useMemo(() => {
-    return importableRows.filter((r) => !skippedByRow[r.line]?.length);
-  }, [importableRows, skippedByRow]);
-
-  const toCreateRecipients = toCreateRows.length;
-  const toCreateGuests = toCreateRows.reduce((sum, r) => sum + (r.expected ?? 1), 0);
-
-  const errorRowCount = useMemo(() => {
-    if (!rows) return 0;
-    return rows.filter(
-      (r) =>
-        r.errors.length > 0 ||
-        Boolean(checkErrorsByRow[r.line]?.length) ||
-        Boolean(serverErrors[r.line]?.length),
-    ).length;
-  }, [rows, checkErrorsByRow, serverErrors]);
-
-  // Rows that need the couple's attention come first: errors, then warnings, then skipped rows, then valid ones,
-  // each level in spreadsheet order. Levels come from the file as read and from the server checks (duplicates against
-  // the current guest list), never from what is being typed, so the row being edited stays where it is.
-  const orderedRows = useMemo(() => {
-    if (!rows) return [];
-    const level = (row: CoupleRow) => {
-      if (checkErrorsByRow[row.line]?.length || serverErrors[row.line]?.length) return 0;
-      if (checkWarningsByRow[row.line]?.length) return Math.min(1, fileLevels[row.line] ?? 1);
-      const fromFile = fileLevels[row.line];
-      if (fromFile !== undefined) return fromFile;
-      if (skippedByRow[row.line]?.length) return 2;
-      return 3;
-    };
-    return rows
-      .map((row) => ({ row, level: level(row) }))
-      .sort((a, b) => a.level - b.level || a.row.line - b.row.line)
-      .map((item) => item.row);
-  }, [rows, fileLevels, checkErrorsByRow, checkWarningsByRow, serverErrors, skippedByRow]);
-
+      previousCheck.current = { rowValues, value };
+      setActions(next);
+      setChecked({ signature: source, value });
+      setServerErrors({});
+      if (value.errors.length)
+        setError("Có dòng bị máy chủ từ chối. Sửa hoặc loại dòng đó rồi kiểm tra lại.");
+    } catch {
+      if (latestSignature.current !== source) return;
+      setFailedCheck(source);
+      setError("Không kiểm tra được danh sách. File và lựa chọn vẫn được giữ; hãy thử lại.");
+    } finally {
+      setChecking(false);
+    }
+  }
+  const autoCheck = useEffectEvent(() => {
+    void check();
+  });
+  const hasCheck = !!onCheck;
+  useEffect(() => {
+    if (
+      !hasCheck ||
+      !canCheck ||
+      busy ||
+      saving ||
+      checking ||
+      completed ||
+      uncertain ||
+      preview ||
+      failedCheck === signature
+    )
+      return;
+    const timer = window.setTimeout(() => autoCheck(), 600);
+    return () => window.clearTimeout(timer);
+  }, [
+    hasCheck,
+    canCheck,
+    busy,
+    saving,
+    checking,
+    completed,
+    uncertain,
+    preview,
+    failedCheck,
+    signature,
+  ]);
   async function submit() {
-    if (!onImport || !importableRows.length || saving) return;
+    if (!onImport || saving) return;
+    if (!uncertain) {
+      if (
+        !preview?.previewToken ||
+        !summary ||
+        summary.unresolved ||
+        summary.overQuota ||
+        !canCheck ||
+        hasLocalErrors ||
+        preview.errors.length
+      )
+        return;
+      submitted.current = {
+        ...importBody(activeRows),
+        previewToken: preview.previewToken,
+        decisions: activeRows.flatMap((row) => {
+          const action = actions[row.line];
+          if (action === "UPDATE") {
+            const decision = updates[row.line];
+            return decision ? [decision] : [];
+          }
+          return action ? [{ rowNumber: row.line, action }] : [];
+        }),
+      };
+    }
+    if (!submitted.current) return;
     setSaving(true);
     setError("");
     setServerErrors({});
     try {
-      await onImport(importableRows);
+      setCompleted(await onImport(submitted.current));
+      setUncertain(false);
     } catch (e) {
-      let issues: Record<number, string[]> = {};
-      if (e instanceof ApiError && e.rowIssues.length) issues = issuesByRow(e.rowIssues, t);
-      else if (e instanceof ApiError)
+      const issues: Record<number, string[]> = {};
+      if (e instanceof ApiError)
         for (const key of Object.keys(e.fieldErrors)) {
           const match = /^rows\.(\d+)\.(\w+)$/.exec(key);
           if (match)
@@ -244,45 +266,36 @@ export function CoupleImport({
             );
         }
       setServerErrors(issues);
+      if (
+        !(e instanceof ApiError) ||
+        e.status === 0 ||
+        e.status >= 500 ||
+        e.code === "invalid-response"
+      )
+        setUncertain(true);
+      else {
+        setUncertain(false);
+        if (e.status === 409) setChecked(null);
+      }
       setError(
         Object.keys(issues).length
           ? t("errors.savedNone")
-          : e instanceof ApiError && e.backendCode === "PLAN_LIMIT_REACHED"
-            ? t("errors.planLimit")
+          : e instanceof ApiError && e.status === 409
+            ? "Danh sách hoặc quota đã đổi. Kiểm tra lại ngay bên dưới; file và lựa chọn vẫn được giữ."
             : e instanceof ApiError && e.status === 403
-              ? t("errors.forbidden")
-              : e instanceof ApiError && e.status === 409
-                ? t("errors.conflict")
-                : t("errors.retry"),
+              ? "Bạn không còn đủ quyền hoặc quota để import. Kiểm tra quyền và kiểm tra lại danh sách."
+              : t("errors.retry"),
       );
     } finally {
       setSaving(false);
     }
   }
-
-  async function trySample(file = "khach-moi-20-nguoi.csv") {
-    setServerErrors({});
-    const id = ++request.current;
-    setBusy(true);
-    setError("");
-    setRows(null);
-    setSeating(false);
-    try {
-      const response = await fetch(`/templates/${file}`, { cache: "no-store" });
-      if (!response.ok) throw new Error(t("errors.missingSample"));
-      const content = await response.text();
-      if (id !== request.current) return;
-      setRows(parseCoupleCsv(content));
-      setFilename(file);
-    } catch {
-      if (id === request.current) setError(t("errors.missingFile"));
-    } finally {
-      if (id === request.current) setBusy(false);
-    }
-  }
-
   async function choose(file?: File) {
     if (!file) return;
+    setFailedCheck(null);
+    setExcluded(new Set());
+    setChecked(null);
+    setActions({});
     setServerErrors({});
     const id = ++request.current;
     setError("");
@@ -304,45 +317,14 @@ export function CoupleImport({
       const data = await readCoupleFile(file);
       if (id !== request.current) return;
       setRows(data);
-      setFileLevels(
-        Object.fromEntries(
-          data.flatMap((row) =>
-            row.errors.length ? [[row.line, 0]] : row.warnings.length ? [[row.line, 1]] : [],
-          ),
-        ),
-      );
     } catch {
       if (id === request.current) setError(t("errors.readFile"));
     } finally {
       if (id === request.current) setBusy(false);
     }
   }
-
   const valid = rows?.filter((row) => !row.errors.length) ?? [];
-  // importableRows already leaves out rows whose group is not in the catalog yet, so the groups to confirm come from
-  // every row that would otherwise be imported; until they are confirmed those rows stay out of the import.
-  const pendingGroups =
-    groupsState !== "ready"
-      ? []
-      : unknownGroups(
-          rowsWithoutFormatErrors.filter(
-            (row) => !checkErrorsByRow[row.line]?.length && !serverErrors[row.line]?.length,
-          ),
-          catalog,
-        );
-  const total = toCreateGuests;
-
-  function resolve(key: string, label: string) {
-    if (rows) setRows(validateCoupleRows(resolveGroupRows(rows, key, label, catalog)));
-  }
-
-  function create(key: string, label: string) {
-    if (!rows) return;
-    const result = addGroup(catalog, label);
-    setAddedGroups((list) => [...list, result.label]);
-    setRows(validateCoupleRows(resolveGroupRows(rows, key, result.label, result.catalog)));
-  }
-
+  const total = valid.reduce((sum, row) => sum + (row.expected ?? 0), 0);
   function setSide(line: number, side: string) {
     if (rows)
       setRows(
@@ -356,12 +338,15 @@ export function CoupleImport({
         ),
       );
   }
-
+  const normalizedRows = rows?.map((row) => {
+    const values = [...row.values];
+    values[4] = findGroup(values[4] ?? "", catalog) ?? values[4] ?? "";
+    return { ...row, values };
+  });
   const localizeRowMessage = (message: string) => {
     const key = rowMessageKeys[message];
     return key ? t(`validation.${key}`) : message;
   };
-
   const headerLabels: Record<string, string> = {
     "Tên người nhận": t("fields.recipientName"),
     "Danh xưng": t("fields.honorific"),
@@ -372,88 +357,238 @@ export function CoupleImport({
     "Ghi chú": t("fields.note"),
     Email: t("fields.email"),
   };
-
   const translatedSide = (value: string) =>
     ({ "Nhà gái": t("enums.bride"), "Nhà trai": t("enums.groom"), Chung: t("enums.shared") })[
       value
     ] ?? value;
-
-  if (seating && importableRows.length)
-    return <CoupleSeatingPreview rows={importableRows} onBack={() => setSeating(false)} />;
-
+  if (completed)
+    return (
+      <section
+        data-guest-import
+        aria-label="Kết quả import"
+        className="space-y-4 rounded-xl border p-6"
+      >
+        <h2 className="text-xl font-semibold">Import hoàn tất</h2>
+        <p>
+          Đã tạo {completed.createdGuestCount} lời mời / {completed.createdPlaceCount} suất; bỏ qua{" "}
+          {completed.skippedCount + excluded.size} dòng; cập nhật {completed.updatedGuestCount ?? 0}{" "}
+          khách; không thay đổi {completed.noChangeCount ?? 0} dòng;{" "}
+          {(completed.tasks ?? []).length} việc cần xử lý.
+        </p>
+        <ul>
+          {completed.items.map((item) => (
+            <li key={item.rowNumber}>
+              Dòng {item.rowNumber}: đã tạo lời mời — {item.expectedPeople} suất
+            </li>
+          ))}
+          {(completed.updated ?? []).map((item) => (
+            <li key={item.rowNumber}>
+              Dòng {item.rowNumber}: đã cập nhật khách — {item.expectedPeople} suất
+            </li>
+          ))}
+          {(completed.noChange ?? []).map((item) => (
+            <li key={item.rowNumber}>Dòng {item.rowNumber}: không thay đổi</li>
+          ))}
+          {completed.skipped.map((item) => (
+            <li key={item.rowNumber}>Dòng {item.rowNumber}: đã bỏ qua, guest cũ không đổi</li>
+          ))}
+          {[...excluded].map((line) => (
+            <li key={line}>Dòng {line}: đã bỏ qua</li>
+          ))}
+        </ul>
+        {(completed.tasks ?? []).length > 0 && (
+          <div className="space-y-2">
+            <h3 className="font-semibold">Việc cần xử lý sau Import</h3>
+            {completed.tasks.map((task) => (
+              <div key={task.id} className="rounded border p-3">
+                <strong>{task.recipientName}</strong>
+                <p>{task.reason}</p>
+                <a className="underline" href={task.path}>
+                  Mở{" "}
+                  {task.kind === "SEATING"
+                    ? "xếp bàn"
+                    : task.kind === "RSVP"
+                      ? "RSVP"
+                      : "gửi thiệp"}
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button onClick={onClose}>Đóng và xem danh sách khách</Button>
+      </section>
+    );
+  if (uncertain)
+    return (
+      <section
+        data-guest-import
+        aria-label="Chưa rõ kết quả import"
+        className="space-y-4 rounded-xl border p-6"
+      >
+        <p>
+          Chưa xác nhận được kết quả lần gửi. File và lựa chọn vẫn được giữ. Bấm thử lại để nhận kết
+          quả của đúng lần gửi đó.
+        </p>
+        <Button disabled={saving} onClick={() => void submit()}>
+          {saving ? "Đang kiểm tra kết quả…" : "Thử lại lần gửi trước"}
+        </Button>
+      </section>
+    );
+  if (onImport && rows)
+    return (
+      <fieldset data-guest-import disabled={saving} className="min-w-0">
+        <PlanningImportReview
+          rows={rows}
+          filename={filename}
+          preview={preview}
+          actions={actions}
+          updates={updates}
+          onUpdate={async (decision) => {
+            if (!onCheck) return ["Không thể kiểm tra thay đổi lúc này."];
+            const nextUpdates = { ...updates, [decision.rowNumber]: decision };
+            const nextActions = { ...actions, [decision.rowNumber]: "UPDATE" as const };
+            const decisions = checkRows.flatMap((row): PlanningImportDecision[] => {
+              const action = nextActions[row.line];
+              if (action === "UPDATE") {
+                const update = nextUpdates[row.line];
+                return update ? [update] : [];
+              }
+              return action ? [{ rowNumber: row.line, action }] : [];
+            });
+            const value = await onCheck(checkRows, decisions);
+            if (latestSignature.current !== signature)
+              return ["Danh sách đã thay đổi. Vui lòng thử lại."];
+            const errors = value.errors
+              .filter((issue) => issue.rowNumber === decision.rowNumber || issue.rowNumber === 0)
+              .map((issue) => issue.message);
+            if (errors.length) return [...new Set(errors)];
+            if (!value.previewToken) return ["Không thể kiểm tra thay đổi. Vui lòng thử lại."];
+            setUpdates(nextUpdates);
+            setActions(nextActions);
+            setChecked({ signature: signatureFor(nextActions, nextUpdates), value });
+            setServerErrors({});
+            setFailedCheck(null);
+            setError("");
+            return [];
+          }}
+          excluded={excluded}
+          serverErrors={serverErrors}
+          checking={checking}
+          failedCheck={failedCheck === signature}
+          saving={saving}
+          error={error}
+          weddingTitle={weddingTitle}
+          isMock={isMock}
+          onEdit={(line, values) => {
+            const old = rows.find((row) => row.line === line);
+            if (old && JSON.stringify(old.values) === JSON.stringify(values)) return;
+            setRows(
+              validateCoupleRows(rows.map((row) => (row.line === line ? { ...row, values } : row))),
+            );
+            setExcluded((previous) => {
+              const next = new Set(previous);
+              next.delete(line);
+              return next;
+            });
+            setActions((previous) => {
+              const next = { ...previous };
+              delete next[line];
+              return next;
+            });
+            setServerErrors((previous) => ({ ...previous, [line]: [] }));
+            setFailedCheck(null);
+          }}
+          onSkip={(row) => {
+            if (
+              row.errors.length ||
+              serverErrors[row.line]?.length ||
+              preview?.errors.some((issue) => issue.rowNumber === row.line) ||
+              !preview?.rows.some((item) => item.rowNumber === row.line)
+            )
+              setExcluded((previous) => new Set([...previous, row.line]));
+            else setActions((previous) => ({ ...previous, [row.line]: "SKIP" }));
+          }}
+          onRestore={(row) => {
+            if (excluded.has(row.line))
+              setExcluded((previous) => {
+                const next = new Set(previous);
+                next.delete(row.line);
+                return next;
+              });
+            else
+              setActions((previous) => {
+                const next = { ...previous };
+                if (
+                  preview?.rows.find((item) => item.rowNumber === row.line)?.status ===
+                  "NEED_DECISION"
+                )
+                  delete next[row.line];
+                else next[row.line] = "CREATE_SEPARATE";
+                return next;
+              });
+          }}
+          onCreateSeparate={(line) =>
+            setActions((previous) => ({ ...previous, [line]: "CREATE_SEPARATE" }))
+          }
+          onSkipExact={() =>
+            setActions((previous) => ({
+              ...previous,
+              ...Object.fromEntries(
+                preview?.rows
+                  .filter((row) =>
+                    row.reasons.some((reason) => reason.startsWith("EXACT_DUPLICATE")),
+                  )
+                  .map((row) => [row.rowNumber, "SKIP"]) ?? [],
+              ),
+            }))
+          }
+          onRestart={() => {
+            request.current++;
+            setRows(null);
+            setFilename("");
+            setChecked(null);
+            setExcluded(new Set());
+            setActions({});
+            setUpdates({});
+            setServerErrors({});
+            setFailedCheck(null);
+            setError("");
+            previousCheck.current = null;
+            submitted.current = null;
+          }}
+          onSubmit={() => void submit()}
+          onRetry={() => void check()}
+        />
+      </fieldset>
+    );
+  if (seating && normalizedRows)
+    return <CoupleSeatingPreview rows={normalizedRows} onBack={() => setSeating(false)} />;
   return (
-    <fieldset disabled={saving} className="min-w-0 space-y-6">
+    <fieldset
+      data-guest-import={onImport ? "" : undefined}
+      disabled={saving}
+      className="min-w-0 space-y-6"
+    >
       <Button variant="ghost" onClick={onClose}>
         <ArrowLeft /> {t("headerBack")}
       </Button>
       <header className="space-y-3">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">{t("eyebrow")}</p>
-        <h1 className="font-serif text-3xl sm:text-4xl">{t("title")}</h1>
-        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{t("intro")}</p>
+        <h1 className="font-serif text-3xl sm:text-4xl">Nhập khách mời</h1>
       </header>
-      <ol className="grid gap-3 sm:grid-cols-3" aria-label={t("stepsLabel")}>
-        {[t("stepTemplate"), t("stepFill"), onImport ? t("stepImport") : t("stepReview")].map(
-          (label, i) => (
-            <li
-              key={label}
-              className="flex items-center gap-3 rounded-xl border bg-card p-4 text-sm"
-            >
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 font-medium text-primary">
-                {i + 1}
-              </span>
-              {label}
-            </li>
-          ),
-        )}
-      </ol>
       <div className="grid gap-5 lg:grid-cols-2">
         <section
           className="space-y-5 rounded-2xl border bg-card p-6 sm:p-8"
           aria-labelledby="sample-title"
         >
           <FileSpreadsheet className="size-8 text-primary" />
-          <div>
-            <h2 id="sample-title" className="font-serif text-2xl">
-              {t("sampleTitle")}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{t("sampleDescription")}</p>
-          </div>
+          <h2 id="sample-title" className="font-serif text-2xl">
+            Mẫu danh sách khách
+          </h2>
           <Button asChild>
             <a href="/templates/khach-moi.xlsx" download>
-              <Download /> {t("downloadExcel")}
+              <Download /> Tải mẫu Excel
             </a>
           </Button>
-          <p className="text-xs leading-5 text-muted-foreground">{t("excelHelp")}</p>
-          <a
-            href="/templates/khach-moi.csv"
-            download
-            className="inline-block text-xs underline underline-offset-4"
-          >
-            {t("downloadCsv")}
-          </a>
-          <a className="inline-block text-sm underline underline-offset-4" href="#couple-example">
-            {t("showExample")}
-          </a>
-          <div className="border-t pt-4">
-            <Button variant="outline" disabled={busy} onClick={() => void trySample()}>
-              {t("trySample")}
-            </Button>
-            <Button
-              className="mt-2"
-              variant="outline"
-              disabled={busy}
-              onClick={() => void trySample("khach-moi-can-xu-ly.csv")}
-            >
-              {t("tryUnknownGroups")}
-            </Button>
-            <a
-              href="/templates/khach-moi-20-nguoi.csv"
-              download
-              className="mt-3 block text-xs underline underline-offset-4"
-            >
-              {t("downloadSampleData")}
-            </a>
-          </div>
         </section>
         <section
           aria-labelledby="upload-title"
@@ -501,9 +636,50 @@ export function CoupleImport({
               event.target.value = "";
             }}
           />
-          <p className="mt-4 text-xs leading-5 text-muted-foreground">{t("localOnly")}</p>
         </section>
       </div>
+      <details className="group rounded-xl border bg-card">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 font-medium">
+          Hướng dẫn điền file
+          <ChevronDown
+            aria-hidden="true"
+            className="size-4 transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <div className="space-y-4 border-t p-4">
+          <p className="text-sm text-muted-foreground">
+            Giữ nguyên tên và thứ tự 8 cột trong mẫu. Mỗi dòng là một lời mời; thay các dòng ví dụ
+            bằng danh sách của bạn. File CSV/XLSX tối đa 5 MB và 500 dòng khách.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px] text-left text-sm">
+              <thead>
+                <tr>
+                  <th className="p-2">Cột</th>
+                  <th className="p-2">Cách điền</th>
+                  <th className="p-2">Ví dụ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importGuide.map(([name, description, example]) => (
+                  <tr key={name} className="border-t align-top">
+                    <th scope="row" className="p-2 font-medium">
+                      {name}
+                    </th>
+                    <td className="p-2">{description}</td>
+                    <td className="p-2">{example}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Sau khi chọn file, hệ thống tự kiểm tra và hiển thị dòng lỗi hoặc nghi trùng. Bạn có thể
+            sửa, loại dòng, chọn bỏ qua hoặc tạo lời mời riêng. Chỉ khi bấm Xác nhận import thì dữ
+            liệu mới được lưu; khách đã có không bị sửa.
+          </p>
+        </div>
+      </details>
       {error && (
         <p
           role="alert"
@@ -512,100 +688,20 @@ export function CoupleImport({
           {error}
         </p>
       )}
-      {rows && groupsState === "loading" && (
-        <p role="status" className="rounded-2xl border bg-card p-5 text-sm text-muted-foreground">
-          {t("groupsLoading")}
-        </p>
-      )}
-      {rows && groupsState === "error" && (
-        <div
-          role="alert"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-5 text-sm"
-        >
-          <span className="text-destructive">{t("groupsLoadFailed")}</span>
-          {onRetryGroups && (
-            <Button type="button" variant="outline" size="sm" onClick={onRetryGroups}>
-              {t("groupsRetry")}
-            </Button>
-          )}
-        </div>
-      )}
-      {rows && groupsState === "ready" && (
-        <ImportGroupReview rows={rows} catalog={catalog} onResolve={resolve} onCreate={create} />
-      )}
-      {rows && currentGuests}
       {rows && (
         <section
           className="space-y-4 rounded-2xl border bg-card p-5"
           aria-label={t("previewResult")}
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="break-all font-serif text-2xl">
-              {t("previewResult")} · {filename}
-            </h2>
-            {checking && (
-              <span className="text-xs text-muted-foreground animate-pulse">{t("checking")}</span>
-            )}
-          </div>
+          <h2 className="break-all font-serif text-2xl">
+            {t("previewResult")} · {filename}
+          </h2>
           <p role="status" className="text-sm">
-            {checkResult ? (
-              [
-                toCreateRecipients > 0 && (
-                  <span key="summary" className="font-medium text-foreground">
-                    {t("checkSummary", {
-                      recipients: formatNumber(toCreateRecipients, language),
-                      guests: formatNumber(toCreateGuests, language),
-                    })}
-                  </span>
-                ),
-                countRows(skippedByRow) > 0 && (
-                  <span key="skipped" className="text-muted-foreground">
-                    {t("checkSkipped", { count: formatNumber(countRows(skippedByRow), language) })}
-                  </span>
-                ),
-                errorRowCount > 0 && (
-                  <span key="errors" className="text-destructive font-medium">
-                    {t("checkErrorRows", {
-                      count: formatNumber(errorRowCount, language),
-                    })}
-                  </span>
-                ),
-                countRows(checkWarningsByRow) > 0 && (
-                  <span key="warnings" className="text-amber-800">
-                    {t("checkWarningRows", {
-                      count: formatNumber(countRows(checkWarningsByRow), language),
-                    })}
-                  </span>
-                ),
-                pendingGroups.length > 0 && (
-                  <span key="groups" className="text-amber-800">
-                    {t("groupsPending", { count: formatNumber(pendingGroups.length, language) })}
-                  </span>
-                ),
-              ]
-                .filter(Boolean)
-                .flatMap((part, index) => (index ? [" · ", part] : [part]))
-            ) : (
-              <>
-                {t("validRows", { count: formatNumber(valid.length, language) })} ·{" "}
-                {t("expectedTotal", { count: formatNumber(total, language) })} ·{" "}
-                {t("invalidRows", { count: formatNumber(rows.length - valid.length, language) })} ·{" "}
-                {t("groupsPending", { count: formatNumber(pendingGroups.length, language) })}.{" "}
-                {t("invalidRowsNote")}
-              </>
-            )}
+            {t("validRows", { count: formatNumber(valid.length, language) })} ·{" "}
+            {t("expectedTotal", { count: formatNumber(total, language) })} ·{" "}
+            {t("invalidRows", { count: formatNumber(rows.length - valid.length, language) })} ·{" "}
+            {t("invalidRowsNote")}
           </p>
-          {fileIssues.length > 0 && (
-            <div
-              role="alert"
-              className="rounded-xl border border-destructive/30 p-3 text-sm text-destructive"
-            >
-              <p className="font-medium">{t("fileIssues")}</p>
-              {fileIssues.map((message) => (
-                <p key={message}>{message}</p>
-              ))}
-            </div>
-          )}
           <div className="max-h-96 overflow-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="sticky top-0 bg-muted">
@@ -622,9 +718,27 @@ export function CoupleImport({
                 </tr>
               </thead>
               <tbody>
-                {orderedRows.map((row) => (
+                {rows.map((row) => (
                   <tr className="border-t align-top" key={row.line}>
-                    <td className="p-3">{formatNumber(row.line, language)}</td>
+                    <td className="p-3">
+                      {formatNumber(row.line, language)}
+                      {onImport && (
+                        <label className="mt-2 block text-xs">
+                          <input
+                            type="checkbox"
+                            aria-label={`Loại dòng ${row.line}`}
+                            checked={excluded.has(row.line)}
+                            onChange={(event) => {
+                              const next = new Set(excluded);
+                              if (event.target.checked) next.add(row.line);
+                              else next.delete(row.line);
+                              setExcluded(next);
+                            }}
+                          />{" "}
+                          Loại dòng
+                        </label>
+                      )}
+                    </td>
                     {coupleHeaders.map((h, i) => (
                       <td key={h} className="max-w-64 break-words p-3">
                         {i === 3 ? (
@@ -644,6 +758,38 @@ export function CoupleImport({
                             {["Nhà gái", "Nhà trai", "Chung"].map((label) => (
                               <option key={label} value={label}>
                                 {translatedSide(label)}
+                              </option>
+                            ))}
+                          </select>
+                        ) : onImport && i === 4 ? (
+                          <select
+                            aria-label={`${headerLabels[h] ?? h} ${formatNumber(row.line, language)}`}
+                            className="w-36 rounded border bg-background p-2"
+                            value={row.values[i] ?? ""}
+                            onChange={(event) =>
+                              setRows(
+                                validateCoupleRows(
+                                  rows.map((r) =>
+                                    r.line === row.line
+                                      ? {
+                                          ...r,
+                                          values: r.values.map((value, index) =>
+                                            index === 4 ? event.target.value : value,
+                                          ),
+                                        }
+                                      : r,
+                                  ),
+                                ),
+                              )
+                            }
+                          >
+                            <option value="">Khác (mặc định)</option>
+                            {row.values[4] && !findGroup(row.values[4], catalog) && (
+                              <option value={row.values[4]}>{row.values[4]} — không hợp lệ</option>
+                            )}
+                            {catalog.map((label) => (
+                              <option key={label} value={label}>
+                                {label}
                               </option>
                             ))}
                           </select>
@@ -678,24 +824,28 @@ export function CoupleImport({
                       </td>
                     ))}
                     <td className="min-w-52 p-3">
+                      {onImport && (
+                        <span className="mb-2 inline-block rounded bg-muted px-2 py-1 text-xs font-semibold">
+                          {rowStatus(row)}
+                        </span>
+                      )}
+                      {excluded.has(row.line) && <p>Đã loại khỏi lần import này.</p>}
+                      {preview?.errors
+                        .filter((issue) => issue.rowNumber === row.line)
+                        .map((issue) => (
+                          <p key={`${issue.field}-${issue.code}`} className="text-destructive">
+                            Máy chủ từ chối {headerLabels[issue.field] ?? issue.field}; sửa hoặc
+                            loại dòng.
+                          </p>
+                        ))}
                       {serverErrors[row.line]?.map((message) => (
                         <p key={message} className="text-destructive">
                           {localizeRowMessage(message)}
                         </p>
                       ))}
-                      {checkErrorsByRow[row.line]?.map((message) => (
-                        <p key={message} className="text-destructive font-medium text-xs">
-                          {message}
-                        </p>
-                      ))}
                       {row.errors.map((message) => (
                         <p key={message} className="text-destructive">
                           {localizeRowMessage(message)}
-                        </p>
-                      ))}
-                      {checkWarningsByRow[row.line]?.map((message) => (
-                        <p key={message} className="text-amber-800 text-xs">
-                          {message}
                         </p>
                       ))}
                       {row.warnings.map((message) => (
@@ -706,24 +856,10 @@ export function CoupleImport({
                       {row.values[4] && !findGroup(row.values[4], catalog) && (
                         <p className="text-amber-800">{t("unknownGroup")}</p>
                       )}
-                      {skippedByRow[row.line] && (
-                        <>
-                          <span className="inline-block rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground font-medium">
-                            {t("skippedBadge")}
-                          </span>
-                          {skippedByRow[row.line]?.map((message) => (
-                            <p key={message} className="text-xs text-muted-foreground">
-                              {message}
-                            </p>
-                          ))}
-                        </>
-                      )}
-                      {!row.errors.length &&
+                      {!onImport &&
+                        !row.errors.length &&
                         !serverErrors[row.line]?.length &&
-                        !checkErrorsByRow[row.line]?.length &&
                         !row.warnings.length &&
-                        !checkWarningsByRow[row.line]?.length &&
-                        !skippedByRow[row.line] &&
                         (!row.values[4] || !!findGroup(row.values[4], catalog)) && (
                           <span className="text-emerald-700">{t("valid")}</span>
                         )}
@@ -738,25 +874,36 @@ export function CoupleImport({
               {onImport ? t("importReview") : t("demoReview")}
             </p>
             <Button
+              aria-label={onImport ? "Xác nhận import" : undefined}
               disabled={
                 saving ||
                 busy ||
-                checking ||
-                groupsState !== "ready" ||
                 (onImport
-                  ? toCreateRecipients === 0 || checkFailed
-                  : total > 500 || importableRows.length === 0) ||
-                pendingGroups.length > 0
+                  ? !canCheck ||
+                    !preview?.previewToken ||
+                    !!preview.errors.length ||
+                    !summary ||
+                    !!summary.unresolved ||
+                    summary.overQuota
+                  : !valid.length || total > 500)
               }
               onClick={() => (onImport ? void submit() : setSeating(true))}
             >
               {onImport ? (
                 saving ? (
                   t("importing")
+                ) : !canCheck ? (
+                  "Sửa hoặc loại dòng lỗi"
+                ) : !preview ? (
+                  "Đang kiểm tra danh sách…"
+                ) : summary?.unresolved ? (
+                  "Chọn cách xử lý dòng trùng"
+                ) : !summary?.created ? (
+                  `Xác nhận bỏ qua ${summary?.skipped ?? 0} dòng`
                 ) : (
                   t("importButton", {
-                    recipients: formatNumber(toCreateRecipients, language),
-                    guests: formatNumber(toCreateGuests, language),
+                    recipients: formatNumber(summary?.created ?? 0, language),
+                    guests: formatNumber(summary?.places ?? 0, language),
                   })
                 )
               ) : (
@@ -766,145 +913,11 @@ export function CoupleImport({
               )}
             </Button>
           </div>
-          {checkFailed && (
-            <div
-              className="flex flex-wrap items-center gap-3 text-xs text-destructive"
-              role="alert"
-            >
-              <p>{t("errors.checkFailed")}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCheckState({ key: "", result: null, failed: false })}
-              >
-                {t("recheck")}
-              </Button>
-            </div>
-          )}
-          {errorRowCount > 0 && (
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              {tx("errorRowsSkipped", { rows: formatNumber(errorRowCount, language) })}
-            </p>
-          )}
-          {rows && rows.length > 0 && toCreateRecipients === 0 && countRows(skippedByRow) > 0 && (
-            <p className="text-xs text-muted-foreground">{t("allSkipped")}</p>
-          )}
-          {rows && rows.length > 0 && toCreateRecipients === 0 && countRows(skippedByRow) === 0 && (
-            <p className="text-xs text-destructive">{tx("allRowsInvalid")}</p>
-          )}
-          {pendingGroups.length > 0 && (
-            <p className="text-xs text-amber-900">
-              {t("resolveGroups", { count: formatNumber(pendingGroups.length, language) })}
-            </p>
-          )}
           {!onImport && total > 500 && (
             <p className="text-xs text-muted-foreground">{t("demoLimit")}</p>
           )}
         </section>
       )}
-      <section
-        id="couple-example"
-        className="scroll-mt-6 overflow-hidden rounded-2xl border bg-card"
-      >
-        <div className="p-5 sm:p-6">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">
-            {t("exampleEyebrow")}
-          </p>
-          <h2 className="mt-2 font-serif text-2xl">{t("exampleTitle")}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{t("exampleDescription")}</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <caption className="sr-only">{t("sampleCaption")}</caption>
-            <thead className="bg-muted">
-              <tr>
-                {coupleHeaders.map((h) => (
-                  <th key={h} scope="col" className="px-5 py-3 font-medium">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {coupleExamples.map((row) => (
-                <tr key={row[0]} className="border-t">
-                  {row.map((value, i) => (
-                    <td key={i} className="px-5 py-4">
-                      {value || <span className="text-muted-foreground">—</span>}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="grid gap-4 border-t bg-muted/30 p-5 sm:grid-cols-3">
-          {[
-            [Mail, t("exampleRecipients"), t("exampleRecipientsDescription")],
-            [Users, t("exampleNames"), t("exampleNamesDescription")],
-            [Armchair, t("exampleSeats"), t("exampleSeatsDescription")],
-          ].map(([Icon, title, description]) => {
-            const Symbol = Icon as typeof Mail;
-            return (
-              <div key={String(title)}>
-                <Symbol className="mb-2 size-5 text-primary" />
-                <p className="text-sm font-medium">{String(title)}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {String(description)}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-      <section aria-labelledby="column-guide">
-        <h2 id="column-guide" className="mb-4 font-serif text-2xl">
-          {t("columnsTitle")}
-        </h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          {columns.map(([name, example]) => (
-            <article key={name} className="rounded-xl border bg-card p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-medium">{t(`guide.${name}`)}</h3>
-                <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
-                  {name === "recipient"
-                    ? t("guide.recipientBadge")
-                    : name === "expected"
-                      ? t("guide.expectedBadge")
-                      : name === "side"
-                        ? t("guide.sideBadge")
-                        : name === "group"
-                          ? t("guide.groupBadge")
-                          : t("guide.optional")}
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                {t(`guide.${name}Description`)}
-              </p>
-              <p className="mt-3 text-sm">
-                {t("columnExample")}{" "}
-                <span className="font-medium">
-                  {t(`guide.${name}Example`, { defaultValue: example })}
-                </span>
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="rounded-2xl border bg-card p-5 sm:p-6">
-        <h2 className="mb-3 font-serif text-2xl">{t("faqTitle")}</h2>
-        {[0, 1, 2, 3, 4].map((index) => (
-          <details key={index} className="group border-t py-4">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium">
-              {t(`faq.title.${index}`)}
-              <ChevronDown className="size-4 shrink-0 group-open:rotate-180" />
-            </summary>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-              {t(`faq.answer.${index}`)}
-            </p>
-          </details>
-        ))}
-      </section>
     </fieldset>
   );
 }

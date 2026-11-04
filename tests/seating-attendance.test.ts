@@ -14,7 +14,6 @@ const party: SeatingParty = {
   id: "A",
   name: "Nguyễn Văn An",
   address: "Bác",
-  kind: "Gia đình",
   count: 4,
   group: "Họ ngoại",
   note: "",

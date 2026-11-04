@@ -126,13 +126,18 @@
       "listAria": "Danh sách chờ xếp chỗ",
       "noGuests": "Chưa có khách. Nhập danh sách để bắt đầu.",
       "allAssigned": "Đã xếp hết khách. Bạn có thể xem ở Đã xếp.",
-      "noFilterMatch": "Không có khách phù hợp bộ lọc."
+      "noFilterMatch": "Không có khách phù hợp bộ lọc.",
+      "side": {
+        "GROOM": "Nhà trai",
+        "BRIDE": "Nhà gái",
+        "MUTUAL": "Chung",
+        "UNSPECIFIED": "Chưa rõ"
+      }
     }
   },
   "closeForm": "Đóng form",
   "addGuest": "Thêm khách",
   "import": "Nhập Excel / CSV",
-  "seatingLink": "Sơ đồ bàn",
   "importPage": {
     "errors": {
       "missingSample": "Chưa tải được dữ liệu mẫu. Hãy thử lại.",
@@ -144,72 +149,18 @@
       "savedNone": "BE chưa lưu dữ liệu. Sửa các trường được đánh dấu rồi nhập lại.",
       "conflict": "Yêu cầu bị xung đột. Hãy tải lại danh sách để kiểm tra trước khi nhập lại.",
       "retry": "Chưa nhận được kết quả nhập. Giữ nguyên dữ liệu và bấm thử lại; hệ thống chống tạo trùng khi retry.",
-      "rowField": "Kiểm tra {{field}}.",
-      "planLimit": "Gói hiện tại không đủ chỗ cho số khách trong file. Nâng cấp gói hoặc bớt khách rồi nhập lại.",
-      "forbidden": "Bạn cần quyền sửa khách mời trên toàn bộ đám cưới để nhập danh sách.",
-      "checkFailed": "Chưa kiểm tra được file với danh sách hiện có (trùng SĐT, email, khách đã có). Hãy kiểm tra lại trước khi nhập."
-    },
-    "recheck": "Kiểm tra lại",
-    "checking": "Đang đối chiếu với danh sách khách hiện có…",
-    "checkSummary": "{{recipients}} thiệp sẽ thêm mới ({{guests}} khách)",
-    "checkSkipped": "{{count}} dòng bỏ qua do đã có sẵn",
-    "checkErrorRows": "{{count}} dòng cần sửa",
-    "checkWarningRows": "{{count}} dòng cần lưu ý",
-    "skippedBadge": "Đã có sẵn, sẽ bỏ qua khi thêm",
-    "fixErrorsFirst": "Sửa các dòng có chữ đỏ ngay trong bảng (hoặc trong file rồi chọn lại) trước khi lưu.",
-    "allSkipped": "Tất cả các dòng trong file đều đã có sẵn trong danh sách khách.",
-    "fileIssues": "Lỗi của cả file",
-    "result": {
-      "created": "Đã thêm {{recipients}} thiệp ({{guests}} khách).",
-      "skipped": "Bỏ qua {{count}} dòng đã có sẵn.",
-      "warnings": "{{count}} dòng có cảnh báo (trùng tên, danh xưng, nhóm đông người); kiểm tra lại trong danh sách."
-    },
-    "issues": {
-      "INVALID_ROWS": "File cần từ 1 đến 500 dòng khách.",
-      "INVALID_ROW": "Dòng trống hoặc không đọc được.",
-      "INVALID_ROW_NUMBER": "Số dòng không hợp lệ hoặc bị trùng.",
-      "INVALID_TEXT": "Nội dung ô quá dài hoặc bắt đầu bằng ký hiệu công thức (=, +, @, -).",
-      "INVALID_TEXT_recipientName": "Tên người nhận cần từ 1 đến 150 ký tự và không bắt đầu bằng =, +, @ hoặc -.",
-      "INVALID_TEXT_honorific": "Danh xưng tối đa 50 ký tự và không bắt đầu bằng =, +, @ hoặc -.",
-      "INVALID_TEXT_note": "Ghi chú tối đa 2.000 ký tự và không bắt đầu bằng =, +, @ hoặc -.",
-      "INVALID_PHONE": "SĐT cần 7–15 chữ số; chỉ dùng dấu + ở đầu, khoảng trắng, dấu chấm, gạch nối hoặc ngoặc.",
-      "INVALID_EMAIL": "Email không đúng định dạng hoặc vượt quá 254 ký tự.",
-      "INVALID_EXPECTED_PEOPLE": "Tổng người dự kiến phải là số nguyên từ 1 đến 500.",
-      "INVALID_SIDE": "Phía khách mời chọn Nhà gái, Nhà trai hoặc Chung.",
-      "INVALID_GROUP": "Tên nhóm khách cần từ 1 đến 100 ký tự và không bắt đầu bằng ký hiệu công thức.",
-      "GROUP_CONFIRMATION_REQUIRED": "Cần xác nhận tạo nhóm khách mới trước khi nhập.",
-      "GROUP_NOT_FOUND": "Nhóm khách không còn trong đám cưới này. Chọn lại nhóm rồi nhập lại.",
-      "DUPLICATE_ROW_IN_FILE": "Dòng giống hệt một dòng khác trong file, sẽ bỏ qua.",
-      "DUPLICATE_ROW_IN_FILE_detail": "Giống hệt dòng {{line}}, sẽ bỏ qua.",
-      "GUEST_ALREADY_EXISTS": "Khách này đã có trong danh sách với đúng các thông tin này, sẽ bỏ qua.",
-      "GUEST_ALREADY_EXISTS_detail": "Khách «{{name}}» đã có trong danh sách với đúng các thông tin này, sẽ bỏ qua.",
-      "DUPLICATE_PHONE_IN_FILE": "SĐT trùng với một dòng khác trong file. Mỗi SĐT chỉ dùng cho một thiệp.",
-      "DUPLICATE_PHONE_IN_FILE_detail": "SĐT trùng với dòng {{line}}. Mỗi SĐT chỉ dùng cho một thiệp.",
-      "DUPLICATE_EMAIL_IN_FILE": "Email trùng với một dòng khác trong file. Mỗi email chỉ dùng cho một thiệp.",
-      "DUPLICATE_EMAIL_IN_FILE_detail": "Email trùng với dòng {{line}}. Mỗi email chỉ dùng cho một thiệp.",
-      "PHONE_ALREADY_EXISTS": "SĐT đã được dùng cho một khách khác trong danh sách.",
-      "PHONE_ALREADY_EXISTS_detail": "SĐT đã được dùng cho khách «{{name}}». Sửa SĐT hoặc bỏ dòng này.",
-      "EMAIL_ALREADY_EXISTS": "Email đã được dùng cho một khách khác trong danh sách.",
-      "EMAIL_ALREADY_EXISTS_detail": "Email đã được dùng cho khách «{{name}}». Sửa email hoặc bỏ dòng này.",
-      "DUPLICATE_NAME_IN_FILE": "Trùng tên với một dòng khác trong file; kiểm tra có nhập hai lần không.",
-      "DUPLICATE_NAME_IN_FILE_detail": "Trùng tên với dòng {{line}}; kiểm tra có nhập hai lần không.",
-      "POSSIBLE_DUPLICATE": "Đã có khách cùng tên trong danh sách; kiểm tra có phải cùng một người không.",
-      "NAME_HAS_HONORIFIC": "Tên đã có danh xưng ở đầu trong khi cột Danh xưng cũng có giá trị; thiệp có thể bị lặp (vd \"anh Anh Tuấn\").",
-      "LARGE_PARTY": "Thiệp có hơn 10 người, kiểm tra lại số người.",
-      "LARGE_PARTY_detail": "Một thiệp {{people}} người, kiểm tra lại số người."
+      "rowField": "Kiểm tra {{field}}."
     },
     "validation": {
       "phone": "SĐT cần 7–15 chữ số; chỉ dùng dấu + ở đầu, khoảng trắng, dấu chấm, gạch nối hoặc ngoặc.",
       "email": "Email không đúng định dạng hoặc vượt quá 254 ký tự.",
       "name": "Thiếu tên người nhận.",
       "expected": "Tổng người dự kiến phải là số nguyên từ 1 trở lên.",
-      "kind": "Kiểu lời mời chọn Cá nhân, Gia đình hoặc Nhóm.",
       "side": "Phía khách mời chọn Nhà gái, Nhà trai hoặc Chung.",
       "sideMissing": "Chưa xác định phía khách mời; không mặc định là Chung.",
-      "kindMissing": "Chưa chọn kiểu lời mời: đang dùng Cá nhân. Chọn Gia đình nếu mời cả nhà; không suy từ số người.",
       "formula": "Dùng văn bản hoặc số, không dùng công thức trong các ô.",
       "duplicate": "Tên hoặc SĐT trùng dòng trước. Kiểm tra lại; các dòng vẫn được giữ riêng.",
-      "rowCells": "Dòng cần đủ 8 ô, kể cả ô để trống."
+      "rowCells": "Dòng cần đủ 9 ô, kể cả ô để trống."
     },
     "enums": {
       "bride": "Nhà gái",
@@ -222,7 +173,6 @@
     "fields": {
       "recipientName": "Tên người nhận",
       "honorific": "Danh xưng",
-      "invitationKind": "Kiểu lời mời",
       "expectedPeople": "Tổng người dự kiến (1–500)",
       "side": "Phía khách mời",
       "group": "Nhóm khách",
@@ -258,27 +208,6 @@
     "chooseFileAria": "Chọn danh sách khách mẫu 8 cột",
     "localOnly": "Bước này chỉ kiểm tra trên thiết bị, chưa lưu khách hoặc gửi thiệp.",
     "previewResult": "Kết quả kiểm tra file",
-    "currentGuests": {
-      "title": "Danh sách khách hiện có",
-      "titleWithCount": "Danh sách khách hiện có ({{count}})",
-      "search": "Tìm tên khách hiện có…",
-      "loading": "Đang tải danh sách khách…",
-      "error": "Chưa tải được danh sách khách hiện có.",
-      "retry": "Thử lại",
-      "empty": "Đám cưới chưa có khách nào.",
-      "noMatch": "Không có khách nào khớp tên này.",
-      "name": "Người nhận",
-      "people": "Số người",
-      "side": "Phía",
-      "group": "Nhóm",
-      "contact": "SĐT / Email",
-      "pageOf": "Trang {{page}}/{{pages}}",
-      "previous": "Trước",
-      "next": "Sau"
-    },
-    "groupsLoading": "Đang tải danh mục nhóm của đám cưới để đối chiếu tên nhóm…",
-    "groupsLoadFailed": "Chưa tải được danh mục nhóm của đám cưới, nên chưa thể biết nhóm nào đã có. Hãy thử lại trước khi nhập.",
-    "groupsRetry": "Tải lại danh mục nhóm",
     "validRows": "{{count}} dòng đúng định dạng",
     "expectedTotal": "{{count}} người dự kiến",
     "invalidRows": "{{count}} dòng lỗi dữ liệu",
@@ -318,7 +247,6 @@
       "honorific": "Danh xưng",
       "optional": "Tùy chọn",
       "honorificDescription": "Cách gọi người nhận. Template thiệp quyết định cách tự xưng tương ứng; để trống dùng lời mời trung tính.",
-      "kind": "Kiểu lời mời",
       "kindBadge": "Tùy chọn · trống = Cá nhân",
       "kindDescription": "Chọn Cá nhân, Gia đình hoặc Nhóm. Không tự suy mời gia đình từ số người. Ví dụ Gia đình + Bác + Nguyễn Văn An → Gia đình bác Nguyễn Văn An.",
       "kindExample": "Gia đình",
@@ -516,11 +444,7 @@
       "description": "Ưu tiên cùng nhóm khách và cùng phía ngồi chung bàn. Giữ nguyên từng nhóm đi cùng nếu vừa bàn; không tự ghép nhà gái với nhà trai để lấp chỗ trống.",
       "source": "Dựa trên phía khách mời, nhóm khách và tổng người dự kiến."
     },
-    "party": {
-      "label": "Theo nhóm đi cùng",
-      "description": "Giữ các chỗ của người đại diện và người đi cùng ở chung một bàn. Xếp lần lượt theo danh sách, không ưu tiên nhóm quan hệ.",
-      "source": "Dựa trên từng dòng nhận thiệp và tổng người dự kiến."
-    },
+    "party": "nhóm",
     "compact": {
       "label": "Ưu tiên đầy bàn",
       "description": "Xếp nhóm đông trước, ưu tiên bàn còn ít chỗ trống vừa đủ. Có thể ghép các nhóm khách khác nhau; giữ nguyên nhóm đi cùng nếu vừa bàn.",
@@ -559,7 +483,6 @@
     "moveCapacityError": "Bàn này không còn đủ chỗ. Chọn bàn khác hoặc chuyển từng chỗ.",
     "movedToQueue": "Đã đưa chỗ về danh sách chưa xếp.",
     "movedToTable": "Đã chuyển {{what}} tới Bàn {{table}}. Tổng số chỗ không thay đổi.",
-    "party": "nhóm",
     "oneExpectedSeat": "một chỗ dự kiến",
     "suggestionApplied": "Đã áp dụng {{strategy}}. {{assigned}}/{{total}} chỗ được bố trí; {{unassigned}} chỗ chưa xếp.",
     "recipientGroups": "Nhóm nhận thiệp",
@@ -604,7 +527,11 @@
     "guestsAt": "Khách tại {{table}}",
     "family": "Gia đình",
     "groupPrefix": "Nhóm",
-    "kinds": { "Gia đình": "Gia đình", "Nhóm": "Nhóm", "Cá nhân": "Cá nhân" },
+    "kinds": {
+      "Gia đình": "Gia đình",
+      "Nhóm": "Nhóm",
+      "Cá nhân": "Cá nhân"
+    },
     "sideValues": {
       "BRIDE": "Nhà gái",
       "GROOM": "Nhà trai",
@@ -709,6 +636,7 @@
     "applying": "Đang áp dụng…",
     "apply": "Áp dụng gợi ý này",
     "noChanges": "Phương án không thay đổi vị trí nào nên không cần lưu.",
-    "reviewUnassigned": "Kiểm tra lý do chưa xếp ở trên để điều chỉnh bàn hoặc tự xếp."
+    "reviewUnassigned": "Kiểm tra lý do chưa xếp ở trên để điều chỉnh bàn hoặc tự xếp.",
+    "tableOccupancy": "{{occupied}}/{{capacity}} chỗ"
   }
 }

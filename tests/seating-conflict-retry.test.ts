@@ -18,7 +18,6 @@ function plan(): SeatingPlan {
         version: 1,
         recipientName: "An",
         honorific: null,
-        invitationKind: "FAMILY",
         expectedPeople: 2,
         side: "GROOM",
         group: null,

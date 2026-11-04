@@ -60,30 +60,32 @@ export const rsvpDashboardSchema = z.object({
     z.object({ side: sideSchema, invited: count, responded: count, expected: count }),
   ),
 });
-export const rsvpGuestRowSchema = z.object({
-  guestId: z.string(),
-  recipientName: z.string(),
-  side: sideSchema,
-  groupId: z.string().nullable(),
-  groupName: z.string().nullable(),
-  phone: z.string().nullable(),
-  email: z.string().nullable(),
-  rsvpStatus: rsvpAnswerSchema,
-  maxPeople: count,
-  people: count,
-  maybePeople: count,
-  overLimit: z.boolean(),
-  needsAction: z.boolean(),
-  pendingRequest: z.boolean(),
-  locked: z.boolean(),
-  dietaryNote: z.string().nullable(),
-  note: z.string().nullable(),
-  respondedAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
-  remindersSent: count,
-  lastRemindedAt: z.string().nullable(),
-  lastReminderStatus: z.string().nullable(),
-});
+export const rsvpGuestRowSchema = z
+  .object({
+    guestId: z.string(),
+    recipientName: z.string(),
+    side: sideSchema,
+    group: z.string().nullable(),
+    groupName: z.string().nullable(),
+    phone: z.string().nullable(),
+    email: z.string().nullable(),
+    rsvpStatus: rsvpAnswerSchema,
+    maxPeople: count,
+    people: count,
+    maybePeople: count,
+    overLimit: z.boolean(),
+    needsAction: z.boolean(),
+    pendingRequest: z.boolean(),
+    locked: z.boolean(),
+    dietaryNote: z.string().nullable(),
+    note: z.string().nullable(),
+    respondedAt: z.string().nullable(),
+    updatedAt: z.string().nullable(),
+    remindersSent: count,
+    lastRemindedAt: z.string().nullable(),
+    lastReminderStatus: z.string().nullable(),
+  })
+  .transform(({ group, ...row }) => ({ ...row, groupId: group }));
 
 export type RsvpDashboard = z.infer<typeof rsvpDashboardSchema>;
 export type RsvpGuestRow = z.infer<typeof rsvpGuestRowSchema>;
@@ -126,7 +128,7 @@ export function getRsvpDashboard(
   groupId?: string,
   signal?: AbortSignal,
 ) {
-  return api.request(`${rsvps(weddingId)}/dashboard${params({ side, groupId })}`, {
+  return api.request(`${rsvps(weddingId)}/dashboard${params({ side, group: groupId })}`, {
     signal,
     schema: rsvpDashboardSchema,
   });
@@ -137,17 +139,22 @@ export function listRsvpGuests(
   filters: RsvpGuestFilters,
   signal?: AbortSignal,
 ) {
-  return api.request(`${rsvps(weddingId)}/dashboard/guests${params(filters)}`, {
-    signal,
-    schema: page(rsvpGuestRowSchema),
-  });
+  return api.request(
+    `${rsvps(weddingId)}/dashboard/guests${params({ ...filters, groupId: undefined, group: filters.groupId })}`,
+    {
+      signal,
+      schema: page(rsvpGuestRowSchema),
+    },
+  );
 }
 export function exportRsvpGuests(
   api: ApiClient,
   weddingId: string,
   filters: Omit<RsvpGuestFilters, "page" | "pageSize">,
 ) {
-  return api.download(`${rsvps(weddingId)}/dashboard/export${params(filters)}`);
+  return api.download(
+    `${rsvps(weddingId)}/dashboard/export${params({ ...filters, groupId: undefined, group: filters.groupId })}`,
+  );
 }
 export function getHostRsvp(
   api: ApiClient,
@@ -198,7 +205,7 @@ export function lockRsvps(
 ) {
   return api.request(`${rsvps(weddingId)}/locks`, {
     method: "PUT",
-    body: { locked, guestIds, groupId },
+    body: { locked, guestIds, group: groupId },
     schema: z.object({ affected: count, locked: z.boolean() }),
   });
 }

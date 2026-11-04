@@ -34,12 +34,12 @@ test("guest planning list sends side and group filters to the server", async () 
 
   await listPlanningGuests(api, "wedding-1", 2, "Dương", undefined, false, {
     side: "BRIDE",
-    groupId: "group-1",
+    groupId: "RELATIVES",
   });
 
   assert.equal(
     requests[0]?.path,
-    "/weddings/wedding-1/guest-planning/guests?page=2&pageSize=20&search=D%C6%B0%C6%A1ng&archivedOnly=false&side=BRIDE&groupId=group-1",
+    "/weddings/wedding-1/guest-planning/guests?page=2&pageSize=20&search=D%C6%B0%C6%A1ng&archivedOnly=false&side=BRIDE&group=RELATIVES",
   );
 });
 

@@ -10,9 +10,11 @@ export default async function Layout({
   const { weddingId } = await params;
   return (
     <WeddingAccessProvider weddingId={weddingId}>
-      <div className="space-y-6">
-        <WeddingRealtime weddingId={weddingId} />
-        <WeddingNavigation weddingId={weddingId} />
+      <div className="space-y-6 [&:has([data-guest-import])>[data-wedding-header]]:hidden">
+        <div data-wedding-header className="space-y-6">
+          <WeddingRealtime weddingId={weddingId} />
+          <WeddingNavigation weddingId={weddingId} />
+        </div>
         {children}
       </div>
     </WeddingAccessProvider>

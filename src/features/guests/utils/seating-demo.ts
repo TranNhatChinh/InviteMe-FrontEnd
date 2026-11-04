@@ -4,7 +4,6 @@ export type SeatingParty = {
   id: string;
   name: string;
   address: string;
-  kind: string;
   count: number;
   group: string;
   note: string;
@@ -44,10 +43,8 @@ export const seatingStrategies: {
   },
 ];
 
-export function recipientLabel(party: Pick<SeatingParty, "name" | "address" | "kind">) {
+export function recipientLabel(party: Pick<SeatingParty, "name" | "address">) {
   const address = party.address ? `${party.address.toLocaleLowerCase("vi")} ` : "";
-  if (party.kind === "Gia đình") return `Gia đình ${address}${party.name}`;
-  if (party.kind === "Nhóm") return /^nhóm\s/i.test(party.name) ? party.name : `Nhóm ${party.name}`;
   const label = `${address}${party.name}`;
   return label.charAt(0).toLocaleUpperCase("vi") + label.slice(1);
 }
@@ -59,7 +56,6 @@ export function seatingParties(rows: CoupleRow[]): SeatingParty[] {
       id: String(row.line),
       name: row.values[0] ?? "",
       address: row.values[1] ?? "",
-      kind: "Cá nhân",
       count: row.expected ?? 1,
       group: row.values[4] || "Chưa phân nhóm",
       note: row.values[6] ?? "",

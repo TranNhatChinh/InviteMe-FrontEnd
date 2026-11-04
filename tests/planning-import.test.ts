@@ -27,7 +27,7 @@ test("import maps expected places including primary, explicit side and family wi
   const rows = validateCoupleRows([
     {
       line: 8,
-      values: ["Nguyễn Văn An", "Bác", "4", "Nhà gái", "Họ ngoại", "", "Hai trẻ nhỏ", ""],
+      values: ["Nguyễn Văn An", "Bác", "4", "Nhà gái", "Họ hàng", "", "Hai trẻ nhỏ"],
     },
   ]);
   assert.deepEqual(importBody(rows), {
@@ -36,21 +36,22 @@ test("import maps expected places including primary, explicit side and family wi
         rowNumber: 8,
         recipientName: "Nguyễn Văn An",
         honorific: "Bác",
+
         expectedPeople: 4,
         side: "BRIDE",
-        group: { newName: "Họ ngoại", confirmed: true },
+        group: "RELATIVES",
         phone: null,
-        note: "Hai trẻ nhỏ",
         email: null,
+        note: "Hai trẻ nhỏ",
       },
     ],
   });
 });
 test("missing side stays unspecified, group optional, count includes representative", () => {
-  const rows = validateCoupleRows([{ line: 2, values: ["Hoa", "", "", "", "", "", "", ""] }]);
+  const rows = validateCoupleRows([{ line: 2, values: ["Hoa", "", "", "", "", "", ""] }]);
   const row = importBody(rows).rows[0];
-  assert.equal(row?.side, "UNSPECIFIED");
-  assert.equal(row?.expectedPeople, 1);
+  assert.equal(row?.side, null);
+  assert.equal(row?.expectedPeople, null);
   assert.equal(row?.group, null);
 });
 test("row errors preserve only allowed row and field metadata, never backend message", () => {
@@ -68,7 +69,7 @@ test("manual create and edit share the backend phone validation rules", () => {
   const create = {
     recipientName: "Khách",
     honorific: null,
-    invitationKind: "INDIVIDUAL" as const,
+
     expectedPeople: 1,
     side: "UNSPECIFIED" as const,
     groupId: null,

@@ -1,14 +1,14 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
 import type { CoupleRow } from "../utils/couple-import";
+import { groupKind, groupLabels } from "@/shared/lib/planning-groups";
 
-const group = z.object({ id: z.string(), name: z.string() });
+const group = groupKind.transform((id) => ({ id, name: groupLabels[id] }));
 export const planningGuestSchema = z.object({
   id: z.string(),
   version: z.number(),
   recipientName: z.string(),
   honorific: z.string().nullable(),
-  invitationKind: z.enum(["INDIVIDUAL", "FAMILY", "GROUP"]),
   expectedPeople: z.number(),
   side: z.enum(["BRIDE", "GROOM", "MUTUAL", "UNSPECIFIED"]),
   group: group.nullable(),
@@ -16,7 +16,6 @@ export const planningGuestSchema = z.object({
   email: z.string().nullable().optional(),
   archivedAt: z.iso.datetime({ offset: true }).nullable().optional(),
   possibleDuplicate: z.boolean().optional(),
-  // Invitation answer as the seating plan sees it: ATTENDING, DECLINED, WAITLISTED or PENDING (no answer / MAYBE).
   rsvpStatus: z.string().nullable().optional(),
   note: z.string().nullable(),
   invitationPath: z
@@ -46,29 +45,129 @@ const issue = z.object({
   code: z.string(),
   message: z.string(),
 });
-const result = z.object({
+export const importTaskSchema = z.object({
+  id: z.string(),
+  guestId: z.string(),
+  recipientName: z.string(),
+  kind: z.string(),
+  reason: z.string(),
+  path: z.string(),
+  resolvedAt: z.string().nullable(),
+});
+export type PlanningImportTask = z.infer<typeof importTaskSchema>;
+const updatedRow = z.object({
+  rowNumber: z.number(),
+  guestId: z.string(),
+  expectedPeople: z.number(),
+  action: z.enum(["UPDATE", "NO_CHANGE"]),
+});
+export const importResultSchema = z.object({
   importId: z.string(),
   createdGuestCount: z.number(),
   createdPlaceCount: z.number(),
   items: z.array(
-    z.object({ rowNumber: z.number(), guestId: z.string(), expectedPeople: z.number() }),
+    z.object({
+      rowNumber: z.number(),
+      guestId: z.string(),
+      expectedPeople: z.number(),
+      action: z.literal("CREATE_SEPARATE"),
+    }),
   ),
-  createdGroups: z.array(group),
   warnings: z.array(issue),
-  skipped: z.array(issue).nullable().optional(),
+  updatedGuestCount: z.number().default(0),
+  noChangeCount: z.number().default(0),
+  updated: z
+    .array(updatedRow)
+    .nullish()
+    .transform((x) => x ?? []),
+  noChange: z
+    .array(updatedRow)
+    .nullish()
+    .transform((x) => x ?? []),
+  tasks: z
+    .array(importTaskSchema)
+    .nullish()
+    .transform((x) => x ?? []),
+  skippedCount: z.number(),
+  skipped: z.array(z.object({ rowNumber: z.number(), action: z.literal("SKIP") })),
 });
-export const importIssueSchema = issue;
-export type ImportIssue = z.infer<typeof importIssueSchema>;
-
-export const importCheckSchema = z.object({
+export type PlanningImportResult = z.infer<typeof importResultSchema>;
+const updateGuestSnapshot = z.object({
+  id: z.string().nullable(),
+  version: z.number(),
+  recipientName: z.string(),
+  honorific: z.string().nullable(),
+  expectedPeople: z.number(),
+  side: z.string(),
+  group: groupKind,
+  phone: z.string().nullable(),
+  email: z.string().nullable(),
+  note: z.string().nullable(),
+  seated: z.boolean(),
+  invitationSent: z.boolean(),
+  hasRsvp: z.boolean(),
+  confirmedPeople: z.number(),
+  protectedPlaces: z.number(),
+});
+export const importPreviewSchema = z.object({
+  updates: z
+    .array(
+      z.object({
+        rowNumber: z.number(),
+        guestId: z.string(),
+        fields: z.array(z.string()),
+        noChange: z.boolean(),
+        placeDelta: z.number(),
+        errors: z.array(issue),
+        warnings: z.array(issue),
+      }),
+    )
+    .nullish()
+    .transform((x) => x ?? []),
+  previewToken: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  quotaRemaining: z.number().nullable(),
+  proposedPlaces: z.number(),
   errors: z.array(issue),
-  warnings: z.array(issue),
-  guestCount: z.number(),
-  peopleCount: z.number(),
-  skipped: z.array(issue),
+  rows: z.array(
+    z.object({
+      rowNumber: z.number(),
+      status: z.enum(["NEW", "WARNING", "NEED_DECISION"]),
+      reasons: z.array(z.string()),
+      matchCount: z.number(),
+      matches: z.array(
+        z.object({
+          guestId: z.string().nullable(),
+          sourceRowNumber: z.number().nullable(),
+          recipientName: z.string(),
+          guest: updateGuestSnapshot.nullish(),
+          differences: z.array(
+            z.object({
+              field: z.string(),
+              existing: z.string().nullable(),
+              incoming: z.string().nullable(),
+            }),
+          ),
+        }),
+      ),
+    }),
+  ),
 });
-export type ImportCheckResult = z.infer<typeof importCheckSchema>;
-
+export type PlanningImportPreview = Omit<z.infer<typeof importPreviewSchema>, "updates"> & {
+  updates?: z.infer<typeof importPreviewSchema>["updates"];
+};
+export type PlanningImportDecision = {
+  rowNumber: number;
+  action: "SKIP" | "CREATE_SEPARATE" | "UPDATE";
+  targetGuestId?: string;
+  expectedVersion?: number;
+  selectedFields?: string[];
+  updateValues?: ReturnType<typeof importBody>["rows"][number];
+};
+export type PlanningImportCommit = ReturnType<typeof importBody> & {
+  previewToken: string;
+  decisions: PlanningImportDecision[];
+};
 export type PlanningGuest = z.infer<typeof planningGuestSchema>;
 export type PlanningDetail = z.infer<typeof planningDetailSchema>;
 export type PlanningGuestValidationMessages = {
@@ -117,7 +216,6 @@ export function createPlanningGuestCreateSchema(messages: PlanningGuestValidatio
   return z.object({
     recipientName: z.string().trim().min(1, messages.nameRequired).max(150, messages.nameMax),
     honorific: z.string().trim().max(50, messages.honorificMax).nullable(),
-    invitationKind: z.enum(["INDIVIDUAL", "FAMILY", "GROUP"]),
     expectedPeople: z
       .number()
       .int()
@@ -160,48 +258,48 @@ export const sideLabels = {
   UNSPECIFIED: "Chưa xác định",
 };
 export function importBody(rows: CoupleRow[]) {
+  if (rows.some((row) => row.errors.length))
+    throw new Error("Sửa hoặc loại các dòng lỗi trước khi kiểm tra.");
   return {
     rows: rows.map((r) => ({
       rowNumber: r.line,
-      recipientName: r.values[0] || "",
+      recipientName: r.values[0],
       honorific: r.values[1] || null,
-      expectedPeople: r.expected ?? 1,
+      expectedPeople: r.defaulted ? null : r.expected,
       side:
         ({ "Nhà gái": "BRIDE", "Nhà trai": "GROOM", Chung: "MUTUAL" } as Record<string, string>)[
           r.values[3] ?? ""
-        ] ?? "UNSPECIFIED",
-      group: r.values[4] ? { newName: r.values[4], confirmed: true } : null,
+        ] ?? null,
+      group: r.values[4]
+        ? groupKind.parse(
+            Object.entries(groupLabels).find(([, label]) => label === r.values[4])?.[0],
+          )
+        : null,
       phone: r.values[5] || null,
-      note: r.values[6] || null,
       email: r.values[7] || null,
+      note: r.values[6] || null,
     })),
   };
 }
 const path = (id: string) => `/weddings/${encodeURIComponent(id)}/guest-planning`;
-export function checkImportGuests(
-  api: ApiClient,
-  id: string,
-  body: ReturnType<typeof importBody>,
-  signal?: AbortSignal,
-) {
-  return api.request(`${path(id)}/imports/check`, {
-    method: "POST",
-    body,
-    signal,
-    schema: importCheckSchema,
-  });
-}
-export function importGuests(
-  api: ApiClient,
-  id: string,
-  body: ReturnType<typeof importBody>,
-  key: string,
-) {
+export function importGuests(api: ApiClient, id: string, body: PlanningImportCommit, key: string) {
   return api.request(`${path(id)}/imports`, {
     method: "POST",
     body,
     headers: { "Idempotency-Key": key },
-    schema: result,
+    schema: importResultSchema,
+  });
+}
+export function checkImportGuests(
+  api: ApiClient,
+  id: string,
+  rows: CoupleRow[],
+  decisions?: PlanningImportDecision[],
+) {
+  return api.request(`${path(id)}/imports/check`, {
+    method: "POST",
+    body: { ...importBody(rows), decisions },
+    schema: importPreviewSchema,
   });
 }
 export function listPlanningGuests(
@@ -220,7 +318,7 @@ export function listPlanningGuests(
     archivedOnly: String(archivedOnly),
   });
   if (filters.side) params.set("side", filters.side);
-  if (filters.groupId) params.set("groupId", filters.groupId);
+  if (filters.groupId) params.set("group", filters.groupId);
   return api.request(`${path(id)}/guests?${params}`, {
     signal,
     schema: z.object({
@@ -255,7 +353,9 @@ export function updatePlanningGuest(
 ) {
   return api.request(`${path(id)}/guests/${encodeURIComponent(guestId)}`, {
     method: "PUT",
-    body: planningGuestUpdateSchema.parse(input),
+    body: (({ groupId, ...rest }) => ({ ...rest, group: groupId ?? "OTHER" }))(
+      planningGuestUpdateSchema.parse(input),
+    ),
     schema: planningGuestSchema,
   });
 }
@@ -268,7 +368,9 @@ export function createPlanningGuest(
 ) {
   return api.request(`${path(id)}/guests`, {
     method: "POST",
-    body: planningGuestCreateSchema.parse(input),
+    body: (({ groupId, ...rest }) => ({ ...rest, group: groupId ?? "OTHER" }))(
+      planningGuestCreateSchema.parse(input),
+    ),
     headers: { "Idempotency-Key": key },
     schema: planningGuestSchema,
   });
@@ -308,5 +410,15 @@ export function restorePlanningGuest(
       method: "POST",
       schema: planningGuestSchema,
     },
+  );
+}
+
+export function listImportTasks(api: ApiClient, id: string) {
+  return api.request(`${path(id)}/imports/tasks`, { schema: z.array(importTaskSchema) });
+}
+export function resolveImportTask(api: ApiClient, id: string, taskId: string, resolved: boolean) {
+  return api.request(
+    `${path(id)}/imports/tasks/${encodeURIComponent(taskId)}?resolved=${resolved}`,
+    { method: "PUT", schema: z.unknown() },
   );
 }

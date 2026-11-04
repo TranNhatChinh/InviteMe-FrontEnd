@@ -25,7 +25,15 @@ export const invitationPreviewSchema = z.object({
 });
 export const invitationBatchSchema = z.object({
   id: z.string(),
-  status: z.enum(["PENDING", "SENT", "FAILED", "PARTIAL_FAILED", "NEEDS_REVIEW", "SIMULATED", "COMPLETED"]),
+  status: z.enum([
+    "PENDING",
+    "SENT",
+    "FAILED",
+    "PARTIAL_FAILED",
+    "NEEDS_REVIEW",
+    "SIMULATED",
+    "COMPLETED",
+  ]),
   totalCount: z.number().int().nonnegative(),
   sentCount: z.number().int().nonnegative(),
   failedCount: z.number().int().nonnegative(),
@@ -41,7 +49,17 @@ export const invitationBatchSchema = z.object({
       guestId: z.string(),
       channel: z.enum(["EMAIL", "SMS"]),
       recipient: z.string(),
-      status: z.enum(["PENDING", "SENDING", "ACCEPTED", "SENT", "DELIVERED", "FAILED", "UNKNOWN", "REVIEW_REQUIRED", "SIMULATED"]),
+      status: z.enum([
+        "PENDING",
+        "SENDING",
+        "ACCEPTED",
+        "SENT",
+        "DELIVERED",
+        "FAILED",
+        "UNKNOWN",
+        "REVIEW_REQUIRED",
+        "SIMULATED",
+      ]),
       attemptCount: z.number().int().nonnegative(),
       sentAt: z.string().nullable(),
       providerAcceptedAt: z.string().nullable().optional(),
@@ -120,7 +138,7 @@ export function queueInvitationBatch(
   return api.request(`${base(weddingId)}/send`, {
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },
-    body: input,
+    body: input.groupId ? { ...input, groupId: undefined, group: input.groupId } : input,
     schema: invitationBatchSchema,
   });
 }

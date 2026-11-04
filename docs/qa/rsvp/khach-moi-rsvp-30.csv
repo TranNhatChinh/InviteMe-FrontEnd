@@ -1,31 +1,31 @@
-"Tên người nhận","Danh xưng","Kiểu lời mời","Tổng người dự kiến","Phía khách mời","Nhóm khách","SĐT","Ghi chú","Email"
-"Khách QA 01 An","Bác","Gia đình","4","Nhà gái","Họ ngoại","","",""
-"Khách QA 02 Bình","Cô","Nhóm","3","Nhà gái","Họ ngoại","","",""
-"Khách QA 03 Chi","Anh","Cá nhân","1","Nhà gái","Bạn đại học","","Muốn ngồi gần cùng nhóm",""
-"Khách QA 04 Dũng","Chị","Cá nhân","2","Nhà gái","Đồng nghiệp","","Cần ghế trẻ em",""
-"Khách QA 05 Hà","Bạn","Cá nhân","1","Nhà gái","Bạn chung","","",""
-"Khách QA 06 Hùng","Bác","Gia đình","4","Nhà gái","Bạn cấp 3","","Muốn ngồi gần cùng nhóm",""
-"Khách QA 07 Lan","Cô","Nhóm","3","Nhà gái","Đối tác","","",""
-"Khách QA 08 Minh","Anh","Cá nhân","2","Nhà gái","Họ ngoại","","Cần ghế trẻ em",""
-"Khách QA 09 Ngọc","Chị","Cá nhân","1","Nhà gái","Họ nội","","Muốn ngồi gần cùng nhóm",""
-"Khách QA 10 Phúc","Bạn","Cá nhân","1","Nhà gái","Họ ngoại","","",""
-"Khách QA 11 An","Bác","Gia đình","4","Nhà trai","Bạn đại học","","",""
-"Khách QA 12 Bình","Cô","Nhóm","3","Nhà trai","Đồng nghiệp","","Muốn ngồi gần cùng nhóm",""
-"Khách QA 13 Chi","Anh","Cá nhân","1","Nhà trai","Bạn chung","","",""
-"Khách QA 14 Dũng","Chị","Cá nhân","1","Nhà trai","Bạn cấp 3","","",""
-"Khách QA 15 Hà","Bạn","Cá nhân","1","Nhà trai","Đối tác","","Muốn ngồi gần cùng nhóm",""
-"Khách QA 16 Hùng","Bác","Gia đình","4","Nhà trai","Họ ngoại","","Cần ghế trẻ em",""
-"Khách QA 17 Lan","Cô","Nhóm","3","Nhà trai","Họ nội","","",""
-"Khách QA 18 Minh","Anh","Cá nhân","1","Nhà trai","Họ ngoại","","Muốn ngồi gần cùng nhóm",""
-"Khách QA 19 Ngọc","Chị","Cá nhân","1","Nhà trai","Bạn đại học","","",""
-"Khách QA 20 Phúc","Bạn","Cá nhân","2","Nhà trai","Đồng nghiệp","","Cần ghế trẻ em",""
-"Khách QA 21 An","Bác","Gia đình","4","Chung","Bạn chung","","Muốn ngồi gần cùng nhóm",""
-"Khách QA 22 Bình","Cô","Nhóm","3","Chung","Bạn cấp 3","","",""
-"Khách QA 23 Chi","Anh","Cá nhân","1","Chung","Đối tác","","",""
-"Khách QA 24 Dũng","Chị","Cá nhân","2","Chung","Họ ngoại","","Muốn ngồi gần cùng nhóm",""
-"Khách QA 25 Hà","Bạn","Cá nhân","1","Chung","Họ nội","","",""
-"Khách QA 26 Hùng","Bác","Gia đình","4","Chung","Họ ngoại","","",""
-"Khách QA 27 Lan","Cô","Nhóm","3","Chung","Bạn đại học","","Muốn ngồi gần cùng nhóm",""
-"Khách QA 28 Minh","Anh","Cá nhân","2","Chung","Đồng nghiệp","","Cần ghế trẻ em",""
-"Khách QA 29 Ngọc","Chị","Cá nhân","1","Chung","Bạn chung","","",""
-"Khách QA 30 Phúc","Bạn","Cá nhân","1","Chung","Bạn cấp 3","","Muốn ngồi gần cùng nhóm",""
+﻿Tên người nhận,Danh xưng,Tổng người dự kiến,Phía khách mời,Nhóm khách,SĐT,Ghi chú,Email
+Khách QA 01 An,Bác,4,Nhà gái,Họ ngoại,,,
+Khách QA 02 Bình,Cô,3,Nhà gái,Họ ngoại,,,
+Khách QA 03 Chi,Anh,1,Nhà gái,Bạn đại học,,Muốn ngồi gần cùng nhóm,
+Khách QA 04 Dũng,Chị,2,Nhà gái,Đồng nghiệp,,Cần ghế trẻ em,
+Khách QA 05 Hà,Bạn,1,Nhà gái,Bạn chung,,,
+Khách QA 06 Hùng,Bác,4,Nhà gái,Bạn cấp 3,,Muốn ngồi gần cùng nhóm,
+Khách QA 07 Lan,Cô,3,Nhà gái,Đối tác,,,
+Khách QA 08 Minh,Anh,2,Nhà gái,Họ ngoại,,Cần ghế trẻ em,
+Khách QA 09 Ngọc,Chị,1,Nhà gái,Họ nội,,Muốn ngồi gần cùng nhóm,
+Khách QA 10 Phúc,Bạn,1,Nhà gái,Họ ngoại,,,
+Khách QA 11 An,Bác,4,Nhà trai,Bạn đại học,,,
+Khách QA 12 Bình,Cô,3,Nhà trai,Đồng nghiệp,,Muốn ngồi gần cùng nhóm,
+Khách QA 13 Chi,Anh,1,Nhà trai,Bạn chung,,,
+Khách QA 14 Dũng,Chị,1,Nhà trai,Bạn cấp 3,,,
+Khách QA 15 Hà,Bạn,1,Nhà trai,Đối tác,,Muốn ngồi gần cùng nhóm,
+Khách QA 16 Hùng,Bác,4,Nhà trai,Họ ngoại,,Cần ghế trẻ em,
+Khách QA 17 Lan,Cô,3,Nhà trai,Họ nội,,,
+Khách QA 18 Minh,Anh,1,Nhà trai,Họ ngoại,,Muốn ngồi gần cùng nhóm,
+Khách QA 19 Ngọc,Chị,1,Nhà trai,Bạn đại học,,,
+Khách QA 20 Phúc,Bạn,2,Nhà trai,Đồng nghiệp,,Cần ghế trẻ em,
+Khách QA 21 An,Bác,4,Chung,Bạn chung,,Muốn ngồi gần cùng nhóm,
+Khách QA 22 Bình,Cô,3,Chung,Bạn cấp 3,,,
+Khách QA 23 Chi,Anh,1,Chung,Đối tác,,,
+Khách QA 24 Dũng,Chị,2,Chung,Họ ngoại,,Muốn ngồi gần cùng nhóm,
+Khách QA 25 Hà,Bạn,1,Chung,Họ nội,,,
+Khách QA 26 Hùng,Bác,4,Chung,Họ ngoại,,,
+Khách QA 27 Lan,Cô,3,Chung,Bạn đại học,,Muốn ngồi gần cùng nhóm,
+Khách QA 28 Minh,Anh,2,Chung,Đồng nghiệp,,Cần ghế trẻ em,
+Khách QA 29 Ngọc,Chị,1,Chung,Bạn chung,,,
+Khách QA 30 Phúc,Bạn,1,Chung,Bạn cấp 3,,Muốn ngồi gần cùng nhóm,

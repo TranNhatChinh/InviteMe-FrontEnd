@@ -44,7 +44,6 @@ export function PlanningGuestCreateForm({
     defaultValues: {
       recipientName: "",
       honorific: "",
-      invitationKind: "INDIVIDUAL",
       expectedPeople: 1,
       side: "UNSPECIFIED",
       groupId: !isWeddingWide && groups.length === 1 ? (groups[0]?.id ?? null) : null,
@@ -107,25 +106,6 @@ export function PlanningGuestCreateForm({
         <FormField control={form.control} name="phone" label={t("planning.phone")}>
           {(field) => (
             <Input {...field} value={String(field.value ?? "")} type="tel" maxLength={30} />
-          )}
-        </FormField>
-        <FormField
-          control={form.control}
-          name="invitationKind"
-          label={t("planning.invitationKind")}
-        >
-          {(field) => (
-            <select
-              {...field}
-              value={String(field.value)}
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-            >
-              {(["INDIVIDUAL", "FAMILY", "GROUP"] as const).map((value) => (
-                <option key={value} value={value}>
-                  {t(`planning.kind.${value}`)}
-                </option>
-              ))}
-            </select>
           )}
         </FormField>
         <FormField
