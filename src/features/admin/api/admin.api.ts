@@ -193,6 +193,14 @@ export const adminPlanSchema = z.object({
 });
 export type AdminPlan = z.infer<typeof adminPlanSchema>;
 
+const publicPlanForGrantSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  price: z.number(),
+  currency: z.string(),
+  limits: planLimitsSchema,
+});
+
 export const adminPlanOrderSchema = z.object({
   id: z.string(),
   weddingId: z.string().nullable().optional(),
@@ -364,6 +372,8 @@ export const adminApi = {
     }),
   plans: (api: ApiClient, signal?: AbortSignal) =>
     api.request("/admin/plans", { signal, schema: z.array(adminPlanSchema) }),
+  publicPlansForGrant: (api: ApiClient, signal?: AbortSignal) =>
+    api.request("/plans", { auth: "none", signal, schema: z.array(publicPlanForGrantSchema) }),
   updatePlan: (
     api: ApiClient,
     code: string,
@@ -420,11 +430,7 @@ export const adminApi = {
         limits: planLimitsSchema,
       }),
     }),
-  planRevenue: (
-    api: ApiClient,
-    input?: { from?: string; to?: string },
-    signal?: AbortSignal,
-  ) =>
+  planRevenue: (api: ApiClient, input?: { from?: string; to?: string }, signal?: AbortSignal) =>
     api.request(`/admin/plan-revenue?${queryString(input ?? {})}`, {
       signal,
       schema: planRevenueSchema,
