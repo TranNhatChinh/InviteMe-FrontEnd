@@ -27,6 +27,7 @@ export function WeddingRealtime({ weddingId }: { weddingId: string }) {
       refresh(["guest-planning-detail", weddingId], since);
       refresh(["guest-planning-groups", weddingId], since);
       refresh(["co-hosts", weddingId, "groups"], since);
+      refresh(["rsvp-reminders", weddingId], since);
       invalidate(since);
     };
     const invalidateRsvp = (since: number | null = null) => {
@@ -52,6 +53,8 @@ export function WeddingRealtime({ weddingId }: { weddingId: string }) {
       realtime.on(REALTIME_EVENTS.rsvp, () => invalidateRsvp()),
       realtime.on(REALTIME_EVENTS.waitlist, () => invalidateRsvp()),
       realtime.onPlanningChange((change) => {
+        if (change.type === "RsvpRemindersChanged" && change.entityId === weddingId)
+          refresh(["rsvp-reminders", weddingId], null);
         if (change.type === "WeddingSetupChanged") invalidate();
         if (change.type.startsWith("WeddingWebsite") || change.type.startsWith("Invitation"))
           invalidatePublication();

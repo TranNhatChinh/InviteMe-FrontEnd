@@ -25,6 +25,7 @@ import {
   getRsvpReminderSummary,
   listRsvpReminders,
   previewRsvpReminders,
+  retryRsvpReminder,
   rsvpReminderKeys,
   saveRsvpReminderSettings,
   sendRsvpReminders,
@@ -32,6 +33,7 @@ import {
   type RsvpReminderPreview,
   type RsvpReminderStatus,
 } from "../api/rsvp-reminders.api";
+import { listRsvpGuests } from "../api/host-rsvp.api";
 
 const fieldClass = "h-10 rounded-lg border bg-background px-3 text-sm";
 function formatDate(value: string | null, timezone: string, language: "vi" | "en", notSet: string) {
@@ -49,6 +51,10 @@ function errorMessage(error: unknown, t: (key: string) => string) {
   if (!(error instanceof ApiError)) return t("reminder.errors.generic");
   if (error.backendCode === "PLAN_LIMIT_REACHED") return t("reminder.errors.planLimit");
   if (error.backendCode === "EMAIL_NOT_CONFIGURED") return t("reminder.errors.emailUnavailable");
+  if (error.backendCode === "RSVP_REMINDER_NOT_FAILED")
+    return t("reminder.errors.retryUnavailable");
+  if (error.backendCode === "RSVP_REMINDER_NOT_ELIGIBLE")
+    return t("reminder.errors.retryNotEligible");
   if (error.backendCode === "WEDDING_SCOPE_REQUIRED")
     return t("reminder.errors.weddingWideRequired");
   if (error.status === 403) return t("reminder.errors.forbidden");
@@ -68,10 +74,13 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
   const plan = useWeddingPlan(weddingId, hasWeddingWideRsvp);
   const [status, setStatus] = useState<RsvpReminderStatus | "">("");
   const [kind, setKind] = useState<RsvpReminderKind | "">("");
+  const [guestSearch, setGuestSearch] = useState("");
+  const [guestId, setGuestId] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
   const [preview, setPreview] = useState<RsvpReminderPreview | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [busy, setBusy] = useState<"settings" | "preview" | "send" | null>(null);
+  const [busy, setBusy] = useState<"settings" | "preview" | "send" | "retry" | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -79,10 +88,11 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
     () => ({
       status: status || undefined,
       kind: kind || undefined,
+      guestId: guestId || undefined,
       page: pageNumber,
       pageSize: 25,
     }),
-    [kind, pageNumber, status],
+    [guestId, kind, pageNumber, status],
   );
   const summaryQuery = useQuery({
     queryKey: rsvpReminderKeys.summary(weddingId),
@@ -94,6 +104,12 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
     queryFn: ({ signal }) => listRsvpReminders(api, weddingId, filters, signal),
     enabled: hasWeddingWideRsvp,
   });
+  const guestOptionsQuery = useQuery({
+    queryKey: ["host-rsvp", weddingId, "reminder-guest-filter", guestSearch.trim()],
+    queryFn: ({ signal }) =>
+      listRsvpGuests(api, weddingId, { search: guestSearch.trim(), page: 1, pageSize: 20 }, signal),
+    enabled: hasWeddingWideRsvp && guestSearch.trim().length >= 2,
+  });
   const summary = summaryQuery.data;
   const history = historyQuery.data;
   const selectedCount = selectedIds.length;
@@ -102,6 +118,13 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
     !planUnavailable && plan.data ? planEntitlementState(plan.data, "reminderRounds") : null;
   const manualAllowed =
     !planUnavailable && !plan.isPending && plan.data ? canSendManualReminder(plan.data) : false;
+  const retryAllowed =
+    canManage &&
+    Boolean(summary?.emailConfigured) &&
+    !planUnavailable &&
+    !plan.isPending &&
+    Boolean(plan.data) &&
+    !automaticGate?.locked;
   const manualLimit = plan.data?.limits.reminderRounds;
   const manualUsage = plan.data?.usage.reminderRounds;
   const manualUsageText =
@@ -128,6 +151,7 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
 
   async function toggleAutomatic() {
     if (!summary || !canManage || busy) return;
+    if (!summary.autoEnabled && !summary.emailConfigured) return;
     if (
       !summary.autoEnabled &&
       (plan.isPending || planUnavailable || !plan.data || automaticGate?.locked)
@@ -169,7 +193,15 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
   }
 
   async function sendSelected() {
-    if (!canManage || !manualAllowed || !preview || selectedIds.length === 0 || busy) return;
+    if (
+      !canManage ||
+      !manualAllowed ||
+      !summary?.emailConfigured ||
+      !preview ||
+      selectedIds.length === 0 ||
+      busy
+    )
+      return;
     setBusy("send");
     setActionError("");
     setNotice("");
@@ -200,6 +232,35 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
     }
   }
 
+  async function retryFailed(reminderId: string) {
+    if (!canManage || !retryAllowed || busy) return;
+    setBusy("retry");
+    setRetryingId(reminderId);
+    setActionError("");
+    setNotice("");
+    try {
+      const result = await retryRsvpReminder(api, weddingId, reminderId);
+      setNotice(
+        t("reminder.retryQueuedNotice", {
+          date: formatDate(
+            result.sendAt,
+            summary?.timezone ?? "Asia/Ho_Chi_Minh",
+            language,
+            t("reminder.notSet"),
+          ),
+        }),
+      );
+      await refreshAfterChange();
+    } catch (error) {
+      setActionError(errorMessage(error, t));
+      if (error instanceof ApiError && error.backendCode === "PLAN_LIMIT_REACHED")
+        await cache.invalidateQueries({ queryKey: ["wedding-plan", weddingId] });
+    } finally {
+      setBusy(null);
+      setRetryingId(null);
+    }
+  }
+
   function toggleGuest(guestId: string, checked: boolean) {
     setSelectedIds((current) =>
       checked ? [...new Set([...current, guestId])] : current.filter((id) => id !== guestId),
@@ -213,6 +274,12 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
 
   function changeKind(event: FormEvent<HTMLSelectElement>) {
     setKind(event.currentTarget.value as RsvpReminderKind | "");
+    setPageNumber(1);
+  }
+
+  function changeGuestSearch(value: string) {
+    setGuestSearch(value);
+    setGuestId("");
     setPageNumber(1);
   }
 
@@ -298,7 +365,8 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
                   disabled={
                     busy !== null ||
                     (!summary.autoEnabled &&
-                      (plan.isPending ||
+                      (!summary.emailConfigured ||
+                        plan.isPending ||
                         planUnavailable ||
                         !plan.data ||
                         Boolean(automaticGate?.locked)))
@@ -320,6 +388,7 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
 
             <dl className="grid grid-cols-2 divide-x divide-y rounded-xl border bg-muted/20 sm:grid-cols-3 sm:divide-y-0">
               <Metric label={t("reminder.notResponded")} value={summary.notResponded} />
+              <Metric label={t("reminder.maybe")} value={summary.maybe ?? 0} />
               <Metric label={t("reminder.canRemindNow")} value={summary.canRemindNow} />
               <Metric label={t("reminder.pendingSending")} value={summary.counts.pending} />
               <Metric label={t("reminder.sentSuccessfully")} value={summary.counts.sent} />
@@ -583,41 +652,95 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">{t("reminder.historyDescription")}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <label className="sr-only" htmlFor="reminder-status-filter">
-              {t("reminder.filterStatus")}
-            </label>
-            <select
-              id="reminder-status-filter"
-              className={fieldClass}
-              value={status}
-              onChange={changeStatus}
-            >
-              <option value="">{t("reminder.allStatuses")}</option>
-              {(["PENDING", "SENDING", "SENT", "FAILED", "CANCELLED"] as RsvpReminderStatus[]).map(
-                (value) => (
+          <div className="grid w-full gap-2 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
+            <div>
+              <label className="sr-only" htmlFor="reminder-status-filter">
+                {t("reminder.filterStatus")}
+              </label>
+              <select
+                id="reminder-status-filter"
+                className={fieldClass + " w-full"}
+                value={status}
+                onChange={changeStatus}
+              >
+                <option value="">{t("reminder.allStatuses")}</option>
+                {(
+                  ["PENDING", "SENDING", "SENT", "FAILED", "CANCELLED"] as RsvpReminderStatus[]
+                ).map((value) => (
                   <option key={value} value={value}>
                     {t(`reminder.status.${value}`)}
                   </option>
-                ),
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="sr-only" htmlFor="reminder-kind-filter">
+                {t("reminder.filterKind")}
+              </label>
+              <select
+                id="reminder-kind-filter"
+                className={fieldClass + " w-full"}
+                value={kind}
+                onChange={changeKind}
+              >
+                <option value="">{t("reminder.allKinds")}</option>
+                {(["AUTO_3D", "AUTO_1D", "MANUAL"] as RsvpReminderKind[]).map((value) => (
+                  <option key={value} value={value}>
+                    {t(`reminder.kind.${value}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="sr-only" htmlFor="reminder-guest-search">
+                {t("reminder.searchGuest")}
+              </label>
+              <input
+                id="reminder-guest-search"
+                className={fieldClass + " w-full"}
+                type="search"
+                value={guestSearch}
+                onChange={(event) => changeGuestSearch(event.currentTarget.value)}
+                placeholder={t("reminder.searchGuest")}
+              />
+            </div>
+            <div>
+              <label className="sr-only" htmlFor="reminder-guest-filter">
+                {t("reminder.filterGuest")}
+              </label>
+              <select
+                id="reminder-guest-filter"
+                className={fieldClass + " w-full"}
+                value={guestId}
+                disabled={guestSearch.trim().length < 2 || guestOptionsQuery.isPending}
+                onChange={(event) => {
+                  setGuestId(event.currentTarget.value);
+                  setPageNumber(1);
+                }}
+              >
+                <option value="">{t("reminder.allGuests")}</option>
+                {guestOptionsQuery.data?.items.map((guest) => (
+                  <option key={guest.guestId} value={guest.guestId}>
+                    {guest.recipientName} · {guest.groupName ?? guest.side}
+                  </option>
+                ))}
+              </select>
+              {guestOptionsQuery.isError && (
+                <p role="status" className="mt-1 text-xs text-muted-foreground">
+                  {t("reminder.guestSearchUnavailable")}
+                </p>
               )}
-            </select>
-            <label className="sr-only" htmlFor="reminder-kind-filter">
-              {t("reminder.filterKind")}
-            </label>
-            <select
-              id="reminder-kind-filter"
-              className={fieldClass}
-              value={kind}
-              onChange={changeKind}
-            >
-              <option value="">{t("reminder.allKinds")}</option>
-              {(["AUTO_3D", "AUTO_1D", "MANUAL"] as RsvpReminderKind[]).map((value) => (
-                <option key={value} value={value}>
-                  {t(`reminder.kind.${value}`)}
-                </option>
-              ))}
-            </select>
+              {!guestOptionsQuery.isError &&
+                guestSearch.trim().length > 0 &&
+                guestSearch.trim().length < 2 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("reminder.guestSearchHint")}
+                  </p>
+                )}
+              {guestOptionsQuery.isSuccess && guestOptionsQuery.data.items.length === 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">{t("reminder.noGuestMatches")}</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -641,6 +764,7 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
                     <th className="p-3 font-medium">{t("reminder.statusLabel")}</th>
                     <th className="p-3 font-medium">{t("reminder.time")}</th>
                     <th className="p-3 font-medium">{t("reminder.result")}</th>
+                    {canManage && <th className="p-3 font-medium">{t("reminder.actions")}</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -673,6 +797,32 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
                             ? t("reminder.sentAttempts", { count: item.attemptCount })
                             : t("reminder.waitingWorker"))}
                       </td>
+                      {canManage && (
+                        <td className="p-3">
+                          {item.status === "FAILED" && (
+                            <ConfirmDialog
+                              trigger={
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={!retryAllowed || busy !== null}
+                                >
+                                  {retryingId === item.id
+                                    ? t("reminder.retrying")
+                                    : t("reminder.retry")}
+                                </Button>
+                              }
+                              title={t("reminder.retryConfirmTitle")}
+                              description={t("reminder.retryConfirmDescription", {
+                                name: item.recipientName,
+                              })}
+                              cancelLabel={t("reminder.goBack")}
+                              confirmLabel={t("reminder.retry")}
+                              onConfirm={() => void retryFailed(item.id)}
+                            />
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -716,6 +866,26 @@ export function RsvpReminderCenter({ weddingId }: { weddingId: string }) {
                       </dd>
                     </div>
                   </dl>
+                  {canManage && item.status === "FAILED" && (
+                    <ConfirmDialog
+                      trigger={
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!retryAllowed || busy !== null}
+                        >
+                          {retryingId === item.id ? t("reminder.retrying") : t("reminder.retry")}
+                        </Button>
+                      }
+                      title={t("reminder.retryConfirmTitle")}
+                      description={t("reminder.retryConfirmDescription", {
+                        name: item.recipientName,
+                      })}
+                      cancelLabel={t("reminder.goBack")}
+                      confirmLabel={t("reminder.retry")}
+                      onConfirm={() => void retryFailed(item.id)}
+                    />
+                  )}
                 </li>
               ))}
             </ul>

@@ -36,6 +36,7 @@ export const planningChangeSchema = z.object({
     "GiftReceived",
     "RsvpLocksChanged",
     "RsvpSettingsChanged",
+    "RsvpRemindersChanged",
     "WeddingWebsiteChanged",
     "WeddingSetupChanged",
     "WeddingWebsitePublished",

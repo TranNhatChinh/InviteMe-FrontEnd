@@ -23,6 +23,7 @@ export const rsvpReminderSummarySchema = z.object({
   maxRemindersPerGuest: count,
   sendingHours: z.string(),
   emailConfigured: z.boolean(),
+  maybe: count.optional(),
 });
 
 export const rsvpReminderCandidateSchema = z.object({
@@ -51,6 +52,12 @@ export const rsvpReminderSendResultSchema = z.object({
   skipped: z.array(rsvpReminderSkippedSchema),
 });
 
+export const rsvpReminderRetryResultSchema = z.object({
+  reminderId: z.string(),
+  status: z.literal("PENDING"),
+  sendAt: z.string(),
+});
+
 export const rsvpReminderHistoryRowSchema = z.object({
   id: z.string(),
   guestId: z.string(),
@@ -71,6 +78,7 @@ export type RsvpReminderSummary = z.infer<typeof rsvpReminderSummarySchema>;
 export type RsvpReminderCandidate = z.infer<typeof rsvpReminderCandidateSchema>;
 export type RsvpReminderPreview = z.infer<typeof rsvpReminderPreviewSchema>;
 export type RsvpReminderSendResult = z.infer<typeof rsvpReminderSendResultSchema>;
+export type RsvpReminderRetryResult = z.infer<typeof rsvpReminderRetryResultSchema>;
 export type RsvpReminderHistoryRow = z.infer<typeof rsvpReminderHistoryRowSchema>;
 export type RsvpReminderKind = "AUTO_3D" | "AUTO_1D" | "MANUAL";
 export type RsvpReminderStatus = "PENDING" | "SENDING" | "SENT" | "FAILED" | "CANCELLED";
@@ -86,8 +94,10 @@ const query = (values: Record<string, string | number | undefined>) => {
 export const rsvpReminderKeys = {
   all: (weddingId: string) => ["rsvp-reminders", weddingId] as const,
   summary: (weddingId: string) => ["rsvp-reminders", weddingId, "summary"] as const,
-  history: (weddingId: string, filters: { status?: string; kind?: string; page?: number }) =>
-    ["rsvp-reminders", weddingId, "history", filters] as const,
+  history: (
+    weddingId: string,
+    filters: { status?: string; kind?: string; guestId?: string; page?: number },
+  ) => ["rsvp-reminders", weddingId, "history", filters] as const,
 };
 
 export function getRsvpReminderSummary(api: ApiClient, weddingId: string, signal?: AbortSignal) {
@@ -114,10 +124,17 @@ export function sendRsvpReminders(api: ApiClient, weddingId: string, guestIds: s
   });
 }
 
+export function retryRsvpReminder(api: ApiClient, weddingId: string, reminderId: string) {
+  return api.request(`${base(weddingId)}/${encodeURIComponent(reminderId)}/retry`, {
+    method: "POST",
+    schema: rsvpReminderRetryResultSchema,
+  });
+}
+
 export function listRsvpReminders(
   api: ApiClient,
   weddingId: string,
-  filters: { status?: string; kind?: string; page?: number; pageSize?: number },
+  filters: { status?: string; kind?: string; guestId?: string; page?: number; pageSize?: number },
   signal?: AbortSignal,
 ) {
   return api.request(`${base(weddingId)}${query(filters)}`, {
