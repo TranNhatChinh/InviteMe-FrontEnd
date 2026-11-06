@@ -6,7 +6,16 @@ export { WeddingSetupForm } from "./components/wedding-setup-form";
 export { WeddingOverview } from "./components/wedding-overview";
 export { WeddingNavigation } from "./components/wedding-navigation";
 export { StoryBuilderV4Renderer } from "./components/story-builder-v4-renderer";
-export { isStoryBuilderV4Document } from "./schemas/story-builder-v4.document";
+export {
+  createStoryBuilderV4Document,
+  isStoryBuilderV4Document,
+} from "./schemas/story-builder-v4.document";
+export type {
+  StoryBuilderV4Document,
+  StoryTemplateSummaryV4,
+} from "./schemas/story-builder-v4.schema";
+export type { WeddingSetup } from "./schemas/wedding.schema";
+export { fetchPublicWebsite, getWeddingWebsiteMetadata } from "./lib/public-website-metadata";
 
 export { WebsiteEditor } from "./components/website-editor";
 export { WebsiteRenderer } from "./components/website-renderer";

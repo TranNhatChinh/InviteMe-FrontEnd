@@ -6,7 +6,7 @@ const colors = z.object({
   accent: z.string(),
   text: z.string(),
 });
-const storyTemplateConfigSchema = z
+export const storyTemplateConfigSchema = z
   .object({
     key: z.string(),
     name: z.string(),
@@ -72,6 +72,15 @@ export const storyTemplateAdminApi = {
         schema: adminStoryTemplateSchema,
       },
     ),
+};
+
+export const storyTemplateMetaApi = {
+  variants: (api: ApiClient) =>
+    api.request("/story-template-meta/variants", {
+      schema: z.record(z.string(), z.array(z.string())),
+    }),
+  fonts: (api: ApiClient) =>
+    api.request("/story-template-meta/fonts", { schema: z.array(z.string()) }),
 };
 
 const pageSchema = <T extends z.ZodType>(item: T) =>
