@@ -52,9 +52,35 @@ const storyItemSchema = z.object({
   body: z.string().max(3000).optional(), imageUrl: imageUrlSchema.optional(),
 }).strict();
 
+const storyTemplateConfigSectionSchema = z.object({
+  type: z.string(),
+  variant: z.string(),
+  defaultContent: z.object({
+    title: z.string().max(150).optional(),
+    intro: z.string().max(1000).optional(),
+    eyebrow: z.string().max(120).optional(),
+    subtitle: z.string().max(500).optional(),
+    submitLabel: z.string().max(60).optional(),
+  }).strict().nullable().optional(),
+}).strict().superRefine((section, context) => {
+  const defaults = section.defaultContent;
+  if (!defaults) return;
+  if (defaults.intro && defaults.intro.length > (section.type === "couple" ? 1000 : 500)) {
+    context.addIssue({ code: "custom", path: ["defaultContent", "intro"], message: "Default introduction is too long for this section." });
+  }
+  const allowed = section.type === "hero"
+    ? new Set(["title", "eyebrow", "subtitle"])
+    : section.type === "rsvp"
+      ? new Set(["title", "intro", "submitLabel"])
+      : new Set(["title", "intro"]);
+  for (const key of Object.keys(defaults)) {
+    if (!allowed.has(key)) context.addIssue({ code: "custom", path: ["defaultContent", key], message: `Default content field ${key} is not supported for ${section.type}.` });
+  }
+});
+
 export const storyTemplateConfigSchema = z.object({
   key: z.string().min(1), name: z.string().min(1),
-  sections: z.array(z.object({ type: z.string(), variant: z.string() }).strict()),
+  sections: z.array(storyTemplateConfigSectionSchema),
   theme: z.object({ colors: z.object({ primary: z.string(), background: z.string(), accent: z.string(), text: z.string() }).strict(), fontHeading: z.string(), fontBody: z.string() }).strict(),
   palettes: z.array(z.object({ id: z.string(), label: z.string(), colors: z.object({ primary: z.string(), background: z.string(), accent: z.string(), text: z.string() }).strict() }).strict()),
   allowedFonts: z.array(z.string()), assets: z.record(z.string(), z.string()).nullable().optional(),

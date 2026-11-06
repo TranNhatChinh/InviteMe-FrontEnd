@@ -6,11 +6,37 @@ const colors = z.object({
   accent: z.string(),
   text: z.string(),
 });
+const templateDefaultContentSchema = z.object({
+  title: z.string().max(150).optional(),
+  intro: z.string().max(1000).optional(),
+  eyebrow: z.string().max(120).optional(),
+  subtitle: z.string().max(500).optional(),
+  submitLabel: z.string().max(60).optional(),
+}).strict();
+const templateSectionSchema = z.object({
+  type: z.string(),
+  variant: z.string(),
+  defaultContent: templateDefaultContentSchema.nullable().optional(),
+}).strict().superRefine((section, context) => {
+  const defaults = section.defaultContent;
+  if (!defaults) return;
+  const allowed = section.type === "hero"
+    ? new Set(["title", "eyebrow", "subtitle"])
+    : section.type === "rsvp"
+      ? new Set(["title", "intro", "submitLabel"])
+      : new Set(["title", "intro"]);
+  for (const key of Object.keys(defaults)) {
+    if (!allowed.has(key)) context.addIssue({ code: "custom", path: ["defaultContent", key], message: `Default content field ${key} is not supported for ${section.type}.` });
+  }
+  if (defaults.intro && defaults.intro.length > (section.type === "couple" ? 1000 : 500)) {
+    context.addIssue({ code: "custom", path: ["defaultContent", "intro"], message: "Default introduction is too long for this section." });
+  }
+});
 export const storyTemplateConfigSchema = z
   .object({
     key: z.string(),
     name: z.string(),
-    sections: z.array(z.object({ type: z.string(), variant: z.string() })),
+    sections: z.array(templateSectionSchema),
     theme: z.object({ colors, fontHeading: z.string(), fontBody: z.string() }),
     palettes: z.array(z.object({ id: z.string(), label: z.string(), colors })),
     allowedFonts: z.array(z.string()),
