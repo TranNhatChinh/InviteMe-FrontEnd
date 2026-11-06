@@ -124,6 +124,7 @@ export const storyBuilderV4DocumentSchema = z.object({
   templateKey: z.string().min(1).max(80), templateVersion: z.number().int().positive().optional(),
   templateSnapshot: z.record(z.string(), z.unknown()).optional(),
   navigationMode: z.enum(["one-page", "multi-page", "hybrid"]), content: sharedContentSchema,
+  seo: z.object({ title: z.string().max(70).optional(), description: z.string().max(200).optional(), imageUrl: imageUrlSchema.optional() }).strict().optional(),
   appearance: z.object({ paletteId: z.string().optional(), fontHeading: z.string().optional(), fontBody: z.string().optional(), motion: z.enum(["template", "off"]).optional() }).strict(),
   pages: z.array(pageSchema).min(1).max(8), publishedAt: z.string().optional(),
 }).strict().superRefine((document, context) => {
