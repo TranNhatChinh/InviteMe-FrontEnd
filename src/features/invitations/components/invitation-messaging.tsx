@@ -42,11 +42,14 @@ import { countSmsSegments } from "../utils/sms-segments";
 import { FeatureLimitNotice, useWeddingPlan } from "@/features/plans";
 import { useLocale } from "@/i18n/language-context";
 import { formatNumber } from "@/i18n/format";
+import { groupKind, groupLabels } from "@/shared/lib/planning-groups";
 
 const recipientSchema = z.object({
   id: z.string(),
   recipientName: z.string(),
-  group: z.object({ id: z.string(), name: z.string() }).nullable(),
+  group: groupKind
+    .nullable()
+    .transform((group) => (group ? { id: group, name: groupLabels[group] } : null)),
   phone: z.string().nullable(),
   email: z.string().nullable().optional(),
 });
@@ -86,8 +89,21 @@ function friendlyError(error: unknown, t: (key: string) => string): string {
   if (!(error instanceof ApiError)) return t("errors.generic");
   if (error.status === 503 || error.backendCode === "INVITATION_CHANNEL_NOT_CONFIGURED")
     return t("errors.channelNotConfigured");
-  if (["SMS_PHONE_INVALID", "GUEST_PHONE_INVALID", "TEXTBEE_RECIPIENT_INVALID"].includes(error.backendCode ?? "")) return t("errors.invalidPhone");
-  if (["TEXTBEE_NOT_CONFIGURED", "TEXTBEE_AUTH_FAILED", "TEXTBEE_ACCESS_DENIED", "TEXTBEE_DEVICE_NOT_FOUND"].includes(error.backendCode ?? "")) return t("errors.providerNotConfigured");
+  if (
+    ["SMS_PHONE_INVALID", "GUEST_PHONE_INVALID", "TEXTBEE_RECIPIENT_INVALID"].includes(
+      error.backendCode ?? "",
+    )
+  )
+    return t("errors.invalidPhone");
+  if (
+    [
+      "TEXTBEE_NOT_CONFIGURED",
+      "TEXTBEE_AUTH_FAILED",
+      "TEXTBEE_ACCESS_DENIED",
+      "TEXTBEE_DEVICE_NOT_FOUND",
+    ].includes(error.backendCode ?? "")
+  )
+    return t("errors.providerNotConfigured");
   if (error.backendCode === "SMS_CONTENT_TOO_LONG") return t("errors.smsTooLong");
   if (error.backendCode === "CONCURRENCY_CONFLICT" || error.status === 409)
     return t("errors.conflict");
@@ -324,11 +340,14 @@ export function InvitationMessaging({
       feature: isEmail ? "emailInvites" : "smsInvites",
     };
   };
-  const quotaIssue = plan.data && !plan.isError
-    ? channels
-        .map((channel) => ({ channel, quota: quotaFor(channel) }))
-        .find(({ quota }) => quota && quota.remaining !== null && quota.remaining < selectionCount)
-    : undefined;
+  const quotaIssue =
+    plan.data && !plan.isError
+      ? channels
+          .map((channel) => ({ channel, quota: quotaFor(channel) }))
+          .find(
+            ({ quota }) => quota && quota.remaining !== null && quota.remaining < selectionCount,
+          )
+      : undefined;
   const planUnavailable = plan.isError || (!plan.isPending && !plan.data);
   const canSend = Boolean(
     draftQuery.data &&
@@ -642,8 +661,18 @@ export function InvitationMessaging({
                   {(() => {
                     const smsLength = countSmsSegments(previewQuery.data.smsContent);
                     return (
-                      <p className={smsLength.segments > 3 ? "text-sm text-destructive" : "text-xs text-muted-foreground"}>
-                        {t("smsSegmentCount", { encoding: smsLength.encoding, units: smsLength.units, segments: smsLength.segments })}
+                      <p
+                        className={
+                          smsLength.segments > 3
+                            ? "text-sm text-destructive"
+                            : "text-xs text-muted-foreground"
+                        }
+                      >
+                        {t("smsSegmentCount", {
+                          encoding: smsLength.encoding,
+                          units: smsLength.units,
+                          segments: smsLength.segments,
+                        })}
                         {smsLength.segments > 3 && ` ${t("smsOverLimit")}`}
                       </p>
                     );
@@ -733,7 +762,9 @@ export function InvitationMessaging({
                       : formatNumber(quotaIssue.quota.limit, language),
                 })}
                 variant="compact"
-                upgradeHref={isOwner ? `/weddings/${encodeURIComponent(weddingId)}/plan` : undefined}
+                upgradeHref={
+                  isOwner ? `/weddings/${encodeURIComponent(weddingId)}/plan` : undefined
+                }
                 upgradeLabel={isOwner ? tPlans("gate.viewPlans") : undefined}
               />
             </div>
@@ -812,9 +843,7 @@ export function InvitationMessaging({
                       sendMutation.isPending ||
                       Boolean(uncertainSend) ||
                       plan.isPending ||
-                      Boolean(
-                        quotaFor(channel)?.remaining === 0 && !channels.includes(channel),
-                      )
+                      Boolean(quotaFor(channel)?.remaining === 0 && !channels.includes(channel))
                     }
                     onChange={(event) =>
                       setChannels((current) =>

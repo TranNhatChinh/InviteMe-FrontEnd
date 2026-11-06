@@ -2,6 +2,7 @@ export { AdminAccessControl } from "./components/admin-access-control";
 export { AdminAuditLogs } from "./components/admin-audit-logs";
 export { AdminDashboard } from "./components/admin-dashboard";
 export { AdminPlans } from "./components/admin-plans";
+export { AdminPortalShell } from "./components/admin-portal-shell";
 export { AdminTemplates } from "./components/admin-templates";
 export { adminApi } from "./api/admin.api";
 export { AdminStoryTemplates } from "./components/admin-story-templates";

@@ -16,12 +16,15 @@ import {
 import { usePublicWeddingSignal } from "@/core/realtime/public-wedding-signal";
 import type { z } from "zod";
 import { useTranslation } from "react-i18next";
+import { isStoryBuilderV4Document, StoryBuilderV4Renderer } from "@/features/weddings";
 
 export function PublicWebsiteClient({
   slug,
+  pagePath,
   initial,
 }: {
   slug: string;
+  pagePath?: string;
   initial?: z.infer<typeof publicWebsiteSchema>;
 }) {
   const { t } = useTranslation("public");
@@ -48,6 +51,9 @@ export function PublicWebsiteClient({
       </main>
     );
 
+  if (isStoryBuilderV4Document(site.data.document)) {
+    return <StoryBuilderV4Renderer document={site.data.document} slug={site.data.slug} pagePath={pagePath} />;
+  }
   if (isStoryV3(site.data.document)) {
     return <StoryClassic document={fromStoryV3(site.data.document)} slug={site.data.slug} />;
   }
