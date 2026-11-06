@@ -12,12 +12,14 @@ export function Modal({
   title,
   description,
   children,
+  size = "default",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   description?: string;
   children: ReactNode;
+  size?: "default" | "wide";
 }) {
   const { t } = useTranslation("common");
   const ref = useRef<HTMLDialogElement>(null);
@@ -55,7 +57,7 @@ export function Modal({
         )
           onClose();
       }}
-      className="fixed inset-0 m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-3xl overflow-hidden rounded-2xl border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40 open:flex open:flex-col"
+      className={`fixed inset-0 m-auto ${size === "wide" ? "max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-[1440px] rounded-2xl sm:w-[calc(100%-2rem)]" : "max-h-[85dvh] w-[calc(100%-2rem)] max-w-3xl rounded-2xl"} overflow-hidden border bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40 open:flex open:flex-col`}
     >
       <header className="flex shrink-0 items-start justify-between gap-4 border-b border-foreground/10 px-5 py-4">
         <div>
@@ -79,7 +81,9 @@ export function Modal({
           <X className="size-5" />
         </Button>
       </header>
-      <div className="min-h-0 overflow-y-auto p-5">{children}</div>
+      <div className={`min-h-0 overflow-y-auto ${size === "wide" ? "p-3 sm:p-4" : "p-5"}`}>
+        {children}
+      </div>
     </dialog>
   );
 }

@@ -173,7 +173,7 @@ function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDo
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/65 to-transparent px-4 pb-4 pt-12 text-sm text-white"><span>{template.config.category || "Website cưới"}</span>{isCurrent ? <span className="rounded-full bg-white/20 px-2 py-1 text-xs">Đang dùng</span> : <Eye className="size-4 opacity-0 transition group-hover:opacity-100" />}</div>
           </button>
           <div className="mt-4 flex items-start justify-between gap-3">
-            <div><h2 className="font-display text-xl text-foreground">{template.name}</h2><p className="mt-1 text-xs text-muted-foreground">{template.config.accessTier === "PREMIUM" ? "Premium" : template.config.accessTier === "FREE" ? "Miễn phí" : "Chưa phân loại"} · {template.config.sections.length} phần gợi ý</p></div>
+            <div className="min-w-0"><h2 className="font-display text-xl text-foreground">{template.name}</h2><p className="mt-1 text-xs text-muted-foreground">{template.config.accessTier === "PREMIUM" ? "Premium" : template.config.accessTier === "FREE" ? "Miễn phí" : "Chưa phân loại"} · {template.config.sections.length} phần gợi ý</p><div className="mt-3 flex items-center gap-2"><span className="flex gap-1.5" aria-label="Bảng màu của mẫu">{[template.config.theme.colors.primary, template.config.theme.colors.background, template.config.theme.colors.accent].map((color, index) => <span key={`${color}-${index}`} className="size-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}</span><span className="truncate text-[11px] text-muted-foreground">{template.config.theme.fontHeading} · {template.config.category || "Website cưới"}</span></div></div>
             {premiumLocked(template) ? <Button asChild size="sm"><Link href={`/weddings/${encodeURIComponent(weddingId)}/plan`}>Xem các gói</Link></Button> : <Button size="sm" disabled={busy || locked || isCurrent} onClick={() => { setMessage(""); setSelectedTemplate(template); }}>{locked ? "Đang kiểm tra gói" : isCurrent ? "Mẫu đang dùng" : currentDocument ? "Xem & đổi mẫu" : legacyDocument ? "Xem & chuyển" : "Xem mẫu"}</Button>}
           </div>
           {template.config.accessTier === "UNCLASSIFIED" && <p className="mt-2 text-xs text-muted-foreground">Mẫu chưa được Admin phân loại gói.</p>}
@@ -292,6 +292,7 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   const templateQuery = useQuery({ queryKey: ["story-templates"], queryFn: () => listStoryTemplates(api), staleTime: 60_000 });
   const mediaLibrary = useQuery({ queryKey: ["wedding-media", weddingId], queryFn: () => listWeddingMedia(api, weddingId), enabled: mediaPickerOpen });
   const currentTemplate = templateQuery.data?.find(item => item.key === doc?.templateKey);
+  const sectionLibraryDefaults = currentTemplate?.config.sections.find(item => item.type === sectionLibraryType)?.defaultContent;
   const currentTier = currentTemplate?.config.accessTier ?? record(doc?.templateSnapshot).accessTier;
   const currentPage = doc?.pages.find(page => page.id === selectedPageId) ?? doc?.pages.find(page => page.isHome);
   const currentSection = currentPage?.sections.find(section => section.id === selectedSectionId);
@@ -331,11 +332,11 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
     const previewDocument = clone(doc);
     const page = previewDocument.pages.find(item => item.id === currentPage?.id);
     if (!page) return previewDocument;
-    const section = createV4Section(sectionLibraryType, previewDocument.content, setup);
+    const section = createV4Section(sectionLibraryType, previewDocument.content, setup, sectionLibraryDefaults);
     section.variant = sectionLibraryVariant as typeof section.variant;
     page.sections = [section];
     return previewDocument;
-  }, [doc, currentPage?.id, sectionLibraryType, sectionLibraryVariant, setup]);
+  }, [doc, currentPage?.id, sectionLibraryType, sectionLibraryVariant, sectionLibraryDefaults, setup]);
   const pageIndex = doc?.pages.findIndex(page => page.id === currentPage?.id) ?? -1;
   const sectionIndex = currentPage?.sections.findIndex(section => section.id === currentSection?.id) ?? -1;
   const selectSection = (sectionId: string) => {
@@ -493,7 +494,7 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   function addSection(type: SectionType, variant?: string): boolean {
     const totalSections = doc?.pages.reduce((total, page) => total + page.sections.length, 0) ?? 0;
     if (!doc || !currentPage || currentPage.sections.length >= 24 || totalSections >= 80) return false;
-    const nextSection = createV4Section(type, doc.content, setup);
+    const nextSection = createV4Section(type, doc.content, setup, currentTemplate?.config.sections.find(item => item.type === type)?.defaultContent);
     if (variant) nextSection.variant = variant as typeof nextSection.variant;
     if (type === "hero" && currentPage.sections.some(item => item.type === "hero")) return false;
     mutate(copy => {
@@ -522,7 +523,8 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   function addPage() {
     if (!doc || doc.pages.length >= 8 || !pageName.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pageSlug.trim())) return;
     if (doc.pages.some(page => page.slug.toLowerCase() === pageSlug.trim().toLowerCase())) { setError("Đường dẫn trang này đã được dùng."); return; }
-    const hero = createV4Section("hero", doc.content, setup); const rsvp = createV4Section("rsvp", doc.content, setup);
+    const hero = createV4Section("hero", doc.content, setup, currentTemplate?.config.sections.find(item => item.type === "hero")?.defaultContent);
+    const rsvp = createV4Section("rsvp", doc.content, setup, currentTemplate?.config.sections.find(item => item.type === "rsvp")?.defaultContent);
     const page = { id: id(), slug: pageSlug.trim(), title: pageName.trim(), navigationLabel: pageName.trim(), isHome: false, visible: true, sections: [hero, rsvp] };
     mutate(copy => { copy.pages.push(page); if (copy.navigationMode === "one-page") copy.navigationMode = "multi-page"; });
     setSelectedPageId(page.id); setSelectedSectionId(hero.id); setPageName(""); setPageSlug("");
@@ -980,17 +982,19 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
     setBatchUploading(false);
   }
   return <div className="min-h-[300px]">
-    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-4 py-3"><div><p className="text-xs text-muted-foreground">ĐANG CHỈNH SỬA</p><h2 className="mt-1 text-sm font-semibold">{sectionName}</h2></div></div>
-    <div className="flex border-b border-border px-4"><button className={`border-b-2 px-3 py-2.5 text-sm ${tab === "content" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("content")}>Nội dung</button><button className={`border-b-2 px-3 py-2.5 text-sm ${tab === "style" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("style")}>Kiểu hiển thị</button></div>
+    <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3"><p className="text-xs text-muted-foreground">ĐANG CHỈNH SỬA</p><h2 className="mt-1 text-sm font-semibold">{sectionName}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{sectionDescriptions[section.type]}</p></div>
+    <div className="flex border-b border-border px-4" role="group" aria-label={`Chỉnh ${sectionName}`}><button type="button" aria-pressed={tab === "content"} className={`border-b-2 px-3 py-2.5 text-sm ${tab === "content" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("content")}>Nội dung</button><button type="button" aria-pressed={tab === "style"} className={`border-b-2 px-3 py-2.5 text-sm ${tab === "style" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("style")}>Kiểu hiển thị</button></div>
     <div className="space-y-5 p-4">
-      {page && <fieldset className="space-y-3 border-b border-border pb-5">
-        <legend className="pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cài đặt trang</legend>
-        <Field label="Tên trang" value={page.title} error={errorAt(["pages", pageIndex, "title"])} onChange={value => pageChange({ title: value, navigationLabel: page.navigationLabel || value })} />
-        <Field label="Nhãn điều hướng" value={page.navigationLabel ?? page.title} error={errorAt(["pages", pageIndex, "navigationLabel"])} onChange={value => pageChange({ navigationLabel: value })} />
-        {page.isHome ? <p className="text-xs text-muted-foreground">Trang chủ dùng đường dẫn gốc của website.</p> : <Field label="Đường dẫn" value={page.slug} placeholder="our-story" error={errorAt(["pages", pageIndex, "slug"])} onChange={value => pageChange({ slug: value.toLocaleLowerCase() })} />}
-        <label className="flex items-center justify-between text-sm">Hiển thị trang<input type="checkbox" checked={page.visible !== false} onChange={event => pageChange({ visible: event.target.checked })} /></label>
-        {!page.isHome && <Button size="sm" variant="outline" className="text-destructive" onClick={pageDelete}><Trash2 className="mr-1.5 size-3.5" />Xóa trang</Button>}
-      </fieldset>}
+      {page && tab === "content" && <details className="border-b border-border pb-4">
+        <summary className="min-h-10 cursor-pointer py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cài đặt trang · {page.title}</summary>
+        <div className="mt-3 space-y-3">
+          <Field label="Tên trang" value={page.title} error={errorAt(["pages", pageIndex, "title"])} onChange={value => pageChange({ title: value, navigationLabel: page.navigationLabel || value })} />
+          <Field label="Nhãn điều hướng" value={page.navigationLabel ?? page.title} error={errorAt(["pages", pageIndex, "navigationLabel"])} onChange={value => pageChange({ navigationLabel: value })} />
+          {page.isHome ? <p className="text-xs text-muted-foreground">Trang chủ dùng đường dẫn gốc của website.</p> : <Field label="Đường dẫn" value={page.slug} placeholder="our-story" error={errorAt(["pages", pageIndex, "slug"])} onChange={value => pageChange({ slug: value.toLocaleLowerCase() })} />}
+          <label className="flex min-h-10 items-center justify-between text-sm">Hiển thị trang<input type="checkbox" checked={page.visible !== false} onChange={event => pageChange({ visible: event.target.checked })} /></label>
+          {!page.isHome && <Button size="sm" variant="outline" className="text-destructive" onClick={pageDelete}><Trash2 className="mr-1.5 size-3.5" />Xóa trang</Button>}
+        </div>
+      </details>}
       {tab === "content" ? <>
         <Field label="Tiêu đề điều hướng" value={section.navigationLabel ?? ""} error={errorAt([...sectionPath, "navigationLabel"])} onChange={value => onSection({ navigationLabel: value })} placeholder={sectionName} />
         {section.type === "hero" && <>{field("Tiêu đề lớn", "title", "Tên hai bạn hoặc tên đám cưới")}{field("Lời dẫn", "subtitle", "Lời mời ngắn")} {field("Dòng nhấn", "eyebrow", "")}
@@ -1018,7 +1022,6 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
           })}
           {availableBindings.some(option => !bindings.some(binding => binding.target === option.target)) && <select className={inputClass} value="" aria-label="Thêm liên kết Wedding Setup" onChange={event => { if (event.target.value) onBinding(event.target.value, "dynamic"); }}><option value="">+ Thêm dữ liệu từ Wedding Setup</option>{availableBindings.filter(option => !bindings.some(binding => binding.target === option.target)).map(option => <option key={option.target} value={option.target}>{option.label}</option>)}</select>}
         </fieldset>}
-        <div className="flex gap-2 border-t border-border pt-4"><Button size="sm" variant="outline" onClick={onDuplicate} disabled={section.type === "hero"}><Copy className="mr-1.5 size-3.5" />Nhân bản</Button><Button size="sm" variant="outline" className="text-destructive" onClick={onDelete} disabled={section.type === "hero" && page?.sections.length === 1}><Trash2 className="mr-1.5 size-3.5" />Xóa phần</Button></div>
       </> : <>
         {template && <>
           <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Bảng màu
@@ -1037,7 +1040,12 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
         <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Nền phần
           <select className={inputClass} value={section.style?.background ?? "default"} onChange={event => onSection({ style: { ...section.style, background: event.target.value as "default" | "soft" | "accent" } })}><option value="default">Mặc định</option><option value="soft">Nền dịu</option><option value="accent">Nền nhấn</option></select>
         </label>
+        <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Chuyển động
+          <select className={inputClass} value={section.style?.animation ?? "none"} onChange={event => onSection({ style: { ...section.style, animation: event.target.value as "none" | "fade" } })}><option value="none">Không chuyển động</option><option value="fade">Hiện nhẹ khi tải trang</option></select>
+          <span className="text-[11px] font-normal leading-5">Tự tắt hiệu ứng khi thiết bị bật giảm chuyển động.</span>
+        </label>
       </>}
+      <div className="flex gap-2 border-t border-border pt-4"><Button type="button" size="sm" variant="outline" onClick={onDuplicate} disabled={section.type === "hero"}><Copy className="mr-1.5 size-3.5" />Nhân bản</Button><Button type="button" size="sm" variant="outline" className="text-destructive" onClick={onDelete} disabled={section.type === "hero" && page?.sections.length === 1}><Trash2 className="mr-1.5 size-3.5" />Xóa phần</Button></div>
     </div>
   </div>;
 }

@@ -2480,3 +2480,21 @@ body:has(.landing-dialog[open]) {
 .template-canvas .font-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
+.story-section--fade {
+  animation: story-section-enter 650ms ease-out both;
+}
+@keyframes story-section-enter {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-section--fade {
+    animation: none;
+  }
+}

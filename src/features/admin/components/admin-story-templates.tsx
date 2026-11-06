@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Eye, Plus, Search, Upload } from "lucide-react";
+import { Download, Eye, Monitor, Plus, Search, Smartphone, Tablet, Upload } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { PageHeader } from "@/shared/components/page-header";
 import { Button } from "@/shared/ui/button";
@@ -55,6 +55,11 @@ type Confirmation = "publish" | "archive" | null;
 type PendingImport = { templates: StoryTemplateConfig[]; existingKeys: string[] };
 
 const colorFields = ["primary", "background", "accent", "text"] as const;
+const previewViewports = [
+  { id: "desktop", Icon: Monitor },
+  { id: "tablet", Icon: Tablet },
+  { id: "mobile", Icon: Smartphone },
+] as const;
 const emptyTemplates: AdminStoryTemplate[] = [];
 
 function createEmptyTemplate(): StoryTemplateConfig {
@@ -208,6 +213,22 @@ export function AdminStoryTemplates() {
     setMessage("");
   };
   const change = (next: StoryTemplateConfig) => setForm(next);
+
+  const updateDefaultContent = (
+    sectionIndex: number,
+    field: "title" | "intro" | "eyebrow" | "subtitle" | "submitLabel",
+    value: string,
+  ) => {
+    if (!form) return;
+    const sections = form.sections.map((section, index) => {
+      if (index !== sectionIndex) return section;
+      const defaultContent = { ...(section.defaultContent ?? {}) };
+      if (value.trim()) defaultContent[field] = value;
+      else delete defaultContent[field];
+      return { ...section, defaultContent: Object.keys(defaultContent).length ? defaultContent : undefined };
+    });
+    change({ ...form, sections });
+  };
 
   const action = async (run: () => Promise<unknown>, success: string) => {
     setBusy(true);
@@ -675,6 +696,9 @@ export function AdminStoryTemplates() {
                           <p className="mt-1 text-xs text-muted-foreground">
                             {t("storyTemplates.sectionsHelp")}
                           </p>
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+                          {t("storyTemplates.defaultContentHelp")}
+                        </p>
                         </div>
                         <span className="font-mono text-xs text-muted-foreground">
                           {form.sections.length}/12
@@ -684,85 +708,142 @@ export function AdminStoryTemplates() {
                         {form.sections.map((section, index) => (
                           <li
                             key={section.type}
-                            className="flex flex-wrap items-center gap-2 py-2.5"
+                            className="py-3"
                           >
-                            <span className="w-6 font-mono text-xs text-muted-foreground">
-                              {String(index + 1).padStart(2, "0")}
-                            </span>
-                            <span className="min-w-28 flex-1 text-sm text-foreground">
-                              {t(`storyTemplates.sectionTypes.${section.type}`, {
-                                defaultValue: section.type,
-                              })}
-                            </span>
-                            <select
-                              value={section.variant}
-                              onChange={(event) =>
-                                change({
-                                  ...form,
-                                  sections: form.sections.map((item, itemIndex) =>
-                                    itemIndex === index
-                                      ? { ...item, variant: event.target.value }
-                                      : item,
-                                  ),
-                                })
-                              }
-                              disabled={!variantsQuery.data}
-                              className="h-9 min-w-32 rounded-md border border-input bg-background px-2 text-xs"
-                              aria-label={t("storyTemplates.variantFor", {
-                                section: t(`storyTemplates.sectionTypes.${section.type}`, {
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="w-6 font-mono text-xs text-muted-foreground">
+                                {String(index + 1).padStart(2, "0")}
+                              </span>
+                              <span className="min-w-28 flex-1 text-sm text-foreground">
+                                {t(`storyTemplates.sectionTypes.${section.type}`, {
                                   defaultValue: section.type,
-                                }),
-                              })}
-                            >
-                              {(variantsQuery.data?.[section.type] ?? [section.variant]).map(
-                                (variant) => (
-                                  <option key={variant} value={variant}>
-                                    {t(`storyTemplates.variants.${variant}`, {
-                                      defaultValue: variant,
-                                    })}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                            <div className="flex gap-1">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={index <= 1}
-                                aria-label={t("storyTemplates.moveUp")}
-                                onClick={() => reorderSection(index, index - 1)}
-                              >
-                                ↑
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={index === form.sections.length - 1}
-                                aria-label={t("storyTemplates.moveDown")}
-                                onClick={() => reorderSection(index, index + 1)}
-                              >
-                                ↓
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={section.type === "hero" || section.type === "rsvp"}
-                                aria-label={t("storyTemplates.removeSection")}
-                                onClick={() =>
+                                })}
+                              </span>
+                              <select
+                                value={section.variant}
+                                onChange={(event) =>
                                   change({
                                     ...form,
-                                    sections: form.sections.filter(
-                                      (_, itemIndex) => itemIndex !== index,
+                                    sections: form.sections.map((item, itemIndex) =>
+                                      itemIndex === index
+                                        ? { ...item, variant: event.target.value }
+                                        : item,
                                     ),
                                   })
                                 }
+                                disabled={!variantsQuery.data}
+                                className="h-9 min-w-32 rounded-md border border-input bg-background px-2 text-xs"
+                                aria-label={t("storyTemplates.variantFor", {
+                                  section: t(`storyTemplates.sectionTypes.${section.type}`, {
+                                    defaultValue: section.type,
+                                  }),
+                                })}
                               >
-                                ×
-                              </Button>
+                                {(variantsQuery.data?.[section.type] ?? [section.variant]).map(
+                                  (variant) => (
+                                    <option key={variant} value={variant}>
+                                      {t(`storyTemplates.variants.${variant}`, {
+                                        defaultValue: variant,
+                                      })}
+                                    </option>
+                                  ),
+                                )}
+                              </select>
+                              <div className="flex gap-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={index <= 1}
+                                  aria-label={t("storyTemplates.moveUp")}
+                                  onClick={() => reorderSection(index, index - 1)}
+                                >
+                                  ↑
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={index === form.sections.length - 1}
+                                  aria-label={t("storyTemplates.moveDown")}
+                                  onClick={() => reorderSection(index, index + 1)}
+                                >
+                                  ↓
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={section.type === "hero" || section.type === "rsvp"}
+                                  aria-label={t("storyTemplates.removeSection")}
+                                  onClick={() =>
+                                    change({
+                                      ...form,
+                                      sections: form.sections.filter(
+                                        (_, itemIndex) => itemIndex !== index,
+                                      ),
+                                    })
+                                  }
+                                >
+                                  ×
+                                </Button>
+                              </div>
                             </div>
+                            <details className="mt-2 rounded-md bg-muted/30 px-3 py-2">
+                              <summary className="cursor-pointer text-xs font-medium text-foreground">
+                                {t("storyTemplates.defaultsTitle")}
+                              </summary>
+                              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                <label className="grid gap-1 text-xs text-muted-foreground">
+                                  {t("storyTemplates.defaultTitleLabel")}
+                                  <Input
+                                    value={section.defaultContent?.title ?? ""}
+                                    maxLength={150}
+                                    onChange={(event) => updateDefaultContent(index, "title", event.target.value)}
+                                    className="h-9 text-sm"
+                                  />
+                                </label>
+                                {section.type !== "hero" && <label className="grid gap-1 text-xs text-muted-foreground">
+                                  {t("storyTemplates.defaultIntroLabel")}
+                                  <textarea
+                                    value={section.defaultContent?.intro ?? ""}
+                                    maxLength={section.type === "couple" ? 1000 : 500}
+                                    onChange={(event) => updateDefaultContent(index, "intro", event.target.value)}
+                                    rows={2}
+                                    className="min-h-9 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  />
+                                </label>}
+                                {section.type === "hero" && <>
+                                  <label className="grid gap-1 text-xs text-muted-foreground">
+                                    {t("storyTemplates.defaultEyebrowLabel")}
+                                    <Input
+                                      value={section.defaultContent?.eyebrow ?? ""}
+                                      maxLength={120}
+                                      onChange={(event) => updateDefaultContent(index, "eyebrow", event.target.value)}
+                                      className="h-9 text-sm"
+                                    />
+                                  </label>
+                                  <label className="grid gap-1 text-xs text-muted-foreground">
+                                    {t("storyTemplates.defaultSubtitleLabel")}
+                                    <Input
+                                      value={section.defaultContent?.subtitle ?? ""}
+                                      maxLength={500}
+                                      onChange={(event) => updateDefaultContent(index, "subtitle", event.target.value)}
+                                      className="h-9 text-sm"
+                                    />
+                                  </label>
+                                </>}
+                                {section.type === "rsvp" && <label className="grid gap-1 text-xs text-muted-foreground">
+                                  {t("storyTemplates.defaultSubmitLabel")}
+                                  <Input
+                                    value={section.defaultContent?.submitLabel ?? ""}
+                                    maxLength={60}
+                                    onChange={(event) => updateDefaultContent(index, "submitLabel", event.target.value)}
+                                    className="h-9 text-sm"
+                                  />
+                                </label>}
+                              </div>
+                            </details>
                           </li>
                         ))}
                       </ol>
@@ -1020,7 +1101,7 @@ export function AdminStoryTemplates() {
                   </div>
 
                   <aside className="min-w-0 space-y-3 2xl:sticky 2xl:top-5 2xl:self-start">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-muted-foreground">
                         {t("storyTemplates.previewFor", {
                           version:
@@ -1030,20 +1111,22 @@ export function AdminStoryTemplates() {
                         })}
                       </p>
                       <div
-                        className="flex gap-1"
+                        className="inline-flex w-fit rounded-lg border border-border bg-muted/40 p-1"
                         role="group"
                         aria-label={t("storyTemplates.previewSize")}
                       >
-                        {(["desktop", "tablet", "mobile"] as const).map((size) => (
+                        {previewViewports.map(({ id, Icon }) => (
                           <Button
-                            key={size}
+                            key={id}
                             type="button"
                             size="sm"
-                            variant={viewport === size ? "default" : "outline"}
-                            onClick={() => setViewport(size)}
-                            aria-pressed={viewport === size}
+                            variant={viewport === id ? "default" : "ghost"}
+                            onClick={() => setViewport(id)}
+                            aria-pressed={viewport === id}
+                            className="gap-1.5 px-2.5"
                           >
-                            {t(`storyTemplates.viewports.${size}`)}
+                            <Icon className="size-4" />
+                            <span>{t(`storyTemplates.viewports.${id}`)}</span>
                           </Button>
                         ))}
                       </div>
@@ -1053,6 +1136,7 @@ export function AdminStoryTemplates() {
                         config={previewConfig}
                         version={currentTemplateVersion}
                         viewport={viewport}
+                        onViewportChange={setViewport}
                       />
                     )}
                     {!previewConfig && (
@@ -1092,6 +1176,7 @@ export function AdminStoryTemplates() {
                       config={previewConfig}
                       version={selectedTemplate.publishedVersion || selectedTemplate.version}
                       viewport={viewport}
+                      onViewportChange={setViewport}
                     />
                   )}
                   <p className="text-xs text-muted-foreground">
