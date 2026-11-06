@@ -6,15 +6,26 @@ const colors = z.object({
   accent: z.string(),
   text: z.string(),
 });
-const storyTemplateConfigSchema = z.object({
-  key: z.string(),
-  name: z.string(),
-  sections: z.array(z.object({ type: z.string(), variant: z.string() })),
-  theme: z.object({ colors, fontHeading: z.string(), fontBody: z.string() }),
-  palettes: z.array(z.object({ id: z.string(), label: z.string(), colors })),
-  allowedFonts: z.array(z.string()),
-  assets: z.record(z.string(), z.string()).nullable().optional(),
-});
+const storyTemplateConfigSchema = z
+  .object({
+    key: z.string(),
+    name: z.string(),
+    sections: z.array(z.object({ type: z.string(), variant: z.string() })),
+    theme: z.object({ colors, fontHeading: z.string(), fontBody: z.string() }),
+    palettes: z.array(z.object({ id: z.string(), label: z.string(), colors })),
+    allowedFonts: z.array(z.string()),
+    assets: z.record(z.string(), z.string()).nullable().optional(),
+    accessTier: z.enum(["UNCLASSIFIED", "FREE", "PREMIUM"]).default("UNCLASSIFIED"),
+    // Keep reads compatible with the V4 builder's string categories and older catalog values.
+    category: z.string().max(80).nullable().optional(),
+    previewImageUrl: z
+      .string()
+      .max(2048)
+      .startsWith("/images/story-templates/")
+      .nullable()
+      .optional(),
+  })
+  .strict();
 
 export const adminStoryTemplateSchema = z.object({
   id: z.string(),
@@ -37,13 +48,13 @@ export const storyTemplateAdminApi = {
   create: (api: ApiClient, key: string, draft: StoryTemplateConfig) =>
     api.request("/admin/story-templates", {
       method: "POST",
-      body: { key, draft },
+      body: { key, draft: storyTemplateConfigSchema.parse(draft) },
       schema: adminStoryTemplateSchema,
     }),
   save: (api: ApiClient, id: string, expectedVersion: number, draft: StoryTemplateConfig) =>
     api.request(`/admin/story-templates/${encodeURIComponent(id)}/draft`, {
       method: "PUT",
-      body: { expectedVersion, draft },
+      body: { expectedVersion, draft: storyTemplateConfigSchema.parse(draft) },
       schema: adminStoryTemplateSchema,
     }),
   publish: (api: ApiClient, id: string, expectedVersion: number) =>
@@ -95,7 +106,6 @@ export const adminUserSchema = z.object({
 });
 export type AdminUser = z.infer<typeof adminUserSchema>;
 export const adminUsersSchema = pageSchema(adminUserSchema);
-
 export const adminWeddingSchema = z.object({
   id: z.string(),
   ownerUserId: z.string(),
@@ -107,6 +117,39 @@ export const adminWeddingSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
 });
 export const adminWeddingsSchema = pageSchema(adminWeddingSchema);
+export const adminUserDetailSchema = z.object({
+  account: adminUserSchema,
+  weddingCount: z.number(),
+  recentWeddings: z.array(adminWeddingSchema),
+});
+export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
+export const adminWeddingDetailSchema = z.object({
+  wedding: adminWeddingSchema,
+  plan: z.object({
+    weddingId: z.string(),
+    planCode: z.string(),
+    planName: z.string(),
+    legacy: z.boolean(),
+    usage: z.object({
+      guestPlaces: z.number(),
+      mediaImages: z.number(),
+      emailInvites: z.number(),
+      smsInvites: z.number(),
+      reminderRounds: z.number(),
+      coHosts: z.number(),
+      seatingTables: z.number(),
+      aiThankYouRuns: z.number(),
+    }),
+    publicLinkUntil: z.iso.datetime({ offset: true }).nullable(),
+  }),
+  websiteStatus: z.string(),
+  activeGuests: z.number(),
+  emailInvitationsSent: z.number(),
+  smsInvitationsSent: z.number(),
+  failedInvitationJobs: z.number(),
+  pendingInvitationJobs: z.number(),
+});
+export type AdminWeddingDetail = z.infer<typeof adminWeddingDetailSchema>;
 
 export const adminTemplateSchema = z.object({
   id: z.string(),
@@ -261,6 +304,8 @@ function queryString(values: Record<string, string | number | undefined>) {
 }
 
 export const adminApi = {
+  myPermissions: (api: ApiClient, signal?: AbortSignal) =>
+    api.request("/admin/me/permissions", { signal, schema: z.array(z.string()) }),
   dashboard: (api: ApiClient, signal?: AbortSignal) =>
     api.request("/admin/dashboard", { signal, schema: adminDashboardSchema }),
   users: (
@@ -268,6 +313,11 @@ export const adminApi = {
     input: { page: number; pageSize?: number; search?: string; status?: string; role?: string },
     signal?: AbortSignal,
   ) => api.request(`/admin/users?${queryString(input)}`, { signal, schema: adminUsersSchema }),
+  userDetail: (api: ApiClient, userId: string, signal?: AbortSignal) =>
+    api.request(`/admin/users/${encodeURIComponent(userId)}`, {
+      signal,
+      schema: adminUserDetailSchema,
+    }),
   setUserStatus: (api: ApiClient, userId: string, status: "ACTIVE" | "SUSPENDED") =>
     api.request(`/admin/users/${encodeURIComponent(userId)}/status`, {
       method: "PUT",
@@ -286,6 +336,11 @@ export const adminApi = {
     signal?: AbortSignal,
   ) =>
     api.request(`/admin/weddings?${queryString(input)}`, { signal, schema: adminWeddingsSchema }),
+  weddingDetail: (api: ApiClient, weddingId: string, signal?: AbortSignal) =>
+    api.request(`/admin/weddings/${encodeURIComponent(weddingId)}`, {
+      signal,
+      schema: adminWeddingDetailSchema,
+    }),
   templates: (
     api: ApiClient,
     input: { page: number; pageSize?: number; search?: string; status?: string },
@@ -361,6 +416,7 @@ export const adminApi = {
       pageSize?: number;
       action?: string;
       entityType?: string;
+      entityId?: string;
       from?: string;
       to?: string;
     },

@@ -37,6 +37,7 @@ export const builtinStoryTemplateCatalog: PublicStoryTemplate[] =
       key, name: template.name, version: 1,
       config: {
         key, name: template.name,
+        accessTier: "UNCLASSIFIED",
         sections: template.sections.map((type) => ({ type, variant: (template.variants as Record<string, string>)[type] ?? "default" })),
         theme: { colors: defaultColors, fontHeading: "Georgia", fontBody: "Georgia" },
         palettes: paletteIds.map((id) => ({ id, label: storyPalettes[id].label, colors: storyPalettes[id] })),

@@ -17,7 +17,8 @@ export type PlanEntitlement =
   | "mediaImages"
   | "emailInvites"
   | "smsInvites"
-  | "seatingTables";
+  | "seatingTables"
+  | "premiumTemplates";
 export type PlanGateReason = "not-included" | "limit-reached";
 
 export function useWeddingPlan(weddingId: string, enabled = true) {
@@ -46,6 +47,10 @@ export function planEntitlementState(
     return plan.limits[entitlement]
       ? { locked: false }
       : { locked: true, reason: "not-included" };
+  }
+
+  if (entitlement === "premiumTemplates") {
+    return plan.limits.premiumTemplates ? { locked: false } : { locked: true, reason: "not-included" };
   }
 
   const limit = plan.limits[entitlement];

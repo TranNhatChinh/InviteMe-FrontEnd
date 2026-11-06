@@ -6,6 +6,7 @@ import { resolveMediaUrl } from "@/core/config/media-url";
 import { studioDocumentSchema } from "@/features/template-studio/schemas/document";
 import { weddingStorySchema, isWeddingStoryDocument } from "../schemas/wedding-story.schema";
 import { storyDraftV3Schema, storySnapshotV3Schema } from "../schemas/story-v3.schema";
+import { storyBuilderV4DocumentSchema, storyTemplateSummarySchema } from "../schemas/story-builder-v4.schema";
 
 export const websiteTemplates = [
   { id: "story-red-velvet", name: "Đỏ nhung", color: "#7d1929", background: "#fff7f2" },
@@ -48,6 +49,7 @@ export const legacyWebsiteDocumentSchema = z
 export type LegacyWebsiteDocument = z.infer<typeof legacyWebsiteDocumentSchema>;
 
 export const websiteDocumentSchema = z.union([
+  storyBuilderV4DocumentSchema,
   storyDraftV3Schema,
   storySnapshotV3Schema,
   weddingStorySchema,
@@ -77,26 +79,7 @@ export const storyWishSchema = z.object({
   message: z.string(),
   createdAt: z.string(),
 });
-export const storyTemplateConfigSchema = z.object({
-  key: z.string(), name: z.string(),
-  sections: z.array(z.object({ type: z.string(), variant: z.string() })),
-  theme: z.object({
-    colors: z.object({ primary: z.string(), background: z.string(), accent: z.string(), text: z.string() }),
-    fontHeading: z.string(), fontBody: z.string(),
-  }),
-  palettes: z.array(z.object({
-    id: z.string(), label: z.string(),
-    colors: z.object({ primary: z.string(), background: z.string(), accent: z.string(), text: z.string() }),
-  })),
-  allowedFonts: z.array(z.string()),
-  assets: z.record(z.string(), z.string()).nullable().optional(),
-});
-export const storyTemplateSummarySchema = z.object({
-  key: z.string(),
-  version: z.number(),
-  name: z.string(),
-  config: storyTemplateConfigSchema,
-});
+export { storyTemplateSummarySchema };
 export type PublicStoryTemplate = z.infer<typeof storyTemplateSummarySchema>;
 export const listStoryTemplates = (api: ApiClient) =>
   api.request("/story-templates", { schema: z.array(storyTemplateSummarySchema) });
@@ -150,6 +133,17 @@ export function mapStudioMedia(
   };
 }
 
+function mapV4Media<T>(value: T, mapper: (src: string) => string): T {
+  if (Array.isArray(value)) return value.map((item) => mapV4Media(item, mapper)) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [
+      key,
+      typeof nested === "string" && /(?:imageurl|photourl)$/i.test(key) ? mapper(nested) : mapV4Media(nested, mapper),
+    ])) as T;
+  }
+  return value;
+}
+
 export function toStoredSource(src: string) {
   try {
     const url = new URL(src);
@@ -171,12 +165,16 @@ export const resolveWebsiteDocument = (document: StudioDocument) =>
   mapStudioMedia(document, (src) => resolveMediaUrl(toStoredSource(src)) ?? src);
 
 export const storedWebsiteDocument = (document: WebsiteDocument) =>
-  isStudioDocument(document) ? mapStudioMedia(document, toStoredSource) : document;
+  isStudioDocument(document) ? mapStudioMedia(document, toStoredSource) :
+    storyBuilderV4DocumentSchema.safeParse(document).success ? mapV4Media(document, toStoredSource) as WebsiteDocument : document;
 
 function resolveDocumentMedia(doc: WebsiteDocument | null): WebsiteDocument | null {
   if (!doc) return null;
   if (isStudioDocument(doc)) {
     return resolveWebsiteDocument(doc);
+  }
+  if (storyBuilderV4DocumentSchema.safeParse(doc).success) {
+    return mapV4Media(doc, (source) => resolveMediaUrl(source) ?? source);
   }
   return doc;
 }

@@ -24,10 +24,17 @@ export function AdminAuditLogs() {
   const { language } = useLocale();
   const { api } = useRuntime();
   const [page, setPage] = useState(1);
-  const [draft, setDraft] = useState({ action: "", entityType: "", from: "", to: "" });
+  const [draft, setDraft] = useState({
+    action: "",
+    entityType: "",
+    entityId: "",
+    from: "",
+    to: "",
+  });
   const [filters, setFilters] = useState<{
     action?: string;
     entityType?: string;
+    entityId?: string;
     from?: string;
     to?: string;
   }>({});
@@ -42,30 +49,35 @@ export function AdminAuditLogs() {
       setError(t("invalidDateRange"));
       return;
     }
+    if (
+      draft.entityId.trim() &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(draft.entityId.trim())
+    ) {
+      setError(t("invalidAuditEntityId"));
+      return;
+    }
     setError("");
     setPage(1);
     setFilters({
       action: draft.action.trim() || undefined,
       entityType: draft.entityType.trim() || undefined,
+      entityId: draft.entityId.trim() || undefined,
       from: bound(draft.from, false),
       to: bound(draft.to, true),
     });
   }
   function reset() {
-    setDraft({ action: "", entityType: "", from: "", to: "" });
+    setDraft({ action: "", entityType: "", entityId: "", from: "", to: "" });
     setFilters({});
     setError("");
     setPage(1);
   }
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Platform audit log"
-        description="System-wide history of sensitive actions. Metadata is filtered to avoid exposing contact details, tokens or message content."
-      />
+      <PageHeader title={t("platformAuditTitle")} description={t("platformAuditDescription")} />
       <form
         onSubmit={apply}
-        className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-5"
+        className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-6"
       >
         <label className="grid gap-1 text-sm">
           {t("auditAction")}
@@ -74,6 +86,15 @@ export function AdminAuditLogs() {
             maxLength={100}
             onChange={(e) => setDraft({ ...draft, action: e.target.value })}
             placeholder={t("auditActionPlaceholder")}
+          />
+        </label>
+        <label className="grid gap-1 text-sm">
+          {t("auditEntityId")}
+          <Input
+            value={draft.entityId}
+            maxLength={36}
+            onChange={(e) => setDraft({ ...draft, entityId: e.target.value })}
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
           />
         </label>
         <label className="grid gap-1 text-sm">
@@ -144,6 +165,16 @@ export function AdminAuditLogs() {
                     {log.weddingId && <span>{t("weddingIdLabel", { id: log.weddingId })}</span>}
                     {log.entityId && <span>{t("recordIdLabel", { id: log.entityId })}</span>}
                   </div>
+                  {log.metadata != null && (
+                    <details className="mt-3 border-t pt-3">
+                      <summary className="min-h-10 cursor-pointer py-2 text-sm font-medium">
+                        {t("eventDetails")}
+                      </summary>
+                      <pre className="overflow-x-auto rounded-lg bg-muted/60 p-3 text-xs leading-5">
+                        {JSON.stringify(log.metadata, null, 2) ?? ""}
+                      </pre>
+                    </details>
+                  )}
                 </article>
               ))}
             </div>

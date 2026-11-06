@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
 import { PageHeader } from "@/shared/components/page-header";
@@ -9,8 +10,9 @@ import { LoadingState } from "@/shared/feedback/loading-state";
 import { Button } from "@/shared/ui/button";
 import { adminApi } from "../api/admin.api";
 
-const requiredAdminGrant = "ADMIN_RBAC_MANAGE";
+const requiredAdminGrants = ["ADMIN_RBAC_VIEW", "ADMIN_RBAC_MANAGE"];
 export function AdminAccessControl() {
+  const { t } = useTranslation("admin");
   const { api } = useRuntime();
   const client = useQueryClient();
   const [draftPermissions, setDraftPermissions] = useState<string[] | null>(null);
@@ -19,6 +21,11 @@ export function AdminAccessControl() {
     queryKey: ["admin-access-control"],
     queryFn: ({ signal }) => adminApi.accessControl(api, signal),
   });
+  const permissions = useQuery({
+    queryKey: ["admin-my-permissions"],
+    queryFn: ({ signal }) => adminApi.myPermissions(api, signal),
+  });
+  const canManageRbac = permissions.data?.includes("ADMIN_RBAC_MANAGE") ?? false;
   const adminRole = useMemo(
     () => access.data?.roles.find((role) => role.code === "ADMIN"),
     [access.data],
@@ -27,14 +34,14 @@ export function AdminAccessControl() {
   const update = useMutation({
     mutationFn: () => adminApi.updateRolePermissions(api, "ADMIN", selected),
     onSuccess: async (result) => {
-      setNotice("Permission set saved. API access reflects the new grants immediately.");
+      setNotice(t("permissionsSaved"));
       setDraftPermissions(result.roles.find((role) => role.code === "ADMIN")?.permissions ?? []);
       await client.invalidateQueries({ queryKey: ["admin-access-control"] });
     },
     onError: (reason) =>
-      setNotice(reason instanceof Error ? reason.message : "Could not save permissions."),
+      setNotice(reason instanceof Error ? reason.message : t("permissionsSaveFailed")),
   });
-  if (access.isPending) return <LoadingState label="Loading access-control model…" />;
+  if (access.isPending) return <LoadingState label={t("loadingAccessControl")} />;
   if (access.isError || !access.data)
     return <ErrorState error={access.error} retry={() => void access.refetch()} />;
   function toggle(code: string, checked: boolean) {
@@ -46,21 +53,22 @@ export function AdminAccessControl() {
   }
   return (
     <div className="space-y-6">
-      <PageHeader title="Roles & permissions" description={access.data.model} />
+      <PageHeader title={t("accessControlTitle")} description={t("accessControlDescription")} />
       <section className="rounded-2xl border bg-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Platform Admin permissions</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              These grants control each back-office API independently. At least one administrator
-              must retain access-control management.
-            </p>
+            <h2 className="text-lg font-semibold">{t("adminPermissionSet")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t("adminPermissionSetHelp")}</p>
           </div>
           <Button
-            disabled={update.isPending || !selected.includes(requiredAdminGrant)}
+            disabled={
+              !canManageRbac ||
+              update.isPending ||
+              requiredAdminGrants.some((grant) => !selected.includes(grant))
+            }
             onClick={() => update.mutate()}
           >
-            {update.isPending ? "Saving…" : "Save permissions"}
+            {update.isPending ? t("savingPermissions") : t("savePermissions")}
           </Button>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -72,16 +80,26 @@ export function AdminAccessControl() {
                   type="checkbox"
                   className="mt-1 size-4 accent-primary"
                   checked={selected.includes(permission.code)}
-                  disabled={permission.code === requiredAdminGrant || update.isPending}
+                  disabled={
+                    !canManageRbac ||
+                    requiredAdminGrants.includes(permission.code) ||
+                    update.isPending
+                  }
                   onChange={(e) => toggle(permission.code, e.target.checked)}
                 />
                 <span>
-                  <span className="font-medium">{permission.name}</span>
+                  <span className="font-medium">
+                    {t(`accessPermissionNames.${permission.code}`, {
+                      defaultValue: permission.name,
+                    })}
+                  </span>
                   <span className="mt-1 block text-xs text-muted-foreground">
                     {permission.code}
                   </span>
                   <span className="mt-1 block text-sm text-muted-foreground">
-                    {permission.description}
+                    {t(`accessPermissionDescriptions.${permission.code}`, {
+                      defaultValue: permission.description ?? "",
+                    })}
                   </span>
                 </span>
               </label>
@@ -92,6 +110,11 @@ export function AdminAccessControl() {
             {notice}
           </p>
         )}
+        {!canManageRbac && (
+          <p className="mt-4 rounded-lg bg-muted/60 p-3 text-sm text-muted-foreground">
+            {t("rbacReadOnly")}
+          </p>
+        )}
       </section>
       <section className="grid gap-4 lg:grid-cols-2">
         {access.data.roles
@@ -99,12 +122,16 @@ export function AdminAccessControl() {
           .map((role) => (
             <article key={role.code} className="rounded-2xl border bg-card p-5">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold">{role.name}</h2>
+                <h2 className="text-lg font-semibold">
+                  {t(`accessRoles.${role.code}.name`, { defaultValue: role.name })}
+                </h2>
                 <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                  {role.scope}
+                  {t(`accessScopes.${role.scope}`, { defaultValue: role.scope })}
                 </span>
               </div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{role.description}</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {t(`accessRoles.${role.code}.description`, { defaultValue: role.description })}
+              </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {role.permissions.length ? (
                   role.permissions.map((permission) => (
@@ -113,15 +140,12 @@ export function AdminAccessControl() {
                     </span>
                   ))
                 ) : (
-                  <span className="text-sm text-muted-foreground">
-                    No account role; access uses a scoped invitation token.
-                  </span>
+                  <span className="text-sm text-muted-foreground">{t("guestTokenRoleNote")}</span>
                 )}
               </div>
               {role.code === "CO_HOST" && (
                 <p className="mt-4 text-xs leading-5 text-muted-foreground">
-                  Group and wedding-wide assignments are managed by the Couple in that wedding’s
-                  Co-host settings. CHECKIN_MANAGE is always wedding-wide and is never group-scoped.
+                  {t("coHostScopeNote")}
                 </p>
               )}
             </article>

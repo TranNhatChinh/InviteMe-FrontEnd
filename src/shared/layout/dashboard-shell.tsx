@@ -112,6 +112,7 @@ function localizeNavigationLabel(label: string, t: (key: string) => string) {
     Security: t("security"),
     Users: t("users"),
     Templates: t("templates"),
+    "Story Templates": t("storyTemplates"),
     Plans: t("plans"),
     "Roles & permissions": t("rolesPermissions"),
     "Audit logs": t("auditLogs"),

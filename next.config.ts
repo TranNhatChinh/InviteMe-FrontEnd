@@ -6,6 +6,9 @@ const config: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   images: {
+    // Local API media resolves to loopback/private IPs, which Next's optimizer rejects.
+    // In development, let the browser load media directly from the local API.
+    unoptimized: process.env.NODE_ENV !== "production",
     remotePatterns: [
       {
         protocol: mediaOrigin.protocol.slice(0, -1) as "http" | "https",

@@ -61,6 +61,11 @@ export function AdminTemplates() {
     queryFn: ({ signal }) =>
       adminApi.templates(api, { page, pageSize: 20, search, status: statusFilter }, signal),
   });
+  const permissions = useQuery({
+    queryKey: ["admin-my-permissions"],
+    queryFn: ({ signal }) => adminApi.myPermissions(api, signal),
+  });
+  const canManageTemplates = permissions.data?.includes("ADMIN_TEMPLATES_MANAGE") ?? false;
   const invalidate = async () => {
     setError("");
     await client.invalidateQueries({ queryKey: ["admin-templates"] });
@@ -106,20 +111,27 @@ export function AdminTemplates() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Templates"
-        description="Manage the template registry. Hiding a template preserves its record and existing invitations."
+        title={translate("templateManagementTitle")}
+        description={translate("templateManagementDescription")}
         action={
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setForm(blank);
-              setOpen(true);
-            }}
-          >
-            {translate("addTemplate")}
-          </Button>
+          canManageTemplates ? (
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setForm(blank);
+                setOpen(true);
+              }}
+            >
+              {translate("addTemplate")}
+            </Button>
+          ) : undefined
         }
       />
+      {permissions.data && !canManageTemplates && (
+        <p className="rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">
+          {translate("templatesReadOnly")}
+        </p>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -227,35 +239,41 @@ export function AdminTemplates() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline" asChild>
-                            <Link href={`/admin/templates/${encodeURIComponent(t.id)}/studio`}>
-                              Studio
-                            </Link>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditing(t);
-                              setForm(toForm(t));
-                              setOpen(true);
-                            }}
-                          >
-                            {translate("edit")}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={setStatus.isPending}
-                            onClick={() =>
-                              setStatus.mutate({
-                                id: t.id,
-                                status: t.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
-                              })
-                            }
-                          >
-                            {t.status === "ACTIVE" ? translate("hide") : translate("publish")}
-                          </Button>
+                          {canManageTemplates && (
+                            <Button size="sm" variant="outline" asChild>
+                              <Link href={`/admin/templates/${encodeURIComponent(t.id)}/studio`}>
+                                Studio
+                              </Link>
+                            </Button>
+                          )}
+                          {canManageTemplates && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditing(t);
+                                setForm(toForm(t));
+                                setOpen(true);
+                              }}
+                            >
+                              {translate("edit")}
+                            </Button>
+                          )}
+                          {canManageTemplates && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={setStatus.isPending}
+                              onClick={() =>
+                                setStatus.mutate({
+                                  id: t.id,
+                                  status: t.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+                                })
+                              }
+                            >
+                              {t.status === "ACTIVE" ? translate("hide") : translate("publish")}
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
