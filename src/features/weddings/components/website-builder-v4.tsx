@@ -173,7 +173,7 @@ function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDo
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/65 to-transparent px-4 pb-4 pt-12 text-sm text-white"><span>{template.config.category || "Website cưới"}</span>{isCurrent ? <span className="rounded-full bg-white/20 px-2 py-1 text-xs">Đang dùng</span> : <Eye className="size-4 opacity-0 transition group-hover:opacity-100" />}</div>
           </button>
           <div className="mt-4 flex items-start justify-between gap-3">
-            <div><h2 className="font-display text-xl text-foreground">{template.name}</h2><p className="mt-1 text-xs text-muted-foreground">{template.config.accessTier === "PREMIUM" ? "Premium" : template.config.accessTier === "FREE" ? "Miễn phí" : "Chưa phân loại"} · {template.config.sections.length} phần gợi ý</p></div>
+            <div className="min-w-0"><h2 className="font-display text-xl text-foreground">{template.name}</h2><p className="mt-1 text-xs text-muted-foreground">{template.config.accessTier === "PREMIUM" ? "Premium" : template.config.accessTier === "FREE" ? "Miễn phí" : "Chưa phân loại"} · {template.config.sections.length} phần gợi ý</p><div className="mt-3 flex items-center gap-2"><span className="flex gap-1.5" aria-label="Bảng màu của mẫu">{[template.config.theme.colors.primary, template.config.theme.colors.background, template.config.theme.colors.accent].map((color, index) => <span key={`${color}-${index}`} className="size-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}</span><span className="truncate text-[11px] text-muted-foreground">{template.config.theme.fontHeading} · {template.config.category || "Website cưới"}</span></div></div>
             {premiumLocked(template) ? <Button asChild size="sm"><Link href={`/weddings/${encodeURIComponent(weddingId)}/plan`}>Xem các gói</Link></Button> : <Button size="sm" disabled={busy || locked || isCurrent} onClick={() => { setMessage(""); setSelectedTemplate(template); }}>{locked ? "Đang kiểm tra gói" : isCurrent ? "Mẫu đang dùng" : currentDocument ? "Xem & đổi mẫu" : legacyDocument ? "Xem & chuyển" : "Xem mẫu"}</Button>}
           </div>
           {template.config.accessTier === "UNCLASSIFIED" && <p className="mt-2 text-xs text-muted-foreground">Mẫu chưa được Admin phân loại gói.</p>}
@@ -980,17 +980,19 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
     setBatchUploading(false);
   }
   return <div className="min-h-[300px]">
-    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-4 py-3"><div><p className="text-xs text-muted-foreground">ĐANG CHỈNH SỬA</p><h2 className="mt-1 text-sm font-semibold">{sectionName}</h2></div></div>
-    <div className="flex border-b border-border px-4"><button className={`border-b-2 px-3 py-2.5 text-sm ${tab === "content" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("content")}>Nội dung</button><button className={`border-b-2 px-3 py-2.5 text-sm ${tab === "style" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("style")}>Kiểu hiển thị</button></div>
+    <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3"><p className="text-xs text-muted-foreground">ĐANG CHỈNH SỬA</p><h2 className="mt-1 text-sm font-semibold">{sectionName}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{sectionDescriptions[section.type]}</p></div>
+    <div className="flex border-b border-border px-4" role="group" aria-label={`Chỉnh ${sectionName}`}><button type="button" aria-pressed={tab === "content"} className={`border-b-2 px-3 py-2.5 text-sm ${tab === "content" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("content")}>Nội dung</button><button type="button" aria-pressed={tab === "style"} className={`border-b-2 px-3 py-2.5 text-sm ${tab === "style" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("style")}>Kiểu hiển thị</button></div>
     <div className="space-y-5 p-4">
-      {page && <fieldset className="space-y-3 border-b border-border pb-5">
-        <legend className="pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cài đặt trang</legend>
-        <Field label="Tên trang" value={page.title} error={errorAt(["pages", pageIndex, "title"])} onChange={value => pageChange({ title: value, navigationLabel: page.navigationLabel || value })} />
-        <Field label="Nhãn điều hướng" value={page.navigationLabel ?? page.title} error={errorAt(["pages", pageIndex, "navigationLabel"])} onChange={value => pageChange({ navigationLabel: value })} />
-        {page.isHome ? <p className="text-xs text-muted-foreground">Trang chủ dùng đường dẫn gốc của website.</p> : <Field label="Đường dẫn" value={page.slug} placeholder="our-story" error={errorAt(["pages", pageIndex, "slug"])} onChange={value => pageChange({ slug: value.toLocaleLowerCase() })} />}
-        <label className="flex items-center justify-between text-sm">Hiển thị trang<input type="checkbox" checked={page.visible !== false} onChange={event => pageChange({ visible: event.target.checked })} /></label>
-        {!page.isHome && <Button size="sm" variant="outline" className="text-destructive" onClick={pageDelete}><Trash2 className="mr-1.5 size-3.5" />Xóa trang</Button>}
-      </fieldset>}
+      {page && tab === "content" && <details className="border-b border-border pb-4">
+        <summary className="min-h-10 cursor-pointer py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cài đặt trang · {page.title}</summary>
+        <div className="mt-3 space-y-3">
+          <Field label="Tên trang" value={page.title} error={errorAt(["pages", pageIndex, "title"])} onChange={value => pageChange({ title: value, navigationLabel: page.navigationLabel || value })} />
+          <Field label="Nhãn điều hướng" value={page.navigationLabel ?? page.title} error={errorAt(["pages", pageIndex, "navigationLabel"])} onChange={value => pageChange({ navigationLabel: value })} />
+          {page.isHome ? <p className="text-xs text-muted-foreground">Trang chủ dùng đường dẫn gốc của website.</p> : <Field label="Đường dẫn" value={page.slug} placeholder="our-story" error={errorAt(["pages", pageIndex, "slug"])} onChange={value => pageChange({ slug: value.toLocaleLowerCase() })} />}
+          <label className="flex min-h-10 items-center justify-between text-sm">Hiển thị trang<input type="checkbox" checked={page.visible !== false} onChange={event => pageChange({ visible: event.target.checked })} /></label>
+          {!page.isHome && <Button size="sm" variant="outline" className="text-destructive" onClick={pageDelete}><Trash2 className="mr-1.5 size-3.5" />Xóa trang</Button>}
+        </div>
+      </details>}
       {tab === "content" ? <>
         <Field label="Tiêu đề điều hướng" value={section.navigationLabel ?? ""} error={errorAt([...sectionPath, "navigationLabel"])} onChange={value => onSection({ navigationLabel: value })} placeholder={sectionName} />
         {section.type === "hero" && <>{field("Tiêu đề lớn", "title", "Tên hai bạn hoặc tên đám cưới")}{field("Lời dẫn", "subtitle", "Lời mời ngắn")} {field("Dòng nhấn", "eyebrow", "")}
@@ -1018,7 +1020,6 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
           })}
           {availableBindings.some(option => !bindings.some(binding => binding.target === option.target)) && <select className={inputClass} value="" aria-label="Thêm liên kết Wedding Setup" onChange={event => { if (event.target.value) onBinding(event.target.value, "dynamic"); }}><option value="">+ Thêm dữ liệu từ Wedding Setup</option>{availableBindings.filter(option => !bindings.some(binding => binding.target === option.target)).map(option => <option key={option.target} value={option.target}>{option.label}</option>)}</select>}
         </fieldset>}
-        <div className="flex gap-2 border-t border-border pt-4"><Button size="sm" variant="outline" onClick={onDuplicate} disabled={section.type === "hero"}><Copy className="mr-1.5 size-3.5" />Nhân bản</Button><Button size="sm" variant="outline" className="text-destructive" onClick={onDelete} disabled={section.type === "hero" && page?.sections.length === 1}><Trash2 className="mr-1.5 size-3.5" />Xóa phần</Button></div>
       </> : <>
         {template && <>
           <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Bảng màu
@@ -1037,7 +1038,12 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
         <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Nền phần
           <select className={inputClass} value={section.style?.background ?? "default"} onChange={event => onSection({ style: { ...section.style, background: event.target.value as "default" | "soft" | "accent" } })}><option value="default">Mặc định</option><option value="soft">Nền dịu</option><option value="accent">Nền nhấn</option></select>
         </label>
+        <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Chuyển động
+          <select className={inputClass} value={section.style?.animation ?? "none"} onChange={event => onSection({ style: { ...section.style, animation: event.target.value as "none" | "fade" } })}><option value="none">Không chuyển động</option><option value="fade">Hiện nhẹ khi tải trang</option></select>
+          <span className="text-[11px] font-normal leading-5">Tự tắt hiệu ứng khi thiết bị bật giảm chuyển động.</span>
+        </label>
       </>}
+      <div className="flex gap-2 border-t border-border pt-4"><Button type="button" size="sm" variant="outline" onClick={onDuplicate} disabled={section.type === "hero"}><Copy className="mr-1.5 size-3.5" />Nhân bản</Button><Button type="button" size="sm" variant="outline" className="text-destructive" onClick={onDelete} disabled={section.type === "hero" && page?.sections.length === 1}><Trash2 className="mr-1.5 size-3.5" />Xóa phần</Button></div>
     </div>
   </div>;
 }
