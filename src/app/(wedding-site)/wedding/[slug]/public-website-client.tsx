@@ -43,6 +43,10 @@ export function PublicWebsiteClient({
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnReconnect: "always",
+    // staleTime only marks the query stale. Keep an open public page in sync even
+    // if a SignalR event is missed; the interval pauses while the tab is hidden.
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     retry: false,
   });
   if (site.isPending) return <main className="p-10 text-center">{t("websiteLoading")}</main>;
