@@ -616,7 +616,8 @@
     "applyFailed": "Could not apply the proposal. Review the notice and generate a fresh preview before trying again.",
     "back": "Change settings",
     "sharedColumns": "Tables per row, per side",
-    "sharedColumnsHint": "Applied equally to bride and groom sides"
+    "sharedColumnsHint": "Applied equally to bride and groom sides",
+    "suggest": "Suggest seating"
   },
   "layout": {
     "tables": "Tables",
@@ -675,5 +676,31 @@
     "chooseExisting": "Choose a table",
     "placeExistingHint": "Choose a table here, then choose an empty slot. Seated guests remain unchanged.",
     "seatOption": "{{count}} seats"
+  },
+  "arrangement": {
+    "title": "Suggest seating",
+    "policy": "Seat unassigned guests at existing tables. Keep fixed seats, keep invitations together, respect sides and reduce mixed groups. Tables are not created or moved.",
+    "loading": "Calculating proposal…",
+    "stale": "Data changed. Recalculate before applying.",
+    "failed": "Could not calculate a proposal. Try again.",
+    "summary": "Seat {{added}} more places · preserve {{preserved}} places · {{remaining}} places still unassigned",
+    "notSaved": "This is a preview. The seating plan has not changed.",
+    "unassigned": "Invitations still unassigned",
+    "noChanges": "No additional places fit. Check table sides and positions, or add a table with enough room.",
+    "apply": "Apply suggestion",
+    "applying": "Applying…",
+    "applyFailed": "Could not apply. Recalculate and try again.",
+    "recalculate": "Recalculate suggestion",
+    "warnings": {
+      "PLANNED_PLACES": "Includes all planned places, including declined guests.",
+      "TABLES_NEED_POSITIONS": "Some tables have no positions. Place existing tables in slots on the correct side before using them in a suggestion.",
+      "SEARCH_LIMIT_REACHED": "A feasible proposal was found within the search limit; a better arrangement may exist."
+    },
+    "issues": {
+      "SIDE_REQUIRED": "Choose Bride or Groom first.",
+      "PARTY_ALREADY_SPLIT": "This invitation is already split across tables. Fixed seats are kept; resolve the remaining places manually.",
+      "NO_TABLE_FITS": "No positioned table on the same side can fit this invitation. Check positions or add a table."
+    },
+    "allSeated": "All guest places are already seated. No changes are needed."
   }
 }

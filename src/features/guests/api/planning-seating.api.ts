@@ -175,3 +175,42 @@ export function applySeatingGeneration(api: ApiClient, id: string, input: Seatin
     schema: seatingPlanSchema,
   });
 }
+
+export type ArrangeSeatingInput = {
+  expectedVersion: number;
+  sourceFingerprint?: string;
+  algorithmVersion?: string;
+};
+export const seatingArrangementSchema = z.object({
+  sourceVersion: z.number().int(),
+  sourceFingerprint: z.string(),
+  algorithmVersion: z.string(),
+  assignments: seatingPlanSchema.shape.assignments,
+  newlyAssignedCount: z.number().int(),
+  preservedCount: z.number().int(),
+  unassigned: z.array(
+    z.object({ guestId: z.string(), placeIds: z.array(z.string()), code: z.string() }),
+  ),
+  warnings: z.array(z.string()),
+});
+export type SeatingArrangementPreview = z.infer<typeof seatingArrangementSchema>;
+export function previewSeatingArrangement(
+  api: ApiClient,
+  id: string,
+  input: ArrangeSeatingInput,
+  signal?: AbortSignal,
+) {
+  return api.request(`${path(id)}/arrange-preview`, {
+    method: "POST",
+    body: input,
+    signal,
+    schema: seatingArrangementSchema,
+  });
+}
+export function applySeatingArrangement(api: ApiClient, id: string, input: ArrangeSeatingInput) {
+  return api.request(`${path(id)}/arrange-apply`, {
+    method: "POST",
+    body: input,
+    schema: seatingPlanSchema,
+  });
+}

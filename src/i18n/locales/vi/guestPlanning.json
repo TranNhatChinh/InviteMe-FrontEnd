@@ -616,7 +616,8 @@
     "applyFailed": "Chưa áp dụng được phương án. Hãy xem thông báo và tạo lại preview trước khi thử tiếp.",
     "back": "Đổi cấu hình",
     "sharedColumns": "Số bàn mỗi hàng, mỗi bên",
-    "sharedColumnsHint": "Áp dụng cho cả nhà gái và nhà trai"
+    "sharedColumnsHint": "Áp dụng cho cả nhà gái và nhà trai",
+    "suggest": "Gợi ý sắp xếp"
   },
   "layout": {
     "tables": "Tổng bàn",
@@ -675,5 +676,31 @@
     "chooseExisting": "Chọn bàn",
     "placeExistingHint": "Chọn bàn ở đây, sau đó bấm slot trống để đặt bàn. Khách trong bàn được giữ nguyên.",
     "seatOption": "{{count}} ghế"
+  },
+  "arrangement": {
+    "title": "Gợi ý sắp xếp",
+    "policy": "Xếp khách chưa có chỗ vào bàn hiện có. Giữ nguyên khách đã xếp, không tách lời mời, ưu tiên cùng phía và giảm trộn nhóm. Không tạo hoặc di chuyển bàn.",
+    "loading": "Đang tính phương án…",
+    "stale": "Dữ liệu đã thay đổi. Tính lại gợi ý trước khi áp dụng.",
+    "failed": "Không thể tính phương án. Hãy thử lại.",
+    "summary": "Xếp thêm {{added}} suất · giữ nguyên {{preserved}} suất · còn {{remaining}} suất chưa xếp",
+    "notSaved": "Đây là bản xem trước, chưa thay đổi sơ đồ.",
+    "unassigned": "Lời mời chưa xếp được",
+    "noChanges": "Chưa có suất nào có thể xếp thêm. Kiểm tra phía và vị trí bàn, hoặc thêm bàn còn đủ chỗ.",
+    "apply": "Áp dụng gợi ý",
+    "applying": "Đang áp dụng…",
+    "applyFailed": "Chưa áp dụng được. Hãy tính lại phương án và thử lại.",
+    "recalculate": "Tính lại gợi ý",
+    "warnings": {
+      "PLANNED_PLACES": "Tính tất cả suất dự kiến, kể cả khách đã từ chối.",
+      "TABLES_NEED_POSITIONS": "Có bàn chưa được đặt vào sơ đồ. Chọn bàn đã có và đặt vào slot đúng phía để sử dụng trong gợi ý.",
+      "SEARCH_LIMIT_REACHED": "Đã tìm được phương án hợp lệ trong giới hạn tìm kiếm; có thể còn cách xếp tốt hơn."
+    },
+    "issues": {
+      "SIDE_REQUIRED": "Cần chọn rõ Nhà gái hoặc Nhà trai.",
+      "PARTY_ALREADY_SPLIT": "Lời mời đã được tách qua nhiều bàn; giữ nguyên phần đã xếp, cần xử lý thủ công.",
+      "NO_TABLE_FITS": "Chưa có bàn cùng phía đủ chỗ cho cả lời mời; kiểm tra slot hoặc thêm bàn."
+    },
+    "allSeated": "Tất cả suất khách đã có chỗ. Không cần áp dụng thêm."
   }
 }

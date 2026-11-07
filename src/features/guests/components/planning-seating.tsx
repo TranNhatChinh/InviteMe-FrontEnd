@@ -37,6 +37,8 @@ import { Button } from "@/shared/ui/button";
 import { trapDialogFocus } from "@/shared/lib/dialog-focus";
 import {
   applySeatingGeneration,
+  applySeatingArrangement,
+  type ArrangeSeatingInput,
   type SeatingGenerationApply,
   getSeatingPlan,
   getSeatingPublication,
@@ -50,6 +52,7 @@ import {
 import { sideLabels, type PlanningGuest } from "../api/planning.api";
 import { previewSeatMove } from "../utils/planning-seat-move";
 import { moveSeatingWithRetry } from "../utils/seating-conflict-retry";
+import { ArrangeSeatingDialog } from "./arrange-seating-dialog";
 import { GenerateSeatingDialog } from "./generate-seating-dialog";
 import { SeatingBoard } from "./seating-board";
 import { wouldSplitParty } from "../utils/seating-layout";
@@ -398,7 +401,13 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       await cache.invalidateQueries({ queryKey: key });
     }
   }
-  async function applyGeneration(input: SeatingGenerationApply) {
+  function applyGeneration(input: SeatingGenerationApply) {
+    return applyProposal(() => applySeatingGeneration(api, weddingId, input));
+  }
+  function applyArrangement(input: ArrangeSeatingInput) {
+    return applyProposal(() => applySeatingArrangement(api, weddingId, input));
+  }
+  async function applyProposal(operation: () => Promise<SeatingPlan>) {
     if (
       !editable ||
       savingRef.current ||
@@ -411,7 +420,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     setFailure(false);
     setMessage("");
     try {
-      const latest = await applySeatingGeneration(api, weddingId, input);
+      const latest = await operation();
       cache.setQueryData<SeatingPlan>(key, (current) =>
         current && current.version > latest.version ? current : latest,
       );
@@ -719,6 +728,17 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     plan={plan}
                     disabled={saving}
                     onApply={applyGeneration}
+                    saveError={failure ? message : undefined}
+                  />
+                )}
+              {plan.tables.length > 0 &&
+                editable &&
+                isWeddingWide("SEATING_EDIT") &&
+                isWeddingWide("SEATING_VIEW") && (
+                  <ArrangeSeatingDialog
+                    plan={plan}
+                    disabled={saving}
+                    onApply={applyArrangement}
                     saveError={failure ? message : undefined}
                   />
                 )}

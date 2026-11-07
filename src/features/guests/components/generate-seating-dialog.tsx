@@ -102,7 +102,7 @@ export function GenerateSeatingDialog({
         }}
       >
         <Sparkles className="size-4" />
-        {t("title")}
+        {t("suggest")}
       </Button>
       <Modal open={open} onClose={close} title={t("title")} description={t("description")}>
         <div className="space-y-5" aria-busy={busy || applying}>
