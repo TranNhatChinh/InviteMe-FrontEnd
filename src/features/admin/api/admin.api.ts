@@ -16,6 +16,11 @@ const templateDefaultContentSchema = z.object({
 const templateSectionSchema = z.object({
   type: z.string(),
   variant: z.string(),
+  style: z.object({
+    background: z.enum(["default", "soft", "accent"]).optional(),
+    spacing: z.enum(["compact", "normal", "spacious"]).optional(),
+    animation: z.enum(["none", "fade"]).optional(),
+  }).strict().nullable().optional(),
   defaultContent: templateDefaultContentSchema.nullable().optional(),
 }).strict().superRefine((section, context) => {
   const defaults = section.defaultContent;

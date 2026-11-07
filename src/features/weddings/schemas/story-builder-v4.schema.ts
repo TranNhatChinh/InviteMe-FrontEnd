@@ -55,6 +55,11 @@ const storyItemSchema = z.object({
 const storyTemplateConfigSectionSchema = z.object({
   type: z.string(),
   variant: z.string(),
+  style: z.object({
+    background: z.enum(["default", "soft", "accent"]).optional(),
+    spacing: z.enum(["compact", "normal", "spacious"]).optional(),
+    animation: z.enum(["none", "fade"]).optional(),
+  }).strict().nullable().optional(),
   defaultContent: z.object({
     title: z.string().max(150).optional(),
     intro: z.string().max(1000).optional(),

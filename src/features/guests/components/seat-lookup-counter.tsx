@@ -642,6 +642,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
         }
         cancelLabel={t("reception.goBack")}
         confirmLabel={t("reception.recordCheckIn")}
+        confirmClassName={styles.confirmationAction}
         onConfirm={() => void confirmCheckIn()}
       />
     );

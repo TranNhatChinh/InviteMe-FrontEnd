@@ -9,6 +9,7 @@ const id = () => globalThis.crypto?.randomUUID?.() ?? `section-${Date.now()}-${M
 const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : undefined;
 type TemplateSectionV4 = StoryTemplateSummaryV4["config"]["sections"][number];
 type TemplateDefaultContent = NonNullable<TemplateSectionV4["defaultContent"]>;
+type TemplateSectionStyle = NonNullable<TemplateSectionV4["style"]>;
 
 function personFrom(value: unknown) {
   const source = asRecord(value);
@@ -138,9 +139,10 @@ function makeSection(
   title: string,
   defaultContent?: TemplateDefaultContent | null,
   showTemplateTitle = false,
+  style?: TemplateSectionStyle | null,
 ): StoryBuilderV4Section {
   const content = withTemplateDefaults(type, sectionContent(type, shared, setup, title) as Record<string, unknown>, defaultContent, showTemplateTitle);
-  const base = { id: id(), type, variant, visible: true, content };
+  const base = { id: id(), type, variant, visible: true, content, ...(style ? { style } : {}) };
   if (type === "hero") return { ...base, type, variant: variant as "floral", bindings: [{ target: "heroImageUrl", source: "wedding.coverImageUrl", mode: "dynamic" }] } as StoryBuilderV4Section;
   if (type === "events") return { ...base, type, variant: variant as "cards", bindings: [
     { target: "mainEvent.startsAt", source: "wedding.mainEventAt", mode: "dynamic" },
@@ -161,7 +163,7 @@ export function createStoryBuilderV4Document(
   const shared = legacySharedContent(oldDocument, setup);
   const homeTitle = text(asRecord(oldDocument).title) || setup.name || "Trang chủ";
   const sections = template.config.sections.map(section => makeSection(
-    section.type as StorySectionType, section.variant, shared, setup, homeTitle, section.defaultContent, options.showTemplateDefaults,
+    section.type as StorySectionType, section.variant, shared, setup, homeTitle, section.defaultContent, options.showTemplateDefaults, section.style,
   ));
   const hasHero = sections.some(section => section.type === "hero");
   const safeSections = hasHero ? sections : [makeSection("hero", "floral", shared, setup, homeTitle), ...sections];
@@ -184,17 +186,17 @@ export function applyStoryBuilderV4Template(
   const supportedTypes = new Set<StorySectionType>(["hero", "couple", "countdown", "loveStory", "events", "gallery", "rsvp", "wishes", "gift"]);
   const layouts = template.config.sections.map(item => {
     if (!supportedTypes.has(item.type as StorySectionType)) throw new Error(`Mẫu có loại phần chưa được hỗ trợ: ${item.type}`);
-    return { type: item.type as StorySectionType, variant: item.variant, defaultContent: item.defaultContent };
+    return { type: item.type as StorySectionType, variant: item.variant, defaultContent: item.defaultContent, style: item.style };
   });
-  if (!layouts.some(item => item.type === "hero")) layouts.unshift({ type: "hero", variant: "floral", defaultContent: undefined });
+  if (!layouts.some(item => item.type === "hero")) layouts.unshift({ type: "hero", variant: "floral", defaultContent: undefined, style: undefined });
 
   const remappedPages = current.pages.map(page => {
     const unmatched = structuredClone(page.sections);
     const configured = layouts.map(layout => {
       const existingIndex = unmatched.findIndex(section => section.type === layout.type);
       const existing = existingIndex >= 0 ? unmatched.splice(existingIndex, 1)[0] : undefined;
-      if (existing) return { ...existing, variant: layout.variant, style: undefined } as StoryBuilderV4Section;
-      const created = makeSection(layout.type, layout.variant, current.content as ReturnType<typeof legacySharedContent>, setup, page.title, layout.defaultContent);
+      if (existing) return { ...existing, variant: layout.variant, style: layout.style ?? undefined } as StoryBuilderV4Section;
+      const created = makeSection(layout.type, layout.variant, current.content as ReturnType<typeof legacySharedContent>, setup, page.title, layout.defaultContent, false, layout.style);
       return created;
     });
 
@@ -264,7 +266,8 @@ export function createV4Section(
   shared: StoryBuilderV4Document["content"],
   setup: WeddingSetup,
   defaultContent?: TemplateDefaultContent | null,
+  style?: TemplateSectionStyle | null,
 ): StoryBuilderV4Section {
   const variants: Record<StorySectionType, string> = { hero: "floral", couple: "alternating", countdown: "classic", loveStory: "timeline", events: "cards", gallery: "grid", rsvp: "default", wishes: "default", gift: "default" };
-  return makeSection(type, variants[type], shared as ReturnType<typeof legacySharedContent>, setup, "", defaultContent);
+  return makeSection(type, variants[type], shared as ReturnType<typeof legacySharedContent>, setup, "", defaultContent, false, style);
 }

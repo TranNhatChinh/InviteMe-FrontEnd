@@ -11,6 +11,7 @@ export function ConfirmDialog({
   onConfirm,
   cancelLabel,
   confirmLabel,
+  confirmClassName,
   contentClassName,
   notice,
 }: {
@@ -20,6 +21,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   cancelLabel?: string;
   confirmLabel?: string;
+  confirmClassName?: string;
   contentClassName?: string;
   notice?: ReactNode;
 }) {
@@ -44,7 +46,7 @@ export function ConfirmDialog({
             <AlertDialog.Cancel className={buttonVariants({ variant: "outline" })}>
               {cancelLabel ?? t("cancelAction")}
             </AlertDialog.Cancel>
-            <AlertDialog.Action className={buttonVariants()} onClick={onConfirm}>
+            <AlertDialog.Action className={cn(buttonVariants(), confirmClassName)} onClick={onConfirm}>
               {confirmLabel ?? t("confirmAction")}
             </AlertDialog.Action>
           </div>

@@ -1060,14 +1060,17 @@
 
 .selectionFooter :global(button:not(:disabled)),
 .mobileSelectionFooter :global(button:not(:disabled)) {
-  background: var(--counter-rose);
-  color: #fff;
+  border-color: #a94b68 !important;
+  background-color: #a94b68 !important;
+  color: #fff !important;
+  opacity: 1 !important;
 }
 
 .selectionFooter :global(button:not(:disabled):hover),
 .mobileSelectionFooter :global(button:not(:disabled):hover) {
-  background: #813750;
-  color: #fff;
+  border-color: #813750 !important;
+  background-color: #813750 !important;
+  color: #fff !important;
 }
 
 .mobileSelectionFooter {
@@ -1107,13 +1110,22 @@
   border-radius: 8px;
 }
 
-.confirmationDialog :global(button:last-child) {
-  background: var(--counter-rose);
-  color: #fff;
+.confirmationAction {
+  border-color: #a94b68 !important;
+  background-color: #a94b68 !important;
+  color: #fff !important;
+  opacity: 1 !important;
 }
 
-.confirmationDialog :global(button:last-child:hover) {
-  background: #813750;
+.confirmationAction:hover {
+  border-color: #813750 !important;
+  background-color: #813750 !important;
+  color: #fff !important;
+}
+
+.confirmationAction:focus-visible {
+  outline: 3px solid rgb(169 75 104 / 38%);
+  outline-offset: 2px;
 }
 
 .confirmationNotice {

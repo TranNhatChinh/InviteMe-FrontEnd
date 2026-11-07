@@ -292,7 +292,8 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   const templateQuery = useQuery({ queryKey: ["story-templates"], queryFn: () => listStoryTemplates(api), staleTime: 60_000 });
   const mediaLibrary = useQuery({ queryKey: ["wedding-media", weddingId], queryFn: () => listWeddingMedia(api, weddingId), enabled: mediaPickerOpen });
   const currentTemplate = templateQuery.data?.find(item => item.key === doc?.templateKey);
-  const sectionLibraryDefaults = currentTemplate?.config.sections.find(item => item.type === sectionLibraryType)?.defaultContent;
+  const sectionLibraryConfig = currentTemplate?.config.sections.find(item => item.type === sectionLibraryType);
+  const sectionLibraryDefaults = sectionLibraryConfig?.defaultContent;
   const currentTier = currentTemplate?.config.accessTier ?? record(doc?.templateSnapshot).accessTier;
   const currentPage = doc?.pages.find(page => page.id === selectedPageId) ?? doc?.pages.find(page => page.isHome);
   const currentSection = currentPage?.sections.find(section => section.id === selectedSectionId);
@@ -332,11 +333,11 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
     const previewDocument = clone(doc);
     const page = previewDocument.pages.find(item => item.id === currentPage?.id);
     if (!page) return previewDocument;
-    const section = createV4Section(sectionLibraryType, previewDocument.content, setup, sectionLibraryDefaults);
+    const section = createV4Section(sectionLibraryType, previewDocument.content, setup, sectionLibraryDefaults, sectionLibraryConfig?.style);
     section.variant = sectionLibraryVariant as typeof section.variant;
     page.sections = [section];
     return previewDocument;
-  }, [doc, currentPage?.id, sectionLibraryType, sectionLibraryVariant, sectionLibraryDefaults, setup]);
+  }, [doc, currentPage?.id, sectionLibraryType, sectionLibraryVariant, sectionLibraryDefaults, sectionLibraryConfig?.style, setup]);
   const pageIndex = doc?.pages.findIndex(page => page.id === currentPage?.id) ?? -1;
   const sectionIndex = currentPage?.sections.findIndex(section => section.id === currentSection?.id) ?? -1;
   const selectSection = (sectionId: string) => {
@@ -494,7 +495,8 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   function addSection(type: SectionType, variant?: string): boolean {
     const totalSections = doc?.pages.reduce((total, page) => total + page.sections.length, 0) ?? 0;
     if (!doc || !currentPage || currentPage.sections.length >= 24 || totalSections >= 80) return false;
-    const nextSection = createV4Section(type, doc.content, setup, currentTemplate?.config.sections.find(item => item.type === type)?.defaultContent);
+    const templateSection = currentTemplate?.config.sections.find(item => item.type === type);
+    const nextSection = createV4Section(type, doc.content, setup, templateSection?.defaultContent, templateSection?.style);
     if (variant) nextSection.variant = variant as typeof nextSection.variant;
     if (type === "hero" && currentPage.sections.some(item => item.type === "hero")) return false;
     mutate(copy => {
@@ -523,8 +525,10 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   function addPage() {
     if (!doc || doc.pages.length >= 8 || !pageName.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pageSlug.trim())) return;
     if (doc.pages.some(page => page.slug.toLowerCase() === pageSlug.trim().toLowerCase())) { setError("Đường dẫn trang này đã được dùng."); return; }
-    const hero = createV4Section("hero", doc.content, setup, currentTemplate?.config.sections.find(item => item.type === "hero")?.defaultContent);
-    const rsvp = createV4Section("rsvp", doc.content, setup, currentTemplate?.config.sections.find(item => item.type === "rsvp")?.defaultContent);
+    const heroTemplateSection = currentTemplate?.config.sections.find(item => item.type === "hero");
+    const rsvpTemplateSection = currentTemplate?.config.sections.find(item => item.type === "rsvp");
+    const hero = createV4Section("hero", doc.content, setup, heroTemplateSection?.defaultContent, heroTemplateSection?.style);
+    const rsvp = createV4Section("rsvp", doc.content, setup, rsvpTemplateSection?.defaultContent, rsvpTemplateSection?.style);
     const page = { id: id(), slug: pageSlug.trim(), title: pageName.trim(), navigationLabel: pageName.trim(), isHome: false, visible: true, sections: [hero, rsvp] };
     mutate(copy => { copy.pages.push(page); if (copy.navigationMode === "one-page") copy.navigationMode = "multi-page"; });
     setSelectedPageId(page.id); setSelectedSectionId(hero.id); setPageName(""); setPageSlug("");
