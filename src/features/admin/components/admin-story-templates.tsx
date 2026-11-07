@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Download, Eye, Monitor, Plus, Search, Smartphone, Tablet, Trash2, Upload } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
+import { ApiError } from "@/core/api/api-error";
 import { PageHeader } from "@/shared/components/page-header";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -278,6 +279,12 @@ export function AdminStoryTemplates() {
 
   const permanentlyDeleteSelected = async () => {
     if (!selectedTemplate || deleteConfirmationText.trim() !== selectedTemplate.key) return;
+    if (selectedTemplate.weddingUsageCount > 0) {
+      setError(t("storyTemplates.deleteBlockedInUse", { count: selectedTemplate.weddingUsageCount }));
+      setConfirmation(null);
+      setDeleteConfirmationText("");
+      return;
+    }
     setBusy(true);
     setError("");
     setMessage("");
@@ -293,7 +300,13 @@ export function AdminStoryTemplates() {
       setMessage(t("storyTemplates.deletedMessage"));
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("storyTemplates.actionFailed"));
+      setError(
+        cause instanceof ApiError && cause.backendCode === "STORY_TEMPLATE_IN_USE"
+          ? t("storyTemplates.deleteBlockedInUse", { count: selectedTemplate.weddingUsageCount || 1 })
+          : cause instanceof Error
+            ? cause.message
+            : t("storyTemplates.actionFailed"),
+      );
       await refresh();
     } finally {
       setBusy(false);
@@ -1219,7 +1232,7 @@ export function AdminStoryTemplates() {
                             <Button
                               type="button"
                               variant="destructive"
-                              disabled={busy}
+                              disabled={busy || selectedTemplate.weddingUsageCount > 0}
                               onClick={() => {
                                 setDeleteConfirmationText("");
                                 setConfirmation("delete");
@@ -1232,6 +1245,12 @@ export function AdminStoryTemplates() {
                       )}
                     </div>
                   </div>
+
+                  {selectedTemplate && catalogView === "archive" && selectedTemplate.weddingUsageCount > 0 && (
+                    <p role="note" className="rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-900">
+                      {t("storyTemplates.deleteBlockedInUse", { count: selectedTemplate.weddingUsageCount })}
+                    </p>
+                  )}
 
                   <aside className="min-w-0 space-y-3 2xl:sticky 2xl:top-5 2xl:self-start">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1291,6 +1310,19 @@ export function AdminStoryTemplates() {
                         {selectedTemplate.version}
                       </p>
                       <h2 className="mt-1 font-display text-2xl">{selectedTemplate.name}</h2>
+                      <p className={`mt-2 text-sm ${selectedTemplate.weddingUsageCount > 0 ? "text-amber-800" : "text-muted-foreground"}`}>
+                        {t(
+                          selectedTemplate.weddingUsageCount > 0
+                            ? "storyTemplates.weddingUsageCount"
+                            : "storyTemplates.noWeddingUsage",
+                          { count: selectedTemplate.weddingUsageCount },
+                        )}
+                      </p>
+                      {selectedTemplate.weddingUsageCount > 0 && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t("storyTemplates.archiveKeepsExistingWebsites")}
+                        </p>
+                      )}
                     </div>
                     <Button
                       variant="outline"
@@ -1416,7 +1448,7 @@ export function AdminStoryTemplates() {
                       : selectedTemplate.isArchived
                         ? "storyTemplates.confirmRestore"
                         : "storyTemplates.confirmArchive",
-                  { name: selectedTemplate.name, key: selectedTemplate.key },
+                  { name: selectedTemplate.name, key: selectedTemplate.key, count: selectedTemplate.weddingUsageCount },
                 )}
               </p>
             </div>
