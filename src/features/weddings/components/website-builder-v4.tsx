@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react"
 import Link from "next/link";
 import Image from "next/image";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Globe, GripVertical, Image as ImageIcon, LoaderCircle, Menu, Monitor, MoreHorizontal, Plus, Redo2, RefreshCw, Save, Search, Smartphone, Tablet, Trash2, Undo2, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Globe, GripVertical, Image as ImageIcon, LoaderCircle, Menu, Monitor, MoreHorizontal, Plus, Redo2, RefreshCw, Save, Search, Smartphone, Sparkles, Tablet, Trash2, Undo2, Upload, X } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
 import { usePermission } from "@/shared/components/permission-guard";
@@ -18,7 +18,7 @@ import { applyStoryBuilderV4Template, createStoryBuilderV4Document, createV4Sect
 import { describeV4Issue, describeV4ValidationIssues, moveV4Page } from "../schemas/story-builder-v4.helpers";
 import { storyBuilderV4DocumentSchema, storyTemplateConfigSchema, type StoryBuilderV4Document, type StoryBuilderV4Section, type StorySectionType, type StoryTemplateSummaryV4 } from "../schemas/story-builder-v4.schema";
 import type { Website } from "../api/website.api";
-import { createWeddingEvent, deleteWeddingEvent, getWebsite, listStoryTemplates, listWeddingEvents, listWeddingMedia, mediaUrl, publishWebsite, saveWebsite, updateWeddingEvent, unpublishWebsite, uploadWeddingMedia, type WeddingEvent, type WeddingEventInput } from "../api/website.api";
+import { createWeddingEvent, deleteWeddingEvent, deleteWeddingMedia, getWebsite, listStoryTemplates, listWeddingEvents, listWeddingMedia, mediaUrl, publishWebsite, saveWebsite, updateWeddingEvent, unpublishWebsite, uploadWeddingMedia, type WeddingEvent, type WeddingEventInput } from "../api/website.api";
 import { isoToLocalDateTime, localDateTimeToIso, type WeddingSetup } from "../schemas/wedding.schema";
 import { StoryBuilderV4Renderer } from "./story-builder-v4-renderer";
 
@@ -26,6 +26,8 @@ type BuilderProps = { weddingId: string; site: Website; setup: WeddingSetup };
 type Viewport = "desktop" | "tablet" | "mobile";
 type SectionType = StorySectionType;
 type BuilderIssue = { path: readonly PropertyKey[]; message: string };
+type GuestTool = "rsvp" | "calendar" | "gift" | "wishes" | "share";
+type GuestExperienceSettings = { tools: GuestTool[]; decoration: "none" | "petals" | "sparkles"; intensity: "light" | "medium" };
 function validateBuilderDocument(document: StoryBuilderV4Document, template?: StoryTemplateSummaryV4): BuilderIssue[] {
   const parsed = storyBuilderV4DocumentSchema.safeParse(document);
   if (!parsed.success) return parsed.error.issues;
@@ -71,6 +73,8 @@ const errText = (error: unknown) => {
       WEBSITE_MEDIA_TEMPORARY: "Ảnh đang dùng là ảnh tạm. Hãy tải ảnh đó vào thư viện đám cưới trước khi lưu.",
       WEBSITE_MEDIA_NOT_OWNED: "Có ảnh không thuộc thư viện của đám cưới này. Hãy chọn ảnh từ thư viện cưới hoặc tải ảnh mới lên.",
       WEBSITE_MEDIA_MISSING: "Một ảnh trong website không còn tồn tại. Hãy chọn hoặc tải ảnh thay thế.",
+      MEDIA_IN_USE: "Ảnh vẫn đang được dùng trong Wedding Setup, website hoặc thiệp mời. Hãy gỡ/thay ảnh ở đó và đợi lưu xong trước khi xóa khỏi thư viện.",
+      MEDIA_NOT_FOUND: "Ảnh không còn trong thư viện. Hãy tải lại danh sách ảnh.",
       WEBSITE_VERSION_CONFLICT: "Website đã được cập nhật ở phiên khác. Hãy tải bản mới nhất trước khi tiếp tục.",
     };
     const mappedMessage = error.backendCode ? messages[error.backendCode] : undefined;
@@ -377,6 +381,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const [selectedSectionId, setSelectedSectionId] = useState(initial?.pages[0]?.sections[0]?.id ?? "");
   const [viewport, setViewport] = useState<Viewport>("desktop"); const [preview, setPreview] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true); const [rightOpen, setRightOpen] = useState(true);
+  const [experienceSettingsOpen, setExperienceSettingsOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"structure" | "inspector" | null>(null);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const mobileActionsRef = useRef<HTMLDivElement>(null);
@@ -390,6 +395,9 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [mediaSearch, setMediaSearch] = useState("");
   const [mediaPickerTarget, setMediaPickerTarget] = useState<((url: string) => void) | null>(null);
+  const [mediaDeleteTarget, setMediaDeleteTarget] = useState<{ id: string; url: string } | null>(null);
+  const [mediaDeleteBusy, setMediaDeleteBusy] = useState(false);
+  const [mediaDeleteError, setMediaDeleteError] = useState("");
   const [showQuickStart, setShowQuickStart] = useState(true);
   const [sectionLibraryOpen, setSectionLibraryOpen] = useState(false);
   const [sectionLibraryType, setSectionLibraryType] = useState<SectionType>("hero");
@@ -467,6 +475,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const pageIndex = doc?.pages.findIndex(page => page.id === currentPage?.id) ?? -1;
   const sectionIndex = currentPage?.sections.findIndex(section => section.id === currentSection?.id) ?? -1;
   const selectSection = (sectionId: string) => {
+    setExperienceSettingsOpen(false);
     setSelectedSectionId(sectionId);
     setRightOpen(true);
     if (window.matchMedia("(max-width: 767px)").matches) setMobilePanel("inspector");
@@ -593,6 +602,20 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     setMediaPickerTarget(() => onChoose);
     setMediaSearch("");
     setMediaPickerOpen(true);
+  }
+  async function confirmMediaDelete() {
+    if (!mediaDeleteTarget || mediaDeleteBusy) return;
+    setMediaDeleteBusy(true);
+    setMediaDeleteError("");
+    try {
+      await deleteWeddingMedia(api, weddingId, mediaDeleteTarget.id);
+      await cache.invalidateQueries({ queryKey: ["wedding-media", weddingId] });
+      setMediaDeleteTarget(null);
+    } catch (cause) {
+      setMediaDeleteError(errText(cause));
+    } finally {
+      setMediaDeleteBusy(false);
+    }
   }
   function appendGalleryImages(sectionId: string, images: Record<string, unknown>[]) {
     const latest = docRef.current;
@@ -809,7 +832,16 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   }
   const publishCanProceed = Boolean(doc && publishIssues.length === 0 && !busy && isOwner && !conflict && !premiumLocked && !premiumUnknown);
   const paletteValue = doc.appearance.paletteId ?? currentTemplate?.config.palettes[0]?.id ?? "";
-  const inspectorPanel = <Inspector
+  const currentGuestExperience: GuestExperienceSettings = {
+    tools: doc.appearance.guestExperience?.tools ?? [],
+    decoration: doc.appearance.guestExperience?.decoration ?? "none",
+    intensity: doc.appearance.guestExperience?.intensity ?? "light",
+  };
+  const inspectorPanel = experienceSettingsOpen
+    ? <GuestExperienceInspector document={renderedDocument} settings={currentGuestExperience} onChange={settings => mutate(copy => {
+        copy.appearance = { ...copy.appearance, guestExperience: settings };
+      })} />
+    : <Inspector
     section={currentSection}
     page={currentPage}
     sectionName={currentSection ? sectionNames[currentSection.type] : undefined}
@@ -847,6 +879,11 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     selectedEventIds={currentSection?.type === "events" ? currentSection.content.eventIds ?? (currentSection.content.events?.length ? [] : ["main"]) : []}
     onEventIds={ids => currentSection?.type === "events" && editContent(currentSection.id, "eventIds", ids)}
   />;
+  function openGuestExperienceSettings() {
+    setExperienceSettingsOpen(true);
+    setRightOpen(true);
+    if (window.matchMedia("(max-width: 767px)").matches) setMobilePanel("inspector");
+  }
 
   return <div className="fixed inset-0 z-40 flex flex-col bg-[#faf8f7] text-foreground">
     <header className="z-20 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-3 sm:px-5">
@@ -856,6 +893,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
         <button type="button" className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-35" aria-label="Làm lại" disabled={!redoStack.length || busy} onClick={() => history("redo")}><Redo2 className="size-4" /></button>
         <span className="mx-1 hidden h-6 border-l border-border sm:block" />
         <Button variant="outline" className={preview ? "border-primary text-primary-hover" : ""} size="sm" onClick={() => setPreview(!preview)}><Eye className="mr-1.5 size-4" />{preview ? "Chỉnh sửa" : "Xem trước"}</Button>
+        <Button variant="outline" size="sm" className={experienceSettingsOpen ? "border-primary text-primary-hover" : ""} onClick={() => setExperienceSettingsOpen(open => !open)}><Sparkles className="mr-1.5 size-4" />Trải nghiệm khách</Button>
         <Button size="sm" variant="outline" disabled={busy || conflict || saveState === "saving"} onClick={() => void chooseOtherTemplate()}>Đổi mẫu</Button>
         {status === "PUBLISHED" && setup.slug && <Button asChild size="sm" variant="outline" className="hidden sm:inline-flex"><Link href={`/wedding/${encodeURIComponent(setup.slug)}`} target="_blank" rel="noreferrer"><Globe className="mr-1.5 size-4" />Website</Link></Button>}
         <Button size="sm" variant="outline" onClick={() => setShareSettingsOpen(true)}><Globe className="mr-1.5 size-4" />Chia sẻ & SEO</Button>
@@ -943,6 +981,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
               pagePath={currentPage?.slug}
               showHidden={!preview}
               editable={!preview}
+              showGuestExperiencePreview
               selectedSectionId={currentSection?.id}
               onSelectSection={selectSection}
               onInlineEdit={(sectionId, key, value) => {
@@ -962,13 +1001,14 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
       {!preview && rightOpen && <aside className="hidden w-[310px] shrink-0 flex-col overflow-y-auto border-l border-border bg-background md:flex">{inspectorPanel}</aside>}
       {!preview && !rightOpen && <button type="button" className="hidden w-9 shrink-0 place-items-center border-l border-border bg-background text-muted-foreground hover:text-foreground md:grid" onClick={() => setRightOpen(true)} aria-label="Mở thanh chỉnh sửa"><ChevronLeft className="size-4" /></button>}
     </div>
-    {!preview && <nav aria-label="Công cụ website trên điện thoại" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(55,35,40,0.08)] backdrop-blur md:hidden">
+    {!preview && <nav aria-label="Công cụ website trên điện thoại" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(55,35,40,0.08)] backdrop-blur md:hidden">
       <button type="button" className="flex min-h-14 flex-col items-center justify-center gap-1 text-xs text-muted-foreground" aria-label="Mở trang và nội dung" onClick={() => setMobilePanel("structure")}><Menu className="size-4" />Trang & phần</button>
-      <button type="button" className="flex min-h-14 flex-col items-center justify-center gap-1 text-xs text-muted-foreground" aria-label="Chỉnh sửa phần đang chọn" onClick={() => setMobilePanel("inspector")}><ImageIcon className="size-4" />Chỉnh sửa</button>
+      <button type="button" className="flex min-h-14 flex-col items-center justify-center gap-1 text-xs text-muted-foreground" aria-label="Chỉnh sửa phần đang chọn" onClick={() => { setExperienceSettingsOpen(false); setMobilePanel("inspector"); }}><ImageIcon className="size-4" />Chỉnh sửa</button>
+      <button type="button" className={`flex min-h-14 flex-col items-center justify-center gap-1 text-xs ${experienceSettingsOpen ? "text-primary" : "text-muted-foreground"}`} aria-label="Cài đặt trải nghiệm khách mời" aria-pressed={experienceSettingsOpen} onClick={openGuestExperienceSettings}><Sparkles className="size-4" />Khách mời</button>
       <button type="button" className="flex min-h-14 flex-col items-center justify-center gap-1 text-xs text-primary" aria-label="Xem trước website" onClick={() => setPreview(true)}><Eye className="size-4" />Xem trước</button>
     </nav>}
-    {mobilePanel && !preview && <div className="fixed inset-0 z-30 bg-black/30 md:hidden" role="presentation" onClick={() => setMobilePanel(null)}><section role="dialog" aria-modal="true" aria-label={mobilePanel === "structure" ? "Trang và phần website" : "Chỉnh sửa nội dung website"} className="absolute inset-x-0 bottom-0 flex max-h-[78dvh] flex-col overflow-hidden rounded-t-2xl border-t border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl" onClick={event => event.stopPropagation()}>
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3"><div className="flex gap-1 rounded-lg bg-muted p-1"><button type="button" aria-pressed={mobilePanel === "structure"} className={`rounded-md px-3 py-2 text-sm ${mobilePanel === "structure" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={() => setMobilePanel("structure")}>Trang & phần</button><button type="button" aria-pressed={mobilePanel === "inspector"} className={`rounded-md px-3 py-2 text-sm ${mobilePanel === "inspector" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={() => setMobilePanel("inspector")}>Chỉnh sửa</button></div><Button variant="ghost" size="sm" onClick={() => setMobilePanel(null)} aria-label="Đóng bảng chỉnh sửa"><X className="size-4" /></Button></div>
+    {mobilePanel && !preview && <div className="fixed inset-0 z-30 bg-black/30 md:hidden" role="presentation" onClick={() => setMobilePanel(null)}><section role="dialog" aria-modal="true" aria-label={mobilePanel === "structure" ? "Trang và phần website" : experienceSettingsOpen ? "Trải nghiệm khách mời" : "Chỉnh sửa nội dung website"} className="absolute inset-x-0 bottom-0 flex max-h-[78dvh] flex-col overflow-hidden rounded-t-2xl border-t border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl" onClick={event => event.stopPropagation()}>
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3"><div className="flex gap-1 rounded-lg bg-muted p-1"><button type="button" aria-pressed={mobilePanel === "structure"} className={`rounded-md px-3 py-2 text-sm ${mobilePanel === "structure" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={() => setMobilePanel("structure")}>Trang & phần</button><button type="button" aria-pressed={mobilePanel === "inspector" && !experienceSettingsOpen} className={`rounded-md px-3 py-2 text-sm ${mobilePanel === "inspector" && !experienceSettingsOpen ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={() => { setExperienceSettingsOpen(false); setMobilePanel("inspector"); }}>Chỉnh sửa</button><button type="button" aria-pressed={mobilePanel === "inspector" && experienceSettingsOpen} className={`rounded-md px-3 py-2 text-sm ${mobilePanel === "inspector" && experienceSettingsOpen ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={openGuestExperienceSettings}>Khách mời</button></div><Button variant="ghost" size="sm" onClick={() => setMobilePanel(null)} aria-label="Đóng bảng chỉnh sửa"><X className="size-4" /></Button></div>
       {mobilePanel === "structure" ? <div className="min-h-0 flex-1 overflow-y-auto p-4">
       <p className="mb-2 text-xs font-medium text-muted-foreground">TRANG</p>
       {doc.pages.map((page, index) => <div key={page.id} className={`mb-1 flex items-center gap-1 rounded-lg ${page.id === currentPage?.id ? "bg-primary/10" : ""}`}>
@@ -1079,20 +1119,103 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
         <div className="flex justify-end border-t border-border pt-3"><Button type="button" onClick={() => setShareSettingsOpen(false)}>Hoàn tất</Button></div>
       </div>
     </Modal>
-    <Modal open={mediaPickerOpen} onClose={() => { setMediaPickerOpen(false); setMediaPickerTarget(null); }} title="Thư viện ảnh cưới" description="Chọn ảnh đã tải lên cho đám cưới này. Ảnh được kiểm tra quyền sở hữu khi lưu website.">
+    <Modal open={mediaPickerOpen && !mediaDeleteTarget} onClose={() => { setMediaPickerOpen(false); setMediaPickerTarget(null); }} title="Thư viện ảnh cưới" description="Chọn ảnh cho website hoặc xóa ảnh không còn được sử dụng.">
       <div className="space-y-4">
         <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input autoFocus className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" value={mediaSearch} onChange={event => setMediaSearch(event.target.value)} placeholder="Tìm theo tên ảnh hoặc đường dẫn" aria-label="Tìm ảnh trong thư viện" /></label>
         {mediaLibrary.isPending && <LoadingState label="Đang tải thư viện ảnh…" />}
         {mediaLibrary.isError && <ErrorState error={mediaLibrary.error} retry={() => void mediaLibrary.refetch()} />}
         {mediaLibrary.data && (() => {
           const assets = mediaLibrary.data.filter(asset => `${asset.id} ${asset.url}`.toLocaleLowerCase().includes(mediaSearch.toLocaleLowerCase()));
-          return assets.length ? <div className="grid max-h-[55dvh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">{assets.map(asset => <button key={asset.id} type="button" className="group overflow-hidden rounded-xl border border-border text-left transition hover:border-primary hover:ring-2 hover:ring-primary/20" onClick={() => { mediaPickerTarget?.(asset.url); setMediaPickerTarget(null); setMediaPickerOpen(false); }}><div className="relative aspect-square bg-muted"><Image src={mediaUrl(asset.url) ?? asset.url} alt="" fill sizes="(max-width: 640px) 50vw, 180px" unoptimized className="object-cover transition group-hover:scale-[1.02]" /></div><span className="block truncate px-2.5 py-2 text-xs text-muted-foreground">{asset.id}</span></button>)}</div> : <div className="rounded-xl border border-dashed border-border p-6 text-center"><ImageIcon className="mx-auto size-6 text-muted-foreground" /><p className="mt-2 text-sm font-medium">{mediaSearch ? "Không tìm thấy ảnh phù hợp" : "Thư viện chưa có ảnh"}</p><p className="mt-1 text-xs text-muted-foreground">Tải ảnh từ phần chỉnh sửa để ảnh xuất hiện tại đây.</p></div>;
+          return assets.length ? <div className="grid max-h-[55dvh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">{assets.map(asset => <div key={asset.id} className="group relative overflow-hidden rounded-xl border border-border transition hover:border-primary hover:ring-2 hover:ring-primary/20"><button type="button" className="block w-full text-left" onClick={() => { mediaPickerTarget?.(asset.url); setMediaPickerTarget(null); setMediaPickerOpen(false); }}><div className="relative aspect-square bg-muted"><Image src={mediaUrl(asset.url) ?? asset.url} alt="" fill sizes="(max-width: 640px) 50vw, 180px" unoptimized className="object-cover transition group-hover:scale-[1.02]" /></div><span className="block truncate px-2.5 py-2 pr-11 text-xs text-muted-foreground">Chọn ảnh · {asset.id}</span></button><button type="button" aria-label={`Xóa ảnh ${asset.id} khỏi thư viện`} title="Xóa khỏi thư viện" className="absolute bottom-1.5 right-1.5 grid size-8 place-items-center rounded-lg border border-border bg-background/95 text-destructive shadow-sm transition hover:bg-destructive/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => { setMediaDeleteError(""); setMediaDeleteTarget(asset); }}><Trash2 className="size-4" /></button></div>)}</div> : <div className="rounded-xl border border-dashed border-border p-6 text-center"><ImageIcon className="mx-auto size-6 text-muted-foreground" /><p className="mt-2 text-sm font-medium">{mediaSearch ? "Không tìm thấy ảnh phù hợp" : "Thư viện chưa có ảnh"}</p><p className="mt-1 text-xs text-muted-foreground">Tải ảnh từ phần chỉnh sửa để ảnh xuất hiện tại đây.</p></div>;
         })()}
+      </div>
+    </Modal>
+    <Modal open={Boolean(mediaDeleteTarget)} onClose={() => { if (!mediaDeleteBusy) { setMediaDeleteTarget(null); setMediaDeleteError(""); } }} title="Xóa ảnh khỏi thư viện?" description="Ảnh bị xóa sẽ không thể chọn lại. Ảnh đang được dùng trong Wedding Setup, website hoặc thiệp mời sẽ được giữ lại.">
+      <div className="space-y-4">
+        {mediaDeleteTarget && <div className="flex items-center gap-3 rounded-xl border border-border p-3"><div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-muted"><Image src={mediaUrl(mediaDeleteTarget.url) ?? mediaDeleteTarget.url} alt="" fill sizes="64px" unoptimized className="object-cover" /></div><p className="min-w-0 break-all text-xs text-muted-foreground">{mediaDeleteTarget.id}</p></div>}
+        {mediaDeleteError && <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/[0.04] p-3 text-sm text-destructive">{mediaDeleteError}</p>}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button type="button" variant="outline" disabled={mediaDeleteBusy} onClick={() => { setMediaDeleteTarget(null); setMediaDeleteError(""); }}>Hủy</Button><Button type="button" variant="destructive" disabled={mediaDeleteBusy || !mediaDeleteTarget} onClick={() => void confirmMediaDelete()}>{mediaDeleteBusy ? <LoaderCircle className="mr-2 size-4 animate-spin" /> : <Trash2 className="mr-2 size-4" />}{mediaDeleteBusy ? "Đang xóa…" : "Xóa khỏi thư viện"}</Button></div>
       </div>
     </Modal>
     {premiumLocked && <div className="border-t border-primary/20 bg-primary/5 p-3"><FeatureLimitNotice title="Mẫu này cần gói hỗ trợ Premium" description="Website đã xuất bản vẫn hoạt động. Hãy nâng cấp gói để lưu hoặc xuất bản thay đổi cho mẫu Premium." upgradeHref={`/weddings/${encodeURIComponent(weddingId)}/plan`} upgradeLabel="Xem các gói" /></div>}
     {premiumUnknown && <div className="border-t border-border p-3"><FeatureLimitNotice title="Chưa xác minh được quyền dùng mẫu Premium" description="Thử lại kiểm tra gói trước khi lưu hoặc xuất bản. Website đang công khai vẫn được giữ nguyên." status="unavailable" variant="compact" retryLabel="Thử lại" onRetry={() => void sitePlan.refetch()} /></div>}
     {sitePlan.isError && !premiumUnknown && <p className="border-t border-border px-3 py-1 text-xs text-muted-foreground">Không thể kiểm tra quyền lợi gói. Website đã xuất bản vẫn giữ nguyên.</p>}
+  </div>;
+}
+
+function GuestExperienceInspector({ document, settings, onChange }: {
+  document: StoryBuilderV4Document;
+  settings: GuestExperienceSettings;
+  onChange: (settings: GuestExperienceSettings) => void;
+}) {
+  const visibleSections = document.pages.filter(page => page.visible !== false)
+    .flatMap(page => page.sections.filter(section => section.visible !== false));
+  const events = visibleSections.filter(section => section.type === "events")
+    .flatMap(section => Array.isArray(record(section.content).events) ? record(section.content).events as Record<string, unknown>[] : []);
+  const availability: Record<GuestTool, boolean> = {
+    rsvp: visibleSections.some(section => section.type === "rsvp"),
+    calendar: events.some(event => Number.isFinite(Date.parse(String(event.startsAt ?? "")))),
+    gift: document.content.gift?.enabled === true && visibleSections.some(section => section.type === "gift"),
+    wishes: visibleSections.some(section => section.type === "wishes"),
+    share: true,
+  };
+  const options: { id: GuestTool; label: string; unavailable: string }[] = [
+    { id: "rsvp", label: "Xác nhận tham dự", unavailable: "Thêm một phần RSVP đang hiển thị để bật." },
+    { id: "calendar", label: "Thêm vào lịch", unavailable: "Cần phần sự kiện có ngày giờ hợp lệ." },
+    { id: "gift", label: "Quà mừng", unavailable: "Bật thông tin quà và hiển thị phần Quà mừng." },
+    { id: "wishes", label: "Gửi lời chúc", unavailable: "Thêm một phần Lời chúc đang hiển thị để bật." },
+    { id: "share", label: "Chia sẻ website", unavailable: "" },
+  ];
+  const inputClass = "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const toggleTool = (tool: GuestTool, checked: boolean) => {
+    const tools = checked
+      ? [...settings.tools, tool].slice(0, 4)
+      : settings.tools.filter(item => item !== tool);
+    onChange({ ...settings, tools });
+  };
+  const moveTool = (index: number, direction: -1 | 1) => {
+    const destination = index + direction;
+    if (destination < 0 || destination >= settings.tools.length) return;
+    const tools = [...settings.tools];
+    [tools[index], tools[destination]] = [tools[destination]!, tools[index]!];
+    onChange({ ...settings, tools });
+  };
+  return <div className="min-h-[300px]">
+    <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3"><p className="text-xs text-muted-foreground">CÀI ĐẶT WEBSITE</p><h2 className="mt-1 text-sm font-semibold">Trải nghiệm khách mời</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Chọn lối tắt và hiệu ứng cho khách. Thay đổi xem được ngay trong bản xem trước và tự lưu cùng website.</p></div>
+    <div className="space-y-6 p-4">
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3"><div><h3 className="text-sm font-semibold">Nút tiện ích</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Tối đa 4 nút. Chỉ hiện nút có chức năng tương ứng trên website.</p></div><span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{settings.tools.length}/4</span></div>
+        <div className="divide-y divide-border rounded-xl border border-border">
+          {options.map(option => {
+            const checked = settings.tools.includes(option.id);
+            const unavailable = !availability[option.id];
+            const disabled = (unavailable && !checked) || (!checked && settings.tools.length >= 4);
+            const selectedIndex = settings.tools.indexOf(option.id);
+            return <div key={option.id} className="flex items-center gap-2 px-3 py-2.5">
+              <label className={`flex min-h-10 min-w-0 flex-1 items-center gap-2.5 text-sm ${disabled ? "opacity-50" : ""}`}>
+                <input type="checkbox" checked={checked} disabled={disabled} onChange={event => toggleTool(option.id, event.target.checked)} className="size-4 shrink-0 accent-primary" />
+                <span className="min-w-0"><span className="block font-medium">{option.label}</span>{unavailable && !checked && <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">{option.unavailable}</span>}</span>
+              </label>
+              {checked && <div className="flex shrink-0 gap-1"><button type="button" className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30" aria-label={`Đưa ${option.label} lên`} disabled={selectedIndex <= 0} onClick={() => moveTool(selectedIndex, -1)}><ChevronUp className="size-4" /></button><button type="button" className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30" aria-label={`Đưa ${option.label} xuống`} disabled={selectedIndex === settings.tools.length - 1} onClick={() => moveTool(selectedIndex, 1)}><ChevronDown className="size-4" /></button></div>}
+            </div>;
+          })}
+        </div>
+        <p className="text-xs leading-5 text-muted-foreground">Trên điện thoại, nút nằm ở cạnh dưới và chừa vùng an toàn màn hình. RSVP sẽ giữ liên kết thiệp cá nhân; chia sẻ loại bỏ mã khách khỏi đường dẫn.</p>
+      </section>
+      <section className="space-y-3 border-t border-border pt-5">
+        <div><h3 className="text-sm font-semibold">Hiệu ứng trang trí</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Dùng màu nhấn của mẫu, không chặn thao tác và tự tắt khi thiết bị bật giảm chuyển động.</p></div>
+        <label className="grid gap-1 text-xs text-muted-foreground">Hiệu ứng
+          <select className={inputClass} value={settings.decoration} onChange={event => onChange({ ...settings, decoration: event.target.value as GuestExperienceSettings["decoration"] })}>
+            <option value="none">Không hiệu ứng</option><option value="petals">Cánh hoa rơi</option><option value="sparkles">Ánh sáng lấp lánh nhẹ</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs text-muted-foreground">Mức độ
+          <select className={inputClass} disabled={settings.decoration === "none"} value={settings.intensity} onChange={event => onChange({ ...settings, intensity: event.target.value as GuestExperienceSettings["intensity"] })}>
+            <option value="light">Nhẹ</option><option value="medium">Vừa</option>
+          </select>
+        </label>
+      </section>
+    </div>
   </div>;
 }
 
@@ -1339,7 +1462,8 @@ function ImageField({ label, value, placeholder, error, onChange, onUpload, onCh
     <Field label={label} value={value} placeholder={placeholder ?? "Dán liên kết ảnh hoặc tải từ thiết bị"} error={error} onChange={onChange} />
     {value.trim() && <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-2">
       <Image src={mediaUrl(value) ?? value} alt="" aria-hidden="true" width={56} height={56} unoptimized className="size-14 shrink-0 rounded-md object-cover" />
-      <span className="min-w-0 break-all text-xs text-muted-foreground">Ảnh xem trước</span>
+      <span className="min-w-0 flex-1 break-all text-xs text-muted-foreground">Ảnh xem trước</span>
+      <Button type="button" size="sm" variant="ghost" className="shrink-0 text-destructive hover:bg-destructive/5 hover:text-destructive" disabled={uploading} onClick={() => { onChange(""); setUploadError(""); }}>Gỡ ảnh khỏi mục này</Button>
     </div>}
     <div className="flex flex-wrap items-center gap-3">
       <label htmlFor={inputId} className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-xs font-medium hover:bg-muted ${uploading ? "pointer-events-none opacity-60" : ""}`}><Upload className="size-3.5" />{uploading ? "Đang tải ảnh…" : value ? "Thay ảnh" : "Tải ảnh"}</label>

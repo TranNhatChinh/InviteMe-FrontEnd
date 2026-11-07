@@ -35,6 +35,18 @@ const isWeddingMediaReference = (value: string) => {
 const imageUrlSchema = z.string().max(2048).refine(value => sharedWeddingImages.has(value) || isWeddingMediaReference(value), "Ảnh phải thuộc thư viện cưới hoặc được tải lên đám cưới này.");
 const httpsUrlSchema = z.string().max(2048).refine(isSafeHttps, "Liên kết phải dùng HTTPS.");
 const socialUrlSchema = z.string().max(500).refine(isSafeHttps, "Liên kết mạng xã hội phải dùng HTTPS.");
+const guestExperienceSettingsSchema = z.object({
+  tools: z.array(z.enum(["rsvp", "calendar", "gift", "wishes", "share"]))
+    .max(4).refine(items => new Set(items).size === items.length, "Không chọn tiện ích trùng nhau." ).optional(),
+  decoration: z.enum(["none", "petals", "sparkles"]).optional(),
+  intensity: z.enum(["light", "medium"]).optional(),
+}).strict();
+const guestExperienceDefaultsSchema = z.object({
+  tools: z.array(z.enum(["rsvp", "calendar", "gift", "wishes", "share"]))
+    .max(4).refine(items => new Set(items).size === items.length).nullish(),
+  decoration: z.enum(["none", "petals", "sparkles"]).nullish(),
+  intensity: z.enum(["light", "medium"]).nullish(),
+}).strict();
 const imageItemSchema = z.object({ id: z.string().min(1).max(100), imageUrl: imageUrlSchema, alt: z.string().max(200).optional() }).strict();
 const personSchema = z.object({
   displayName: z.string().max(50).optional(), fullName: z.string().max(100).optional(),
@@ -94,6 +106,7 @@ export const storyTemplateConfigSchema = z.object({
   palettes: z.array(z.object({ id: z.string(), label: z.string(), colors: z.object({ primary: z.string(), background: z.string(), accent: z.string(), text: z.string() }).strict() }).strict()),
   allowedFonts: z.array(z.string()), assets: z.record(z.string(), z.string()).nullable().optional(),
   accessTier: z.enum(["UNCLASSIFIED", "FREE", "PREMIUM"]).default("UNCLASSIFIED"),
+  guestExperienceDefaults: guestExperienceDefaultsSchema.nullish(),
   // Older published catalog rows may carry categories outside the current admin allowlist.
   // Keep gallery reads compatible; writes are still validated by the backend.
   category: z.string().max(80).nullable().optional(),
@@ -163,7 +176,10 @@ export const storyBuilderV4DocumentSchema = z.object({
   templateSnapshot: z.record(z.string(), z.unknown()).optional(),
   navigationMode: z.enum(["one-page", "multi-page", "hybrid"]), content: sharedContentSchema,
   seo: z.object({ title: z.string().max(70).optional(), description: z.string().max(200).optional(), imageUrl: imageUrlSchema.optional() }).strict().optional(),
-  appearance: z.object({ paletteId: z.string().optional(), fontHeading: z.string().optional(), fontBody: z.string().optional(), motion: z.enum(["template", "off"]).optional() }).strict(),
+  appearance: z.object({
+    paletteId: z.string().optional(), fontHeading: z.string().optional(), fontBody: z.string().optional(), motion: z.enum(["template", "off"]).optional(),
+    guestExperience: guestExperienceSettingsSchema.optional(),
+  }).strict(),
   pages: z.array(pageSchema).min(1).max(8), publishedAt: z.string().optional(),
 }).strict().superRefine((document, context) => {
   if (JSON.stringify(document).length > 200_000) context.addIssue({ code: "custom", message: "Website content exceeds 200 KB." });
