@@ -36,6 +36,8 @@ import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
 import { trapDialogFocus } from "@/shared/lib/dialog-focus";
 import {
+  applySeatingGeneration,
+  type SeatingGenerationApply,
   getSeatingPlan,
   getSeatingPublication,
   setSeatingPublication,
@@ -48,6 +50,10 @@ import {
 import { sideLabels, type PlanningGuest } from "../api/planning.api";
 import { previewSeatMove } from "../utils/planning-seat-move";
 import { moveSeatingWithRetry } from "../utils/seating-conflict-retry";
+import { GenerateSeatingDialog } from "./generate-seating-dialog";
+import { SeatingBoard } from "./seating-board";
+import { wouldSplitParty } from "../utils/seating-layout";
+import { Modal } from "@/shared/ui/modal";
 import { PlanningSuggestions } from "./planning-suggestions";
 import { SeatingLegend } from "./seating-legend";
 import { SeatingQueue } from "./seating-queue";
@@ -232,6 +238,11 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       setPublishing(false);
     }
   }
+  const [pendingSplit, setPendingSplit] = useState<{
+    ids: string[];
+    target: string | null;
+    seatNumber?: number;
+  } | null>(null);
   const [preview, setPreview] = useState<SeatingPlan | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -322,10 +333,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     ),
   );
   async function change(input: SeatingChange, optimistic?: SeatingPlan) {
-    if (!editable || savingRef.current || !planQuery.data) return;
+    if (!editable || savingRef.current || !planQuery.data) return false;
     if (realtime.getStatus() !== "connected") {
       collaborationError();
-      return;
+      return false;
     }
     savingRef.current = true;
     setSaving(true);
@@ -357,6 +368,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         setTableId(null);
         setSeat(null);
       }
+      return true;
     } catch (error) {
       setFailure(true);
       const dragProblem =
@@ -377,6 +389,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   ? t("seating.forbidden")
                   : t("seating.saveFailed"),
       );
+      return false;
     } finally {
       setPreview(null);
       savingRef.current = false;
@@ -384,7 +397,46 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       await cache.invalidateQueries({ queryKey: key });
     }
   }
-  function move(ids: string[], target: string | null, seatNumber?: number) {
+  async function applyGeneration(input: SeatingGenerationApply) {
+    if (
+      !editable ||
+      savingRef.current ||
+      !isWeddingWide("SEATING_EDIT") ||
+      !isWeddingWide("SEATING_VIEW")
+    )
+      return false;
+    savingRef.current = true;
+    setSaving(true);
+    setFailure(false);
+    setMessage("");
+    try {
+      const latest = await applySeatingGeneration(api, weddingId, input);
+      cache.setQueryData<SeatingPlan>(key, (current) =>
+        current && current.version > latest.version ? current : latest,
+      );
+      setSelection([]);
+      closeDetails();
+      setMessage(t("seating.saved"));
+      return true;
+    } catch (error) {
+      setFailure(true);
+      setMessage(
+        t(
+          error instanceof ApiError && error.status === 409
+            ? "generation.stale"
+            : error instanceof ApiError && error.backendCode === "PLAN_LIMIT_REACHED"
+              ? "generation.quota"
+              : "generation.applyFailed",
+        ),
+      );
+      return false;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+      await cache.invalidateQueries({ queryKey: key });
+    }
+  }
+  function move(ids: string[], target: string | null, seatNumber?: number, splitConfirmed = false) {
     if (!plan || !editable || savingRef.current) return;
     const lock = collaboration.leases.find(
       (lease) =>
@@ -409,8 +461,15 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       setMessage(
         shortage > 0
           ? t("seating.shortage", { table: table?.name, count: shortage })
-          : t("seating.placeUnavailable"),
+          : table?.side
+            ? t("layout.sideConflict")
+            : t("seating.placeUnavailable"),
       );
+      return;
+    }
+    if (!splitConfirmed && wouldSplitParty(plan, ids, target)) {
+      collaboration.cancel(false);
+      setPendingSplit({ ids, target, seatNumber });
       return;
     }
     void change(
@@ -459,6 +518,31 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         (lease) => lease.connectionId !== collaboration.connectionId,
       )}
     >
+      <Modal
+        open={!!pendingSplit}
+        onClose={() => setPendingSplit(null)}
+        title={t("layout.splitTitle")}
+        description={t("layout.splitDescription")}
+      >
+        <div className="flex gap-3">
+          <Button type="button" variant="outline" onClick={() => setPendingSplit(null)}>
+            {t("layout.cancel")}
+          </Button>
+          <Button
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              if (pendingSplit) {
+                const pending = pendingSplit;
+                setPendingSplit(null);
+                move(pending.ids, pending.target, pending.seatNumber, true);
+              }
+            }}
+          >
+            {t("layout.splitConfirm")}
+          </Button>
+        </div>
+      </Modal>
       <SeatingRemoteCursors
         weddingId={weddingId}
         plan={plan}
@@ -618,13 +702,26 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           )}
           <div className="flex flex-wrap items-center justify-between gap-4">
             <SeatingLegend />
-            <PlanningSuggestions
-              plan={plan}
-              editable={editable}
-              saving={saving}
-              onChange={change}
-              saveError={failure ? message : undefined}
-            />
+            <div className="flex flex-wrap gap-2">
+              {!plan.tables.length &&
+                editable &&
+                isWeddingWide("SEATING_EDIT") &&
+                isWeddingWide("SEATING_VIEW") && (
+                  <GenerateSeatingDialog
+                    plan={plan}
+                    disabled={saving}
+                    onApply={applyGeneration}
+                    saveError={failure ? message : undefined}
+                  />
+                )}
+              <PlanningSuggestions
+                plan={plan}
+                editable={editable}
+                saving={saving}
+                onChange={change}
+                saveError={failure ? message : undefined}
+              />
+            </div>
           </div>
           <div className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
             <DropTarget
@@ -682,11 +779,19 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               className="min-w-0 rounded-xl border bg-[#F8F5EF] p-4"
               aria-label={t("seating.savedPlan")}
             >
-              {!plan.tables.length && (
-                <p className="p-5 text-center text-sm">{t("seating.addFirstTable")}</p>
-              )}
-              <div className="flex flex-wrap justify-center gap-5">
-                {plan.tables.map((table) => {
+              <SeatingBoard
+                plan={plan}
+                editable={
+                  editable && isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")
+                }
+                saving={saving}
+                onChange={change}
+                onInspect={(table) => {
+                  setTableId(table.id);
+                  setPlaceId(null);
+                  setSeat(null);
+                }}
+                renderTable={(table) => {
                   const members = plan.assignments.filter((a) => a.tableId === table.id);
                   const remote = collaboration.leases.filter(
                     (lease) =>
@@ -876,8 +981,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       </div>
                     </DropTarget>
                   );
-                })}
-              </div>
+                }}
+              />
             </section>
             <dialog
               ref={detailsRef}
@@ -892,6 +997,19 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 <SeatingTableDrawer
                   key={inspectedTable.id + ":" + plan.version}
                   table={inspectedTable}
+                  canLayout={isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")}
+                  saveError={failure ? message : undefined}
+                  onLayoutSave={(side, row, column) =>
+                    void change({
+                      action: "UPDATE_TABLE",
+                      tableId: inspectedTable.id,
+                      name: inspectedTable.name,
+                      capacity: inspectedTable.capacity,
+                      side,
+                      row,
+                      column,
+                    })
+                  }
                   plan={plan}
                   editable={editable}
                   saving={saving}

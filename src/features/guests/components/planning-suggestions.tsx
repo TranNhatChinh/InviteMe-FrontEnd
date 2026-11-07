@@ -34,7 +34,7 @@ export function PlanningSuggestions({
   plan: SeatingPlan;
   editable: boolean;
   saving: boolean;
-  onChange: (input: SeatingChange) => Promise<void>;
+  onChange: (input: SeatingChange) => Promise<unknown>;
   saveError?: string;
 }) {
   const { t, i18n } = useTranslation("guestPlanning", { keyPrefix: "suggestions" });
@@ -57,7 +57,8 @@ export function PlanningSuggestions({
     [plan.guests, seatingScope?.groups, weddingWideSeating],
   );
   const requiresGroup = !weddingWideSeating;
-  const canSuggest = weddingWideSeating;
+  const canSuggest =
+    editable && weddingWideSeating && isWeddingWide("SEATING_VIEW") && plan.tables.length > 0;
   const [dialog, setDialog] = useState<"tables" | "suggestions" | null>(null);
   const [selectedGroupIdValue, setSelectedGroupId] = useState(seatingScope?.groups[0]?.id ?? "");
   const selectedGroupId = groupOptions.some((group) => group.id === selectedGroupIdValue)
@@ -150,7 +151,7 @@ export function PlanningSuggestions({
             disabled={saving}
             onClick={() => setDialog("suggestions")}
           >
-            <Sparkles className="size-4" /> {t("smartSuggestions")}
+            <Sparkles className="size-4" /> {t("seatUnassigned")}
           </Button>
         )}
       </div>
@@ -341,7 +342,7 @@ export function PlanningSuggestions({
       <Modal
         open={dialog === "suggestions"}
         onClose={() => setDialog(null)}
-        title={t("smartSuggestions")}
+        title={t("seatUnassigned")}
         description={t("suggestionDialogDescription")}
       >
         <div className="space-y-4">
