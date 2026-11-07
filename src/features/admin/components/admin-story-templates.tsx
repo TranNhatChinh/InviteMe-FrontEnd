@@ -1369,7 +1369,7 @@ export function AdminStoryTemplates() {
                           api,
                           selectedTemplate.id,
                           selectedTemplate.version,
-                          selectedTemplate.isArchived,
+                          !selectedTemplate.isArchived,
                         ),
                       selectedTemplate.isArchived
                         ? t("storyTemplates.restored")

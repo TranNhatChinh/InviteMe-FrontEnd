@@ -94,9 +94,9 @@ export const storyTemplateAdminApi = {
       body: { expectedVersion },
       schema: adminStoryTemplateSchema,
     }),
-  archive: (api: ApiClient, id: string, expectedVersion: number, archived: boolean) =>
+  archive: (api: ApiClient, id: string, expectedVersion: number, shouldArchive: boolean) =>
     api.request(
-      `/admin/story-templates/${encodeURIComponent(id)}/${archived ? "archive" : "unarchive"}`,
+      `/admin/story-templates/${encodeURIComponent(id)}/${shouldArchive ? "archive" : "unarchive"}`,
       {
         method: "POST",
         body: { expectedVersion },
