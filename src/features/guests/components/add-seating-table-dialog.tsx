@@ -4,7 +4,13 @@ import { useTranslation } from "react-i18next";
 import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
-import type { SeatingChange, SeatingPlan, SeatingSide } from "../api/planning-seating.api";
+import {
+  seatingCapacities,
+  type SeatingCapacity,
+  type SeatingChange,
+  type SeatingPlan,
+  type SeatingSide,
+} from "../api/planning-seating.api";
 import { nextSeatingTableNumber } from "../utils/seating-layout";
 
 export type TableSlot = { side: SeatingSide; row: number; column: number };
@@ -29,13 +35,11 @@ export function AddSeatingTableDialog({
   const [nameOverride, setName] = useState<string | null>(null);
   const name =
     nameOverride ?? t("defaultTableName", { number: nextSeatingTableNumber(plan.tables) });
-  const [capacity, setCapacity] = useState(10);
+  const [capacity, setCapacity] = useState<SeatingCapacity>(10);
   const valid =
     !!name.trim() &&
     name.trim().length <= 100 &&
-    Number.isInteger(capacity) &&
-    capacity >= 1 &&
-    capacity <= 20 &&
+    seatingCapacities.includes(capacity) &&
     plan.tables.length < 100 &&
     !!group;
   return (
@@ -83,16 +87,21 @@ export function AddSeatingTableDialog({
           </label>
           <label className="block text-sm">
             {t("capacity")}
-            <input
+            <select
               aria-label={t("capacity")}
-              type="number"
-              min={1}
-              max={20}
-              required
-              value={capacity || ""}
-              onChange={(event) => setCapacity(Number(event.target.value))}
+              value={capacity}
+              onChange={(event) => {
+                const value = seatingCapacities.find((item) => item === Number(event.target.value));
+                if (value !== undefined) setCapacity(value);
+              }}
               className="mt-1 block w-full rounded-lg border bg-background p-2"
-            />
+            >
+              {seatingCapacities.map((value) => (
+                <option key={value} value={value}>
+                  {t("seatOption", { count: value })}
+                </option>
+              ))}
+            </select>
           </label>
         </fieldset>
         <Button type="submit" disabled={disabled || !valid}>

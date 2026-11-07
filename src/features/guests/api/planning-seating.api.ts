@@ -115,10 +115,12 @@ export function changeSeatingPlan(
   });
 }
 
+export const seatingCapacities = [8, 10, 12] as const;
+export type SeatingCapacity = (typeof seatingCapacities)[number];
 export type SeatingSide = "BRIDE" | "GROOM";
 export type SeatingGenerationConfig = {
   expectedVersion: number;
-  tableCapacity: 8 | 10 | 12;
+  tableCapacity: SeatingCapacity;
   tablesPerRow: { bride: number; groom: number };
 };
 export const seatingGenerationSchema = z.object({

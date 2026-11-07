@@ -9,6 +9,8 @@ import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
 import {
   generateSeatingPreview,
+  seatingCapacities,
+  type SeatingCapacity,
   type SeatingGenerationApply,
   type SeatingGenerationConfig,
   type SeatingGenerationPreview,
@@ -30,7 +32,7 @@ export function GenerateSeatingDialog({
   const { t } = useTranslation("guestPlanning", { keyPrefix: "generation" });
   const { api } = useRuntime();
   const [open, setOpen] = useState(false);
-  const [capacity, setCapacity] = useState<8 | 10 | 12>(10);
+  const [capacity, setCapacity] = useState<SeatingCapacity>(10);
   const [columns, setColumns] = useState(plan.brideTablesPerRow ?? 2);
   const [busy, setBusy] = useState(false),
     [applying, setApplying] = useState(false);
@@ -115,7 +117,7 @@ export function GenerateSeatingDialog({
           <fieldset disabled={applying || disabled} className="space-y-4">
             <legend className="mb-2 text-sm font-medium">{t("capacity")}</legend>
             <div className="flex flex-wrap gap-5">
-              {([8, 10, 12] as const).map((n) => (
+              {seatingCapacities.map((n) => (
                 <label key={n} className="flex items-center gap-2 text-sm">
                   <input
                     type="radio"
