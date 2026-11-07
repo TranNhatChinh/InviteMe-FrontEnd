@@ -71,6 +71,7 @@ export const adminStoryTemplateSchema = z.object({
   isArchived: z.boolean(),
   updatedAt: z.string(),
   publishedAt: z.string().nullable(),
+  weddingUsageCount: z.number().int().nonnegative().default(0),
 });
 export type AdminStoryTemplate = z.infer<typeof adminStoryTemplateSchema>;
 export type StoryTemplateConfig = z.infer<typeof storyTemplateConfigSchema>;

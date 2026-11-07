@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Globe, GripVertical, Image as ImageIcon, LoaderCircle, Menu, Monitor, MoreHorizontal, Plus, Redo2, RefreshCw, Save, Search, Smartphone, Tablet, Trash2, Undo2, Upload, X } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
+import { ApiError } from "@/core/api/api-error";
 import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
@@ -15,7 +16,7 @@ import { LoadingState } from "@/shared/feedback/loading-state";
 import { FeatureLimitNotice, useWeddingPlan } from "@/features/plans";
 import { applyStoryBuilderV4Template, createStoryBuilderV4Document, createV4Section, isStoryBuilderV4Document, summarizeStoryBuilderV4TemplateChange } from "../schemas/story-builder-v4.document";
 import { describeV4ValidationIssues, moveV4Page } from "../schemas/story-builder-v4.helpers";
-import { storyBuilderV4DocumentSchema, type StoryBuilderV4Document, type StoryBuilderV4Section, type StorySectionType, type StoryTemplateSummaryV4 } from "../schemas/story-builder-v4.schema";
+import { storyBuilderV4DocumentSchema, storyTemplateConfigSchema, type StoryBuilderV4Document, type StoryBuilderV4Section, type StorySectionType, type StoryTemplateSummaryV4 } from "../schemas/story-builder-v4.schema";
 import type { Website } from "../api/website.api";
 import { createWeddingEvent, deleteWeddingEvent, getWebsite, listStoryTemplates, listWeddingEvents, listWeddingMedia, mediaUrl, publishWebsite, saveWebsite, updateWeddingEvent, unpublishWebsite, uploadWeddingMedia, type WeddingEvent, type WeddingEventInput } from "../api/website.api";
 import { isoToLocalDateTime, localDateTimeToIso, type WeddingSetup } from "../schemas/wedding.schema";
@@ -43,7 +44,13 @@ const setupBindings: Partial<Record<SectionType, Array<{ target: string; source:
 const id = () => globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const clone = (value: StoryBuilderV4Document) => structuredClone(value);
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-const errText = (error: unknown) => error instanceof Error ? error.message : "Không thể hoàn tất thao tác.";
+const errText = (error: unknown) => {
+  if (error instanceof ApiError && error.backendCode === "STORY_TEMPLATE_UNAVAILABLE")
+    return "Mẫu website này không còn khả dụng. Hãy chọn mẫu khác để lưu hoặc xuất bản; nội dung hiện tại sẽ được giữ lại.";
+  if (error instanceof ApiError && error.backendCode === "WEBSITE_DRAFT_INVALID")
+    return "Bản nháp chưa hợp lệ với mẫu đã chọn. Chọn mẫu khác rồi lưu lại trước khi xuất bản.";
+  return error instanceof Error ? error.message : "Không thể hoàn tất thao tác.";
+};
 function templateGalleryPreview(document: StoryBuilderV4Document): StoryBuilderV4Document {
   const home = document.pages.find(page => page.isHome);
   if (!home) return document;
@@ -65,6 +72,7 @@ export function WeddingWebsiteBuilderV4({ weddingId, site, setup }: BuilderProps
   const { api } = useRuntime();
   const templates = useQuery({ queryKey: ["story-templates"], queryFn: () => listStoryTemplates(api), staleTime: 60_000 });
   const [createdSite, setCreatedSite] = useState<Website | null>(null);
+  const [recoveryDraftNeedsSave, setRecoveryDraftNeedsSave] = useState(false);
   const activeSite = createdSite ?? site;
   const activeIsV4 = isStoryBuilderV4Document(activeSite.document);
   const [showGallery, setShowGallery] = useState(!activeSite.document);
@@ -76,7 +84,7 @@ export function WeddingWebsiteBuilderV4({ weddingId, site, setup }: BuilderProps
   if (templates.isPending) return <LoadingState label="Đang tải thư viện mẫu website…" />;
   if (templates.isError) return <ErrorState error={templates.error} retry={() => void templates.refetch()} />;
 
-  if (activeIsV4 && !showGallery) return <V4Studio key={weddingId} weddingId={weddingId} initialSite={activeSite} setup={setup} onChooseOtherTemplate={savedSite => { setCreatedSite(savedSite); setShowGallery(true); }} />;
+  if (activeIsV4 && !showGallery) return <V4Studio key={weddingId} weddingId={weddingId} initialSite={activeSite} initialDirty={recoveryDraftNeedsSave} setup={setup} onChooseOtherTemplate={(savedSite, needsSave) => { setCreatedSite(savedSite); setRecoveryDraftNeedsSave(Boolean(needsSave)); setShowGallery(true); }} />;
 
   if (legacyDocument && !migrationGallery) {
     return <LegacyMigrationScreen
@@ -95,9 +103,11 @@ export function WeddingWebsiteBuilderV4({ weddingId, site, setup }: BuilderProps
     currentDocument={isStoryBuilderV4Document(activeSite.document) ? activeSite.document : undefined}
     legacyDocument={migrationGallery ? legacyDocument : undefined}
     hasActiveDraft={activeIsV4}
+    recoveryDraftNeedsSave={recoveryDraftNeedsSave}
     onBack={() => { setMigrationGallery(false); setShowGallery(false); }}
     onCreated={(saved) => {
       setCreatedSite(saved);
+      setRecoveryDraftNeedsSave(false);
       setSelectedTemplate(null);
       setShowGallery(false);
     }}
@@ -123,9 +133,9 @@ function LegacyMigrationScreen({ slug, published, status, onStart }: { slug: str
   </main>;
 }
 
-function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDocument, legacyDocument, hasActiveDraft, onBack, onCreated, selectedTemplate, setSelectedTemplate }: {
+function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDocument, legacyDocument, hasActiveDraft, recoveryDraftNeedsSave, onBack, onCreated, selectedTemplate, setSelectedTemplate }: {
   weddingId: string; setup: WeddingSetup; templates: StoryTemplateSummaryV4[]; siteVersion: number; currentDocument?: StoryBuilderV4Document; legacyDocument?: unknown;
-  hasActiveDraft: boolean; onBack: () => void; onCreated: (site: Website) => void;
+  hasActiveDraft: boolean; recoveryDraftNeedsSave: boolean; onBack: () => void; onCreated: (site: Website) => void;
   selectedTemplate: StoryTemplateSummaryV4 | null; setSelectedTemplate: (value: StoryTemplateSummaryV4 | null) => void;
 }) {
   const { api } = useRuntime(); const queryClient = useQueryClient();
@@ -206,7 +216,7 @@ function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDo
         </article>;
       })}
     </div>}
-    {selectedTemplate && <TemplatePreviewDialog template={selectedTemplate} setup={setup} currentDocument={currentDocument} oldDocument={legacyDocument} error={message} viewport={viewport} setViewport={setViewport} busy={busy} locked={Boolean(premiumLocked(selectedTemplate) || premiumUnknown(selectedTemplate))} canUpgrade={Boolean(premiumLocked(selectedTemplate))} weddingId={weddingId} onClose={() => { setSelectedTemplate(null); setMessage(""); }} onChoose={(version, document) => void createDraft(selectedTemplate, version, document)} />}
+    {selectedTemplate && <TemplatePreviewDialog template={selectedTemplate} setup={setup} siteVersion={siteVersion} currentDocument={currentDocument} recoveryDraftNeedsSave={recoveryDraftNeedsSave} oldDocument={legacyDocument} error={message} viewport={viewport} setViewport={setViewport} busy={busy} locked={Boolean(premiumLocked(selectedTemplate) || premiumUnknown(selectedTemplate))} canUpgrade={Boolean(premiumLocked(selectedTemplate))} weddingId={weddingId} onClose={() => { setSelectedTemplate(null); setMessage(""); }} onChoose={(version, document) => void createDraft(selectedTemplate, version, document)} />}
     <TemplateCompareDialog open={compareOpen} onClose={() => setCompareOpen(false)} templates={compareTemplates} setup={setup} currentDocument={currentDocument} oldDocument={legacyDocument} viewport={viewport} setViewport={setViewport} onOpenTemplate={template => { setCompareOpen(false); setSelectedTemplate(template); }} />
   </main>;
 }
@@ -244,15 +254,21 @@ function TemplateCompareDialog({ open, onClose, templates, setup, currentDocumen
 
 // Gallery may be opened before a document exists; GET supplies the optimistic concurrency version.
 // Keeping this query inside the gallery makes template selection use the latest server version.
-function TemplatePreviewDialog({ template, setup, currentDocument, oldDocument, error, viewport, setViewport, busy, locked, canUpgrade, weddingId, onClose, onChoose }: {
-  template: StoryTemplateSummaryV4; setup: WeddingSetup; currentDocument?: StoryBuilderV4Document; oldDocument?: unknown; error: string; viewport: Viewport; setViewport: (v: Viewport) => void;
+function TemplatePreviewDialog({ template, setup, siteVersion, currentDocument, recoveryDraftNeedsSave, oldDocument, error, viewport, setViewport, busy, locked, canUpgrade, weddingId, onClose, onChoose }: {
+  template: StoryTemplateSummaryV4; setup: WeddingSetup; siteVersion: number; currentDocument?: StoryBuilderV4Document; recoveryDraftNeedsSave: boolean; oldDocument?: unknown; error: string; viewport: Viewport; setViewport: (v: Viewport) => void;
   busy: boolean; locked: boolean; canUpgrade: boolean; weddingId: string; onClose: () => void; onChoose: (expectedVersion: number, document?: StoryBuilderV4Document) => void;
 }) {
   const { api } = useRuntime(); const siteQuery = useQuery({ queryKey: ["website", setup.id], queryFn: () => getWebsite(api, setup.id), staleTime: 0, refetchOnMount: "always" });
   const [confirmingSwitch, setConfirmingSwitch] = useState(false);
   const [viewingCurrent, setViewingCurrent] = useState(false);
   const site = siteQuery.data;
-  const latestCurrentDocument = currentDocument && site && isStoryBuilderV4Document(site.document) ? site.document : undefined;
+  const staleVersion = Boolean(site && site.version !== siteVersion);
+  const remoteCurrentDocument = site && isStoryBuilderV4Document(site.document) ? site.document : undefined;
+  // Preserve the in-memory recovery copy when its server version is still current. A remote
+  // version change is shown as a conflict instead of silently replacing either document.
+  const latestCurrentDocument = staleVersion
+    ? currentDocument
+    : recoveryDraftNeedsSave ? currentDocument : remoteCurrentDocument ?? currentDocument;
   const previewSource = latestCurrentDocument ?? currentDocument;
   const preparedDocument = previewSource ? applyStoryBuilderV4Template(template, previewSource, setup) : undefined;
   const preview = preparedDocument
@@ -260,7 +276,8 @@ function TemplatePreviewDialog({ template, setup, currentDocument, oldDocument, 
     : createStoryBuilderV4Document(template, setup, oldDocument);
   const impact = previewSource && preparedDocument ? summarizeStoryBuilderV4TemplateChange(previewSource, preparedDocument) : undefined;
   const currentTemplateName = typeof record(previewSource?.templateSnapshot).name === "string" ? String(record(previewSource?.templateSnapshot).name) : "mẫu hiện tại";
-  const draftIsUnavailable = Boolean(currentDocument && site && !latestCurrentDocument);
+  const draftIsUnavailable = Boolean(currentDocument && site && !remoteCurrentDocument && !recoveryDraftNeedsSave);
+  const canApplyTemplate = Boolean(site && !staleVersion && !draftIsUnavailable);
   return <div role="dialog" aria-modal="true" aria-label={`Xem trước ${template.name}`} className="fixed inset-0 z-[120] flex flex-col bg-background">
     <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border px-3 sm:px-5">
       <div className="flex items-center gap-2">{confirmingSwitch ? <Button variant="ghost" size="sm" onClick={() => setConfirmingSwitch(false)}><ArrowLeft className="mr-1 size-4" />Quay lại xem trước</Button> : <Button variant="ghost" size="sm" onClick={onClose}><X className="mr-1 size-4" />Đóng</Button>}<span className="font-medium">{confirmingSwitch ? "Xác nhận đổi mẫu" : template.name}</span></div>
@@ -277,9 +294,11 @@ function TemplatePreviewDialog({ template, setup, currentDocument, oldDocument, 
       </div>}
       {siteQuery.isError ? <Button variant="outline" onClick={() => void siteQuery.refetch()}><RefreshCw className="mr-1.5 size-4" />Thử tải lại</Button>
         : locked && canUpgrade ? <Button asChild><Link href={`/weddings/${encodeURIComponent(weddingId)}/plan`}>Xem các gói</Link></Button>
-          : <Button disabled={busy || locked || siteQuery.isPending || siteQuery.isFetching || siteQuery.isError || !site || draftIsUnavailable || Boolean(previewSource && previewSource.templateKey === template.key && previewSource.templateVersion === template.version)} onClick={() => { if (!site) return; if (previewSource) setConfirmingSwitch(true); else onChoose(site.version); }}>{busy ? "Đang áp dụng…" : locked ? "Đang kiểm tra gói" : siteQuery.isPending || siteQuery.isFetching ? "Đang kiểm tra bản nháp…" : previewSource ? "Đổi mẫu" : oldDocument ? "Tạo bản nháp V4" : "Dùng mẫu này"}</Button>}
+          : <Button disabled={busy || locked || siteQuery.isPending || siteQuery.isFetching || siteQuery.isError || !canApplyTemplate || Boolean(previewSource && previewSource.templateKey === template.key && previewSource.templateVersion === template.version)} onClick={() => { if (!site || !canApplyTemplate) return; if (previewSource) setConfirmingSwitch(true); else onChoose(site.version); }}>{busy ? "Đang áp dụng…" : locked ? "Đang kiểm tra gói" : siteQuery.isPending || siteQuery.isFetching ? "Đang kiểm tra bản nháp…" : previewSource ? "Đổi mẫu" : oldDocument ? "Tạo bản nháp V4" : "Dùng mẫu này"}</Button>}
     </header>
-    {(error || draftIsUnavailable) && <div role="alert" className="border-b border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error || "Không thể xác minh bản nháp hiện tại. Hãy tải lại trước khi đổi mẫu để tránh ghi đè phiên bản khác."}</div>}
+    {(error || draftIsUnavailable || staleVersion || recoveryDraftNeedsSave) && <div role={staleVersion || draftIsUnavailable ? "alert" : "status"} className={`border-b px-4 py-3 text-sm ${staleVersion || draftIsUnavailable ? "border-destructive/20 bg-destructive/5 text-destructive" : "border-amber-300 bg-amber-50 text-amber-950"}`}>
+      {error || (staleVersion ? "Website đã được cập nhật ở nơi khác sau khi bạn mở thư viện mẫu. Hãy quay lại tải bản mới nhất trước khi tiếp tục." : draftIsUnavailable ? "Không thể xác minh bản nháp hiện tại. Hãy tải lại trước khi đổi mẫu để tránh ghi đè phiên bản khác." : "Bản chỉnh sửa đang được giữ tạm. Nội dung sẽ được lưu cùng lúc khi bạn xác nhận áp dụng mẫu mới.")}
+    </div>}
     {confirmingSwitch && previewSource ? <main className="flex flex-1 items-center justify-center overflow-auto bg-muted/40 p-4 sm:p-8"><section className="w-full max-w-2xl rounded-2xl border border-border bg-background p-5 shadow-sm sm:p-8">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Bản nháp sẽ được cập nhật</p>
       <h2 className="mt-2 font-display text-2xl">Đổi từ {currentTemplateName} sang {template.name}?</h2>
@@ -294,7 +313,7 @@ function TemplatePreviewDialog({ template, setup, currentDocument, oldDocument, 
         {impact?.hiddenSections.length ? <li><details><summary className="cursor-pointer font-medium text-foreground">Xem các phần sẽ được ẩn ({impact.hiddenSections.length})</summary><ul className="mt-2 space-y-1 pl-5 text-muted-foreground">{impact.hiddenSections.map(item => <li key={item.sectionId}>{item.pageTitle} · {sectionNames[item.sectionType]}</li>)}</ul></details></li> : <li>• Không có phần đang hiển thị nào cần ẩn.</li>}
         <li>• Website đang công khai không đổi cho đến khi bạn xuất bản lại.</li>
       </ul>
-      <div className="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row"><Button variant="outline" onClick={() => setConfirmingSwitch(false)}>Tiếp tục xem mẫu</Button><Button disabled={busy || siteQuery.isPending || siteQuery.isFetching || siteQuery.isError || !site || !latestCurrentDocument || !preparedDocument} onClick={() => site && preparedDocument && onChoose(site.version, preparedDocument)}>{busy ? "Đang áp dụng…" : "Xác nhận áp dụng mẫu"}</Button></div>
+      <div className="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row"><Button variant="outline" onClick={() => setConfirmingSwitch(false)}>Tiếp tục xem mẫu</Button><Button disabled={busy || siteQuery.isPending || siteQuery.isFetching || siteQuery.isError || !canApplyTemplate || !latestCurrentDocument || !preparedDocument} onClick={() => site && preparedDocument && canApplyTemplate && onChoose(site.version, preparedDocument)}>{busy ? "Đang áp dụng…" : "Xác nhận áp dụng mẫu"}</Button></div>
     </section></main> : <div className="flex-1 overflow-auto bg-muted/50 p-3 sm:p-6"><div className="mx-auto min-h-full overflow-hidden rounded-xl border border-border bg-background shadow-sm transition-[width]" style={{ width: viewport === "desktop" ? "100%" : viewport === "tablet" ? 768 : 390, maxWidth: "100%" }}><StoryBuilderV4Renderer document={viewingCurrent && latestCurrentDocument ? latestCurrentDocument : preview} /></div></div>}
     {siteQuery.isError && <p role="alert" className="border-t border-destructive/20 bg-destructive/5 px-4 py-3 text-center text-sm text-destructive">Không thể kiểm tra phiên bản website hiện tại. Hãy thử tải lại trước khi dùng mẫu để tránh ghi đè thay đổi mới.</p>}
     {Boolean(oldDocument) && <p className="border-t border-border px-4 py-3 text-center text-xs text-muted-foreground">Website đã xuất bản cũ được giữ nguyên cho đến khi bạn chủ động xuất bản bản V4.</p>}
@@ -312,7 +331,7 @@ function PublishCheckItem({ ok, title, detail }: { ok: boolean; title: string; d
   </div>;
 }
 
-function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { weddingId: string; initialSite: Website; setup: WeddingSetup; onChooseOtherTemplate: (site: Website) => void }) {
+function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTemplate }: { weddingId: string; initialSite: Website; initialDirty: boolean; setup: WeddingSetup; onChooseOtherTemplate: (site: Website, needsSave?: boolean) => void }) {
   const { api } = useRuntime(); const cache = useQueryClient();
   const { isOwner } = usePermission();
   const initial = isStoryBuilderV4Document(initialSite.document) ? initialSite.document : null;
@@ -320,8 +339,8 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   const docRef = useRef<StoryBuilderV4Document | null>(initial);
   const versionRef = useRef(initialSite.version);
   const [version, setVersion] = useState(initialSite.version);
-  const [dirty, setDirty] = useState(false); const dirtyRef = useRef(false);
-  const [busy, setBusy] = useState(false); const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
+  const [dirty, setDirty] = useState(initialDirty); const dirtyRef = useRef(initialDirty);
+  const [busy, setBusy] = useState(false); const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(initialDirty ? "error" : "saved");
   const [error, setError] = useState(""); const [conflict, setConflict] = useState(false);
   const [selectedPageId, setSelectedPageId] = useState(initial?.pages[0]?.id ?? "");
   const [selectedSectionId, setSelectedSectionId] = useState(initial?.pages[0]?.sections[0]?.id ?? "");
@@ -331,6 +350,7 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const mobileActionsRef = useRef<HTMLDivElement>(null);
   const saveInFlight = useRef(false);
+  const lastPersistBackendCodeRef = useRef<string | undefined>(undefined);
   const persistRef = useRef<(next: StoryBuilderV4Document, showIssues?: boolean) => Promise<Website | null>>(async () => null);
   const [showFieldErrors, setShowFieldErrors] = useState(false);
   const [publishReviewOpen, setPublishReviewOpen] = useState(false);
@@ -351,7 +371,22 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   const weddingEventsQuery = useQuery({ queryKey: ["wedding-events", weddingId], queryFn: () => listWeddingEvents(api, weddingId), enabled: hasEventsSection, staleTime: 30_000 });
   const templateQuery = useQuery({ queryKey: ["story-templates"], queryFn: () => listStoryTemplates(api), staleTime: 60_000 });
   const mediaLibrary = useQuery({ queryKey: ["wedding-media", weddingId], queryFn: () => listWeddingMedia(api, weddingId), enabled: mediaPickerOpen });
-  const currentTemplate = templateQuery.data?.find(item => item.key === doc?.templateKey);
+  const currentTemplate = useMemo(() => {
+    const published = templateQuery.data?.find(item => item.key === doc?.templateKey);
+    if (published) return published;
+    if (!doc?.templateSnapshot) return undefined;
+    const snapshot = storyTemplateConfigSchema.safeParse(doc.templateSnapshot);
+    if (!snapshot.success || snapshot.data.key !== doc.templateKey) return undefined;
+    return {
+      key: doc.templateKey,
+      name: snapshot.data.name,
+      version: doc.templateVersion ?? 1,
+      config: snapshot.data,
+    } satisfies StoryTemplateSummaryV4;
+  }, [templateQuery.data, doc?.templateKey, doc?.templateSnapshot, doc?.templateVersion]);
+  const templateNotInNewSelections = Boolean(
+    doc && templateQuery.isSuccess && !templateQuery.data.some(item => item.key === doc.templateKey),
+  );
   const sectionLibraryConfig = currentTemplate?.config.sections.find(item => item.type === sectionLibraryType);
   const sectionLibraryDefaults = sectionLibraryConfig?.defaultContent;
   const currentTier = currentTemplate?.config.accessTier ?? record(doc?.templateSnapshot).accessTier;
@@ -456,6 +491,7 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
 
   async function persist(next: StoryBuilderV4Document, showIssues = false): Promise<Website | null> {
     if (saveInFlight.current || conflict || !isOwner || premiumLocked || premiumUnknown) return null;
+    lastPersistBackendCodeRef.current = undefined;
     const validation = storyBuilderV4DocumentSchema.safeParse(next);
     if (!validation.success) {
       if (showIssues) setShowFieldErrors(true);
@@ -469,6 +505,7 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
     let saved = false;
     try {
       const result = await saveWebsite(api, weddingId, versionRef.current, next);
+      lastPersistBackendCodeRef.current = undefined;
       saved = true;
       versionRef.current = result.version; setVersion(result.version);
       cache.setQueryData(["website", weddingId], result);
@@ -476,6 +513,7 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
       else setSaveState("saving");
       return result;
     } catch (cause) {
+      lastPersistBackendCodeRef.current = cause instanceof ApiError ? cause.backendCode : undefined;
       const message = errText(cause); setError(message); setSaveState("error");
       if (/conflict|version|409/i.test(message)) setConflict(true);
       return null;
@@ -606,13 +644,18 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   async function chooseOtherTemplate() {
     if (busy || conflict || saveState === "saving") return;
     let currentSite: Website = { ...initialSite, document: docRef.current, version: versionRef.current, status };
+    let needsSave = false;
     if (dirtyRef.current && docRef.current) {
       const saved = await persistRef.current(docRef.current, true);
-      if (!saved) return;
-      currentSite = saved;
+      if (saved) currentSite = saved;
+      else if (lastPersistBackendCodeRef.current === "STORY_TEMPLATE_UNAVAILABLE") {
+        // Keep the user's working copy in memory so a new template can be applied and saved in one operation.
+        currentSite = { ...currentSite, document: clone(docRef.current) };
+        needsSave = true;
+      } else return;
     }
     cache.setQueryData(["website", weddingId], currentSite);
-    onChooseOtherTemplate(currentSite);
+    onChooseOtherTemplate(currentSite, needsSave);
   }
   const history = useCallback((direction: "undo" | "redo") => {
     const from = direction === "undo" ? undoStack : redoStack; const to = direction === "undo" ? redoStack : undoStack;
@@ -799,6 +842,7 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
     </header>
     {conflict && <div role="alert" className="z-10 flex flex-wrap items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950"><span>Website đã được cập nhật ở phiên khác. Tải bản mới nhất để tiếp tục chỉnh sửa.</span><Button size="sm" variant="outline" onClick={() => void reloadLatest()}><RefreshCw className="mr-1.5 size-3.5" />Tải bản mới nhất</Button></div>}
     {error && <div role="alert" className="z-10 flex items-center justify-between gap-3 border-b border-destructive/20 bg-destructive/5 px-4 py-2 text-sm text-destructive"><span>{error}</span><button aria-label="Đóng thông báo" onClick={() => setError("")}><X className="size-4" /></button></div>}
+    {templateNotInNewSelections && <div role="status" className="z-10 flex flex-wrap items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span>Mẫu hiện tại đã được lưu trữ hoặc gỡ khỏi thư viện chọn mới. Website đang công khai vẫn được giữ nguyên; nếu không thể lưu hoặc xuất bản bản nháp, hãy chọn mẫu thay thế.</span><Button size="sm" variant="outline" disabled={busy || conflict || saveState === "saving"} onClick={() => void chooseOtherTemplate()}><Eye className="mr-1.5 size-4" />Chọn mẫu khác</Button></div>}
     {showQuickStart && !preview && <section aria-label="Hướng dẫn nhanh" className="z-10 border-b border-primary/15 bg-primary/[0.045] px-3 py-2.5 sm:px-5">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-2">
         <p className="shrink-0 text-xs font-semibold text-foreground">Bắt đầu nhanh</p>
