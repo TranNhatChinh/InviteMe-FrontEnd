@@ -6,6 +6,8 @@ import { groupKind } from "@/shared/lib/planning-groups";
 export const seatingPlanSchema = z.object({
   weddingId: z.string(),
   version: z.number().int(),
+  brideTablesPerRow: z.number().int().min(1).max(4).optional(),
+  groomTablesPerRow: z.number().int().min(1).max(4).optional(),
   tables: z.array(
     z
       .object({
@@ -13,6 +15,9 @@ export const seatingPlanSchema = z.object({
         name: z.string(),
         capacity: z.number().int(),
         group: groupKind.nullable().optional(),
+        side: z.enum(["BRIDE", "GROOM"]).nullable().optional(),
+        row: z.number().int().positive().nullable().optional(),
+        column: z.number().int().positive().nullable().optional(),
       })
       .transform(({ group, ...table }) => ({ ...table, ...(group ? { groupId: group } : {}) })),
   ),
@@ -71,7 +76,17 @@ export type SeatingSuggestion = z.infer<typeof seatingSuggestionSchema>;
 export type SeatingChange =
   | { action: "CREATE_TABLE"; name: string; capacity: number; groupId?: string | null }
   | { action: "CREATE_TABLES"; capacity: number; tableCount: number; groupId?: string | null }
-  | { action: "UPDATE_TABLE"; tableId: string; name: string; capacity: number }
+  | {
+      action: "UPDATE_TABLE";
+      tableId: string;
+      name: string;
+      capacity: number;
+      side?: SeatingSide;
+      row?: number;
+      column?: number;
+    }
+  | { action: "MOVE_TABLE_SLOT"; tableId: string; targetRow: number; targetColumn: number }
+  | { action: "UPDATE_LAYOUT"; brideTablesPerRow: number; groomTablesPerRow: number }
   | { action: "DELETE_TABLE"; tableId: string }
   | { action: "MOVE_PLACES"; placeIds: string[]; tableId: string | null; seatNumber?: number }
   | {
@@ -132,5 +147,64 @@ export function suggestSeatingPlan(
     body: { strategy, mode },
     signal,
     schema: seatingSuggestionSchema,
+  });
+}
+
+export type SeatingSide = "BRIDE" | "GROOM";
+export type SeatingGenerationConfig = {
+  expectedVersion: number;
+  tableCapacity: 8 | 10 | 12;
+  tablesPerRow: { bride: number; groom: number };
+};
+export const seatingGenerationSchema = z.object({
+  sourceVersion: z.number().int(),
+  sourceFingerprint: z.string(),
+  algorithmVersion: z.string(),
+  optimizationStatus: z.enum(["PROVEN_OPTIMAL", "FEASIBLE_NOT_PROVEN"]),
+  summary: z.object({
+    guests: z.number(),
+    places: z.number(),
+    tables: z.number(),
+    emptySeats: z.number(),
+  }),
+  tables: z.array(
+    z.object({
+      code: z.string(),
+      side: z.enum(["BRIDE", "GROOM"]),
+      row: z.number().int(),
+      column: z.number().int(),
+      capacity: z.number().int(),
+      group: groupKind.nullable(),
+      guestIds: z.array(z.string()),
+    }),
+  ),
+  assignments: z.array(
+    z.object({ placeId: z.string(), tableCode: z.string(), seatNumber: z.number().int() }),
+  ),
+  warnings: z.array(z.string()),
+});
+export type SeatingGenerationPreview = z.infer<typeof seatingGenerationSchema>;
+export type SeatingGenerationApply = SeatingGenerationConfig & {
+  sourceFingerprint: string;
+  algorithmVersion: string;
+};
+export function generateSeatingPreview(
+  api: ApiClient,
+  id: string,
+  config: SeatingGenerationConfig,
+  signal?: AbortSignal,
+) {
+  return api.request(`${path(id)}/generate-preview`, {
+    method: "POST",
+    body: config,
+    signal,
+    schema: seatingGenerationSchema,
+  });
+}
+export function applySeatingGeneration(api: ApiClient, id: string, input: SeatingGenerationApply) {
+  return api.request(`${path(id)}/generate-apply`, {
+    method: "POST",
+    body: input,
+    schema: seatingPlanSchema,
   });
 }
