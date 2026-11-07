@@ -956,6 +956,7 @@ export function AdminStoryTemplates() {
                                     <option value="fade">{t("storyTemplates.sectionAnimations.fade")}</option>
                                     <option value="rise">{t("storyTemplates.sectionAnimations.rise")}</option>
                                     <option value="stagger">{t("storyTemplates.sectionAnimations.stagger")}</option>
+                                    <option value="zoom">{t("storyTemplates.sectionAnimations.zoom")}</option>
                                   </select>
                                 </label>
                               </div>

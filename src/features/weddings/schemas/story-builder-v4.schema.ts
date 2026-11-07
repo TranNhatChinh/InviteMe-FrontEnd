@@ -62,7 +62,7 @@ const storyTemplateConfigSectionSchema = z.object({
   style: z.object({
     background: z.enum(["default", "soft", "accent"]).optional(),
     spacing: z.enum(["compact", "normal", "spacious"]).optional(),
-    animation: z.enum(["none", "fade", "rise", "stagger"]).optional(),
+    animation: z.enum(["none", "fade", "rise", "stagger", "zoom"]).optional(),
   }).strict().nullable().optional(),
   defaultContent: z.object({
     title: z.string().max(150).optional(),
@@ -107,7 +107,7 @@ export const storyTemplateSummarySchema = z.object({
 const sectionCommon = {
   id: z.string().min(1).max(100), visible: z.boolean().optional(), title: z.string().max(150).optional(),
   intro: z.string().max(1000).optional(), navigationLabel: z.string().max(100).optional(),
-  style: z.object({ background: z.enum(["default", "soft", "accent"]).optional(), spacing: z.enum(["compact", "normal", "spacious"]).optional(), animation: z.enum(["none", "fade", "rise", "stagger"]).optional() }).strict().optional(),
+  style: z.object({ background: z.enum(["default", "soft", "accent"]).optional(), spacing: z.enum(["compact", "normal", "spacious"]).optional(), animation: z.enum(["none", "fade", "rise", "stagger", "zoom"]).optional() }).strict().optional(),
   bindings: z.array(z.object({ target: z.string().min(1).max(100), source: z.string().min(1).max(100), mode: z.enum(["dynamic", "manual", "static"]).optional() }).strict()).max(4).optional(),
 };
 const heroContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), eyebrow: z.string().max(120).optional(), subtitle: z.string().max(500).optional(), ctaLabel: z.string().max(60).optional(), imageUrl: imageUrlSchema.optional(), slides: z.array(imageItemSchema).max(3).optional() }).strict();

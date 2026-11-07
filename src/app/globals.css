@@ -2563,13 +2563,16 @@ body:has(.landing-dialog[open]) {
   border-radius: 0;
 }
 
-.template-canvas[data-design-family="romantic"] .story-hero--floral {
+.template-canvas[data-design-family="romantic"] .story-hero--floral,
+.template-canvas[data-design-family="garden"] .story-hero--floral {
   box-shadow: inset 0 0 0 1px var(--site-accent), inset 0 0 0 8px var(--site-background), inset 0 0 0 9px var(--site-accent);
 }
-.template-canvas[data-design-family="romantic"] .story-section--couple .story-couple__image {
+.template-canvas[data-design-family="romantic"] .story-section--couple .story-couple__image,
+.template-canvas[data-design-family="garden"] .story-section--couple .story-couple__image {
   border-radius: 48% 48% 18px 18px;
 }
-.template-canvas[data-design-family="romantic"] .story-section--events .story-event {
+.template-canvas[data-design-family="romantic"] .story-section--events .story-event,
+.template-canvas[data-design-family="garden"] .story-section--events .story-event {
   border-radius: 26px 26px 8px 26px;
 }
 
@@ -2731,6 +2734,16 @@ body:has(.landing-dialog[open]) {
   .template-canvas[data-motion-ready="true"] [data-reveal-effect="stagger"][data-revealed="true"] {
     animation: story-reveal-rise 760ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
+  .template-canvas[data-motion-ready="true"] [data-reveal-effect="zoom"]:not([data-revealed="true"]) {
+    opacity: 0;
+    transform: scale(0.975);
+  }
+  .template-canvas[data-motion-ready="true"] [data-reveal-effect="zoom"][data-revealed="true"] {
+    animation: story-reveal-zoom 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .template-canvas[data-motion-ready="true"] [data-reveal-effect="zoom"][data-revealed="true"] .story-hero__image {
+    animation: story-hero-image-reveal 1400ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
   .template-canvas[data-motion-ready="true"] [data-reveal-effect="stagger"][data-revealed="true"] .story-event,
   .template-canvas[data-motion-ready="true"] [data-reveal-effect="stagger"][data-revealed="true"] .story-couple__person,
   .template-canvas[data-motion-ready="true"] [data-reveal-effect="stagger"][data-revealed="true"] .story-gallery__image,
@@ -2760,6 +2773,14 @@ body:has(.landing-dialog[open]) {
 @keyframes story-reveal-rise {
   from { opacity: 0; transform: translate3d(0, 18px, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes story-reveal-zoom {
+  from { opacity: 0; transform: scale(0.975); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes story-hero-image-reveal {
+  from { transform: scale(1.04); }
+  to { transform: scale(1); }
 }
 @keyframes story-reveal-item {
   from { opacity: 0; transform: translate3d(0, 12px, 0); }

@@ -21,7 +21,7 @@ const templateSectionSchema = z.object({
     // so existing database snapshots still load in the Admin editor.
     background: z.enum(["default", "soft", "accent"]).nullish().transform((value) => value ?? undefined),
     spacing: z.enum(["compact", "normal", "spacious"]).nullish().transform((value) => value ?? undefined),
-    animation: z.enum(["none", "fade", "rise", "stagger"]).nullish().transform((value) => value ?? undefined),
+    animation: z.enum(["none", "fade", "rise", "stagger", "zoom"]).nullish().transform((value) => value ?? undefined),
   }).strict().nullable().optional(),
   defaultContent: templateDefaultContentSchema.nullable().optional(),
 }).strict().superRefine((section, context) => {

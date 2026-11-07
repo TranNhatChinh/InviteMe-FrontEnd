@@ -159,7 +159,7 @@
     "sectionSpacing": "Khoảng cách",
     "sectionSpacings": { "compact": "Gọn", "normal": "Tiêu chuẩn", "spacious": "Thoáng" },
     "sectionAnimation": "Hiệu ứng xuất hiện",
-    "sectionAnimations": { "none": "Không dùng", "fade": "Mờ dần nhẹ", "rise": "Hiện nhẹ khi cuộn", "stagger": "Hiện lần lượt" },
+    "sectionAnimations": { "none": "Không dùng", "fade": "Mờ dần nhẹ", "rise": "Hiện nhẹ khi cuộn", "stagger": "Hiện lần lượt", "zoom": "Thu phóng nhẹ" },
     "defaultsTitle": "Nội dung mặc định",
     "defaultContentHelp": "Mẫu chỉ lưu nội dung dùng chung. Tên, ngày giờ, địa điểm, ảnh và thông tin quà riêng lấy từ Wedding Setup hoặc do Couple nhập.",
     "defaultTitleLabel": "Tiêu đề mặc định",
