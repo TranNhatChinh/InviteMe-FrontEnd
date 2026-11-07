@@ -159,7 +159,7 @@
     "sectionSpacing": "Spacing",
     "sectionSpacings": { "compact": "Compact", "normal": "Standard", "spacious": "Spacious" },
     "sectionAnimation": "Entrance effect",
-    "sectionAnimations": { "none": "None", "fade": "Gentle fade", "rise": "Reveal on scroll", "stagger": "Staggered reveal" },
+    "sectionAnimations": { "none": "None", "fade": "Gentle fade", "rise": "Reveal on scroll", "stagger": "Staggered reveal", "zoom": "Soft zoom" },
     "defaultsTitle": "Default content",
     "defaultContentHelp": "Templates store shared copy only. Couple names, dates, venues, photos and gift details come from Wedding Setup or are entered by the couple.",
     "defaultTitleLabel": "Default title",

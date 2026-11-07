@@ -3,9 +3,11 @@
 /* eslint-disable @next/next/no-img-element -- Wedding media is served from the wedding-owned media API. */
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { ArrowUp, Share2 } from "lucide-react";
 import type { StoryBuilderV4Document, StoryBuilderV4Section } from "../schemas/story-builder-v4.schema";
 import { StoryRsvp } from "./story-rsvp";
 import { StoryWishes } from "./story-wishes";
+import { StoryGalleryLightbox } from "./story-gallery-lightbox";
 
 type InlineEdit = (sectionId: string, key: string, value: unknown) => void;
 type Props = { document: StoryBuilderV4Document; slug?: string; pagePath?: string; showHidden?: boolean; editable?: boolean; selectedSectionId?: string; onInlineEdit?: InlineEdit; onSelectSection?: (sectionId: string) => void; onNavigatePage?: (pagePath: string) => void };
@@ -38,7 +40,8 @@ function templateFamily(document: StoryBuilderV4Document) {
   return /^[a-z0-9-]{1,80}$/.test(category) ? category : "classic";
 }
 
-function defaultRevealEffect(family: string, sectionType: string): "fade" | "rise" | "stagger" {
+function defaultRevealEffect(family: string, sectionType: string): "fade" | "rise" | "stagger" | "zoom" {
+  if (sectionType === "hero" && ["garden", "outdoor", "royal"].includes(family)) return "zoom";
   if (["garden", "outdoor", "autumn"].includes(family) && ["gallery", "events", "weddingParty", "loveStory"].includes(sectionType)) return "stagger";
   if (["editorial", "minimal"].includes(family)) return "fade";
   if (["traditional", "royal"].includes(family)) return sectionType === "gallery" ? "stagger" : "rise";
@@ -248,10 +251,11 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
       </div>;
       break;
     case "gallery":
-      body = <div className={`story-gallery story-gallery--${section.variant} ${section.variant === "masonry" ? "columns-2 gap-3 sm:columns-3 sm:gap-4" : "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4"}`}>
-        {array(content.images).map((image, index) => <img key={text(image.id) || index} loading="lazy" decoding="async" src={text(image.imageUrl)} alt={text(image.alt) || `Ảnh cưới ${index + 1}`} className={`story-gallery__image w-full object-cover ${section.variant === "masonry" ? `mb-3 break-inside-avoid sm:mb-4 ${index % 3 === 1 ? "aspect-[4/5]" : "aspect-square"}` : `rounded-xl ${index % 4 === 0 ? "aspect-[4/5]" : "aspect-square"}`}`} />)}
-        {!array(content.images).length && <p className="col-span-full text-sm opacity-65">Thêm ảnh để tạo album cưới.</p>}
-      </div>;
+      body = <StoryGalleryLightbox
+        images={array(content.images).map((image, index) => ({ id: text(image.id) || `gallery-${index}`, imageUrl: text(image.imageUrl), alt: text(image.alt) || undefined })).filter(image => image.imageUrl)}
+        variant={section.variant}
+        enabled={!editable && Boolean(slug)}
+      />;
       break;
     case "rsvp":
       body = <StoryRsvp label={text(content.submitLabel) || undefined} />;
@@ -291,6 +295,8 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
 
 export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = false, editable = false, selectedSectionId, onInlineEdit, onSelectSection, onNavigatePage }: Props) {
   const motionRoot = useRef<HTMLDivElement>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [shareStatus, setShareStatus] = useState("");
   const page = useMemo(() => pagePath === undefined ? document.pages.find(item => item.isHome) : document.pages.find(item => item.slug === pagePath), [document.pages, pagePath]);
   const { colors, heading, body } = templateColors(document);
   const family = templateFamily(document);
@@ -323,6 +329,34 @@ export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = 
       targets.forEach(target => { delete target.dataset.revealed; });
     };
   }, [document.appearance.motion, editable, page]);
+  useEffect(() => {
+    if (editable || !slug) return;
+    const updateVisibility = () => setShowBackToTop(window.scrollY > 640);
+    updateVisibility();
+    window.addEventListener("scroll", updateVisibility, { passive: true });
+    return () => window.removeEventListener("scroll", updateVisibility);
+  }, [editable, slug]);
+  async function shareWebsite() {
+    const title = document.seo?.title || "Website cưới";
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url: window.location.href });
+        setShareStatus("Đã mở chia sẻ.");
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        setShareStatus("Đã sao chép liên kết website.");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        setShareStatus("Đã sao chép liên kết website.");
+      } catch {
+        setShareStatus("Không thể chia sẻ liên kết trên thiết bị này.");
+      }
+    }
+    window.setTimeout(() => setShareStatus(""), 2500);
+  }
   if (!page) return <main className="mx-auto max-w-xl px-6 py-24 text-center"><h1 className="font-serif text-3xl">Không tìm thấy trang</h1><p className="mt-3 opacity-70">Trang này có thể chưa được xuất bản.</p></main>;
   const eventsTarget = page.sections.find(section => section.type === "events" && section.visible !== false)?.id;
   const rsvpTarget = page.sections.find(section => section.type === "rsvp" && section.visible !== false)?.id;
@@ -347,6 +381,13 @@ export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = 
     <main>
       {page.sections.map((section, index) => <SectionView key={section.id} section={section} family={family} sectionIndex={index} slug={slug} ctaTarget={ctaTarget} ctaLabel={ctaLabel} showHidden={showHidden} gift={document.content.gift} editable={editable} selected={selectedSectionId === section.id} onInlineEdit={onInlineEdit} onSelectSection={onSelectSection} />)}
     </main>
-    <footer className="border-t border-[var(--site-rule)] px-5 py-9 text-center text-xs tracking-wide opacity-65">Được tạo cùng InviteMe</footer>
+    <footer className="border-t border-[var(--site-rule)] px-5 py-8 text-center">
+      {slug && !editable && <div className="mb-5 flex flex-col items-center gap-2">
+        <button type="button" onClick={() => void shareWebsite()} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--site-rule)] px-4 text-sm transition hover:bg-[var(--site-primary)]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]"><Share2 className="size-4" />Chia sẻ website</button>
+        {shareStatus && <p role="status" aria-live="polite" className="text-xs opacity-70">{shareStatus}</p>}
+      </div>}
+      <p className="text-xs tracking-wide opacity-65">Được tạo cùng InviteMe</p>
+    </footer>
+    {showBackToTop && !editable && <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="fixed bottom-5 right-5 z-20 grid size-11 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)] text-[var(--site-text)] shadow-lg transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]" aria-label="Lên đầu trang"><ArrowUp className="size-5" /></button>}
   </div>;
 }
