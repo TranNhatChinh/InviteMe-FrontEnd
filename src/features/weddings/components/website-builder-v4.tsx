@@ -42,6 +42,13 @@ const id = () => globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math
 const clone = (value: StoryBuilderV4Document) => structuredClone(value);
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const errText = (error: unknown) => error instanceof Error ? error.message : "Không thể hoàn tất thao tác.";
+function templateGalleryPreview(document: StoryBuilderV4Document): StoryBuilderV4Document {
+  const home = document.pages.find(page => page.isHome);
+  if (!home) return document;
+  const hero = home.sections.find(section => section.type === "hero") ?? home.sections[0];
+  if (!hero) return document;
+  return { ...document, navigationMode: "one-page", pages: [{ ...home, visible: true, sections: [{ ...hero, visible: true }] }] };
+}
 function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
   const destination = index + direction;
   const copy = [...items];
@@ -165,11 +172,12 @@ function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDo
         const preview = currentDocument
           ? applyStoryBuilderV4Template(template, currentDocument, setup)
           : createStoryBuilderV4Document(template, setup, legacyDocument);
+        const galleryPreview = templateGalleryPreview(preview);
         const locked = Boolean(premiumLocked(template) || premiumUnknown(template));
         const isCurrent = currentDocument?.templateKey === template.key && currentDocument.templateVersion === template.version;
         return <article key={template.key} className="min-w-0">
           <button type="button" onClick={() => setSelectedTemplate(template)} className="group relative block w-full overflow-hidden rounded-[18px] border border-border bg-[#f5f1f0] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Xem trước ${template.name}`}>
-            <div className="h-[250px] overflow-hidden" style={{ width: viewport === "mobile" ? "55%" : viewport === "tablet" ? "80%" : "100%", marginInline: "auto" }}><div className="h-[620px] origin-top scale-[0.42]" style={{ width: "238%", transformOrigin: "top left", pointerEvents: "none" }}><StoryBuilderV4Renderer document={preview} /></div></div>
+            <div className="story-gallery-preview" aria-hidden="true" style={{ width: viewport === "mobile" ? "72%" : viewport === "tablet" ? "88%" : "100%", marginInline: "auto" }}><div className="story-gallery-preview__canvas pointer-events-none"><StoryBuilderV4Renderer document={galleryPreview} /></div></div>
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/65 to-transparent px-4 pb-4 pt-12 text-sm text-white"><span>{template.config.category || "Website cưới"}</span>{isCurrent ? <span className="rounded-full bg-white/20 px-2 py-1 text-xs">Đang dùng</span> : <Eye className="size-4 opacity-0 transition group-hover:opacity-100" />}</div>
           </button>
           <div className="mt-4 flex items-start justify-between gap-3">
