@@ -1439,7 +1439,13 @@ function DateTimeField({ label, value, timeZone, error, onChange }: { label: str
 function ImageField({ label, value, placeholder, error, onChange, onUpload, onChooseMedia }: { label: string; value: string; placeholder?: string; error?: string; onChange: (value: string) => void; onUpload: (file: File) => Promise<string | null>; onChooseMedia: (onChoose: (url: string) => void) => void }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [previewFailedFor, setPreviewFailedFor] = useState("");
   const inputId = useId();
+  const previewFailed = previewFailedFor === value;
+  const fileName = value ? (() => {
+    try { return decodeURIComponent(new URL(value, "https://inviteme.invalid").pathname.split("/").pop() || "Ảnh đã chọn"); }
+    catch { return value.split("/").pop()?.split("?")[0] || "Ảnh đã chọn"; }
+  })() : "";
   async function selectImage(file?: File) {
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) {
@@ -1459,18 +1465,35 @@ function ImageField({ label, value, placeholder, error, onChange, onUpload, onCh
     }
   }
   return <div className="space-y-2">
-    <Field label={label} value={value} placeholder={placeholder ?? "Dán liên kết ảnh hoặc tải từ thiết bị"} error={error} onChange={onChange} />
-    {value.trim() && <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-2">
-      <Image src={mediaUrl(value) ?? value} alt="" aria-hidden="true" width={56} height={56} unoptimized className="size-14 shrink-0 rounded-md object-cover" />
-      <span className="min-w-0 flex-1 break-all text-xs text-muted-foreground">Ảnh xem trước</span>
-      <Button type="button" size="sm" variant="ghost" className="shrink-0 text-destructive hover:bg-destructive/5 hover:text-destructive" disabled={uploading} onClick={() => { onChange(""); setUploadError(""); }}>Gỡ ảnh khỏi mục này</Button>
+    <span className="block text-sm font-medium text-foreground">{label}</span>
+    {value.trim() ? <div className="grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-3 rounded-xl border border-border bg-muted/30 p-3">
+      <div className="relative grid size-[4.5rem] shrink-0 place-items-center overflow-hidden rounded-lg bg-primary/10 text-primary">
+        {!previewFailed
+          ? <Image src={mediaUrl(value) ?? value} alt={label} fill sizes="72px" unoptimized className="object-cover" onError={() => setPreviewFailedFor(value)} />
+          : <ImageIcon className="size-6" aria-hidden="true" />}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">Ảnh đã được thêm</p>
+        <p className="mt-1 truncate text-xs text-muted-foreground" title={fileName}>{fileName}</p>
+        {previewFailed && <p role="status" className="mt-1 text-xs text-amber-700">Không tải được ảnh xem trước. Bạn có thể chọn ảnh khác.</p>}
+      </div>
+    </div> : <div className="flex min-h-20 items-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+      <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><ImageIcon className="size-5" aria-hidden="true" /></span>
+      <span>Chưa chọn ảnh. Tải ảnh lên hoặc chọn từ thư viện của đám cưới.</span>
     </div>}
-    <div className="flex flex-wrap items-center gap-3">
-      <label htmlFor={inputId} className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-xs font-medium hover:bg-muted ${uploading ? "pointer-events-none opacity-60" : ""}`}><Upload className="size-3.5" />{uploading ? "Đang tải ảnh…" : value ? "Thay ảnh" : "Tải ảnh"}</label>
+    {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+    <div className="flex flex-wrap items-center gap-2">
+      <label htmlFor={inputId} className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium transition hover:bg-muted focus-within:ring-2 focus-within:ring-ring ${uploading ? "pointer-events-none opacity-60" : ""}`}><Upload className="size-3.5" />{uploading ? "Đang tải ảnh…" : value ? "Thay ảnh" : "Tải ảnh lên"}</label>
       <input id={inputId} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void selectImage(file); }} />
       <Button type="button" size="sm" variant="outline" disabled={uploading} onClick={() => onChooseMedia(onChange)}><ImageIcon className="mr-1.5 size-3.5" />Chọn từ thư viện</Button>
+      {value && <Button type="button" size="sm" variant="ghost" className="text-destructive hover:bg-destructive/5 hover:text-destructive" disabled={uploading} onClick={() => { onChange(""); setUploadError(""); }}><Trash2 className="mr-1.5 size-3.5" />Gỡ khỏi mục này</Button>}
       {uploading && <span role="status" aria-live="polite" className="text-xs text-muted-foreground">Đang tải ảnh lên…</span>}
     </div>
+    <p className="text-xs leading-5 text-muted-foreground">Gỡ ảnh chỉ bỏ ảnh khỏi mục này; tệp vẫn được giữ trong thư viện ảnh.</p>
+    <details className="group rounded-lg border border-border/70 px-3 py-2">
+      <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground marker:hidden">Nhập liên kết ảnh thủ công <ChevronDown className="ml-1 inline size-3.5 transition group-open:rotate-180" /></summary>
+      <div className="mt-3"><Field label="Liên kết ảnh" value={value} placeholder={placeholder ?? "Dán liên kết ảnh"} onChange={onChange} /></div>
+    </details>
     {uploadError && <p role="alert" className="text-xs text-destructive">{uploadError}</p>}
   </div>;
 }
