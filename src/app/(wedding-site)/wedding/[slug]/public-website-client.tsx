@@ -38,6 +38,11 @@ export function PublicWebsiteClient({
     queryKey: ["public-website", slug],
     queryFn: ({ signal }) => getPublicWebsite(api, slug, signal),
     initialData: initial,
+    // Published content can change while this URL stays the same. Bypass the app-wide
+    // 30-second freshness window whenever the public page mounts or reconnects.
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
     retry: false,
   });
   if (site.isPending) return <main className="p-10 text-center">{t("websiteLoading")}</main>;
