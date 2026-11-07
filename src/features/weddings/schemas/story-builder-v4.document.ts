@@ -92,10 +92,11 @@ function legacySharedContent(raw: unknown, setup: WeddingSetup) {
 
 function sectionContent(type: StorySectionType, content: ReturnType<typeof legacySharedContent>, setup: WeddingSetup, title: string) {
   switch (type) {
-    case "hero": return { title: title || "Ngày vui của chúng mình", subtitle: "Trân trọng mời bạn cùng chung vui", ...(content.heroImageUrl ? { imageUrl: content.heroImageUrl } : {}) };
+    case "hero": return { title: title || "Ngày vui của chúng mình", subtitle: "Trân trọng mời bạn cùng chung vui", ctaLabel: "Xem ngày vui", ...(content.heroImageUrl ? { imageUrl: content.heroImageUrl } : {}) };
     case "couple": return { title: "Cặp đôi", ...(content.groom ? { groom: structuredClone(content.groom) } : {}), ...(content.bride ? { bride: structuredClone(content.bride) } : {}) };
     case "countdown": return { title: "Đếm ngược đến ngày vui", ...(setup.eventDateTime ? { targetDate: setup.eventDateTime } : {}) };
-    case "events": return { title: "Sự kiện cưới", events: structuredClone(content.events ?? []) };
+    case "events": return { title: "Sự kiện cưới", ...(content.events?.length && content.events[0]?.id !== "main-event" ? { events: structuredClone(content.events) } : { eventIds: ["main"] }) };
+    case "weddingParty": return { title: "Dàn phù dâu & phù rể", groom: [], bride: [] };
     case "loveStory": return { title: "Chuyện tình của chúng mình", ...(content.loveStory ? { intro: content.loveStory.intro, items: structuredClone(content.loveStory.items) } : { items: [] }) };
     case "gallery": return { title: "Album ảnh", images: structuredClone(content.gallery ?? []) };
     case "rsvp": return { title: "Xác nhận tham dự", submitLabel: "Mở thiệp mời" };
@@ -114,7 +115,7 @@ function withTemplateDefaults(
   const next = { ...content };
   const genericTitles: Record<StorySectionType, string[]> = {
     hero: ["Trang chủ", "Ngày vui của chúng mình"], couple: ["Cặp đôi"], countdown: ["Đếm ngược đến ngày vui"],
-    loveStory: ["Chuyện tình của chúng mình"], events: ["Sự kiện cưới"], gallery: ["Album ảnh"],
+    loveStory: ["Chuyện tình của chúng mình"], events: ["Sự kiện cưới"], weddingParty: ["Dàn phù dâu & phù rể"], gallery: ["Album ảnh"],
     rsvp: ["Xác nhận tham dự"], wishes: ["Lời chúc"], gift: ["Mừng cưới"],
   };
   if (defaults.title?.trim() && (!text(next.title).trim() || genericTitles[type].includes(text(next.title)) || showTemplateTitle)) {
@@ -183,7 +184,7 @@ export function applyStoryBuilderV4Template(
   current: StoryBuilderV4Document,
   setup: WeddingSetup,
 ): StoryBuilderV4Document {
-  const supportedTypes = new Set<StorySectionType>(["hero", "couple", "countdown", "loveStory", "events", "gallery", "rsvp", "wishes", "gift"]);
+  const supportedTypes = new Set<StorySectionType>(["hero", "couple", "countdown", "loveStory", "events", "weddingParty", "gallery", "rsvp", "wishes", "gift"]);
   const layouts = template.config.sections.map(item => {
     if (!supportedTypes.has(item.type as StorySectionType)) throw new Error(`Mẫu có loại phần chưa được hỗ trợ: ${item.type}`);
     return { type: item.type as StorySectionType, variant: item.variant, defaultContent: item.defaultContent, style: item.style };
@@ -268,6 +269,6 @@ export function createV4Section(
   defaultContent?: TemplateDefaultContent | null,
   style?: TemplateSectionStyle | null,
 ): StoryBuilderV4Section {
-  const variants: Record<StorySectionType, string> = { hero: "floral", couple: "alternating", countdown: "classic", loveStory: "timeline", events: "cards", gallery: "grid", rsvp: "default", wishes: "default", gift: "default" };
+  const variants: Record<StorySectionType, string> = { hero: "floral", couple: "alternating", countdown: "classic", loveStory: "timeline", events: "cards", weddingParty: "classic", gallery: "grid", rsvp: "default", wishes: "default", gift: "default" };
   return makeSection(type, variants[type], shared as ReturnType<typeof legacySharedContent>, setup, "", defaultContent, false, style);
 }
