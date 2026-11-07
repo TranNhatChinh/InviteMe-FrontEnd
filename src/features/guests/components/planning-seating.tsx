@@ -458,10 +458,17 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         (a) => a.tableId === target && !ids.includes(a.placeId),
       ).length;
       const shortage = table ? ids.length - (table.capacity - occupied) : 0;
+      const sideConflict =
+        table?.side &&
+        plan.places.some(
+          (place) =>
+            ids.includes(place.id) &&
+            plan.guests.find((guest) => guest.id === place.guestId)?.side !== table.side,
+        );
       setMessage(
         shortage > 0
           ? t("seating.shortage", { table: table?.name, count: shortage })
-          : table?.side
+          : sideConflict
             ? t("layout.sideConflict")
             : t("seating.placeUnavailable"),
       );
