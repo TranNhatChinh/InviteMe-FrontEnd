@@ -57,6 +57,19 @@ const fieldLabels: Record<string, string> = {
   visible: "trạng thái hiển thị",
   sections: "các phần nội dung",
   id: "mã nội dung",
+  intro: "lời giới thiệu",
+  subtitle: "lời dẫn",
+  eyebrow: "dòng nhấn",
+  ctaLabel: "nhãn nút",
+  submitLabel: "nhãn nút xác nhận",
+  displayName: "tên hiển thị",
+  fullName: "họ tên",
+  bio: "lời giới thiệu",
+  body: "mô tả",
+  alt: "mô tả ảnh",
+  name: "tên",
+  role: "vai trò",
+  description: "mô tả",
 };
 
 const documentMessages: Record<string, string> = {
@@ -68,10 +81,39 @@ const documentMessages: Record<string, string> = {
   "Page paths must be unique.": "Đường dẫn của các trang không được trùng nhau.",
   "Page path must use a safe, unreserved slug.": "Đường dẫn trang chỉ dùng chữ thường, số và dấu gạch ngang; tránh các địa chỉ dành riêng.",
   "The visible hero must be the first section.": "Ảnh bìa phải nằm ở đầu mỗi trang.",
+  "A page may have only one visible hero section.": "Mỗi trang chỉ được có một phần ảnh bìa đang hiển thị.",
+  "The home page must be visible.": "Trang chủ đang bị ẩn. Hãy bật hiển thị trang chủ trước khi xuất bản.",
+  "At least one page must be visible.": "Website cần có ít nhất một trang đang hiển thị.",
   "Visible pages need a visible section.": "Mỗi trang đang hiển thị cần ít nhất một phần nội dung đang hiển thị.",
   "Section IDs must be unique.": "Các phần nội dung đang bị trùng mã. Hãy tải lại bản mới nhất.",
   "A website may contain at most 80 sections.": "Website chỉ hỗ trợ tối đa 80 phần nội dung.",
+  "Selected color palette is not part of this template.": "Bảng màu đã chọn không còn thuộc mẫu này. Hãy chọn lại bảng màu trong phần Kiểu hiển thị.",
+  "Selected heading font is not supported by this template.": "Phông tiêu đề đã chọn không còn được mẫu hỗ trợ. Hãy chọn phông khác trong phần Kiểu hiển thị.",
+  "Selected body font is not supported by this template.": "Phông nội dung đã chọn không còn được mẫu hỗ trợ. Hãy chọn phông khác trong phần Kiểu hiển thị.",
 };
+
+export function describeV4Issue(issue: ValidationIssue): string {
+  const known = documentMessages[issue.message];
+  if (known) return known;
+  const detail = issue as ValidationIssue & { code?: string; maximum?: number; minimum?: number; origin?: string; format?: string };
+  if (detail.code === "too_big" && typeof detail.maximum === "number") {
+    const unit = detail.origin === "array" ? "mục" : "ký tự";
+    return `Vượt quá giới hạn ${detail.maximum} ${unit}.`;
+  }
+  if (detail.code === "too_small" && typeof detail.minimum === "number") {
+    const unit = detail.origin === "array" ? "mục" : "ký tự";
+    return `Cần có ít nhất ${detail.minimum} ${unit}.`;
+  }
+  if (detail.code === "invalid_format") {
+    if (detail.format === "url") return "Liên kết không đúng định dạng hoặc không dùng HTTPS.";
+    if (detail.format === "datetime") return "Ngày giờ không hợp lệ. Hãy chọn lại thời điểm.";
+    return "Giá trị không đúng định dạng.";
+  }
+  if (detail.code === "invalid_value") return "Giá trị không nằm trong các lựa chọn được hỗ trợ.";
+  if (detail.code === "invalid_type") return "Giá trị chưa đúng kiểu dữ liệu.";
+  if (issue.message.includes("Ảnh phải thuộc") || issue.message.includes("Liên kết phải dùng HTTPS")) return issue.message;
+  return "Nội dung chưa hợp lệ. Hãy kiểm tra trường này.";
+}
 
 export function describeV4ValidationIssues(
   issues: readonly ValidationIssue[],
@@ -81,12 +123,6 @@ export function describeV4ValidationIssues(
 
   const details = new Set<string>();
   for (const issue of issues) {
-    const globalMessage = documentMessages[issue.message];
-    if (globalMessage) {
-      details.add(globalMessage);
-      continue;
-    }
-
     const pagePosition = issue.path.indexOf("pages");
     const pageIndex = pagePosition >= 0 ? issue.path[pagePosition + 1] : undefined;
     const page = typeof pageIndex === "number" ? document.pages[pageIndex] : undefined;
@@ -99,13 +135,14 @@ export function describeV4ValidationIssues(
       page ? `Trang “${page.title}”` : undefined,
       section ? sectionLabels[section.type] ?? "Phần nội dung" : undefined,
     ].filter(Boolean);
+    const reason = describeV4Issue(issue);
 
     if (context.length > 0) {
-      details.add(`${context.join(" → ")}${fieldLabel ? ` → ${fieldLabel}` : ""}: cần kiểm tra lại.`);
+      details.add(`${context.join(" → ")}${fieldLabel ? ` → ${fieldLabel}` : ""}: ${reason}`);
     } else if (fieldLabel) {
-      details.add(`${fieldLabel}: cần kiểm tra lại.`);
+      details.add(`${fieldLabel}: ${reason}`);
     } else {
-      details.add("Một số trường nội dung hoặc liên kết chưa hợp lệ.");
+      details.add(reason);
     }
   }
 

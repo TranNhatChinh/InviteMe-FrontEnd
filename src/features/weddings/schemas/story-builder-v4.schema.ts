@@ -172,21 +172,28 @@ export const storyBuilderV4DocumentSchema = z.object({
   if (document.navigationMode === "one-page" && document.pages.length !== 1) context.addIssue({ code: "custom", message: "One-page websites must have exactly one page." });
   if (document.navigationMode === "multi-page" && document.pages.length < 2) context.addIssue({ code: "custom", message: "Multi-page websites need at least two pages." });
   const pageIds = new Set<string>(); const slugs = new Set<string>(); const sectionIds = new Set<string>(); let total = 0;
-  for (const page of document.pages) {
-    if (pageIds.has(page.id)) context.addIssue({ code: "custom", message: "Page IDs must be unique." });
-    if (slugs.has(page.slug.toLowerCase())) context.addIssue({ code: "custom", message: "Page paths must be unique." });
+  for (const [pageIndex, page] of document.pages.entries()) {
+    if (pageIds.has(page.id)) context.addIssue({ code: "custom", path: ["pages", pageIndex, "id"], message: "Page IDs must be unique." });
+    if (slugs.has(page.slug.toLowerCase())) context.addIssue({ code: "custom", path: ["pages", pageIndex, "slug"], message: "Page paths must be unique." });
     pageIds.add(page.id); slugs.add(page.slug.toLowerCase());
-    if (!page.isHome && (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(page.slug) || reservedSlugs.has(page.slug))) context.addIssue({ code: "custom", message: "Page path must use a safe, unreserved slug." });
+    if (!page.isHome && (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(page.slug) || reservedSlugs.has(page.slug))) context.addIssue({ code: "custom", path: ["pages", pageIndex, "slug"], message: "Page path must use a safe, unreserved slug." });
+    if (page.isHome && page.visible === false) context.addIssue({ code: "custom", path: ["pages", pageIndex, "visible"], message: "The home page must be visible." });
     total += page.sections.length;
-    const heroIndex = page.sections.findIndex(section => section.type === "hero" && section.visible !== false);
-    if (heroIndex > 0) context.addIssue({ code: "custom", message: "The visible hero must be the first section." });
-    if (page.visible !== false && !page.sections.some(section => section.visible !== false)) context.addIssue({ code: "custom", message: "Visible pages need a visible section." });
-    for (const section of page.sections) {
-      if (sectionIds.has(section.id)) context.addIssue({ code: "custom", message: "Section IDs must be unique." });
+    if (page.visible !== false && !page.sections.some(section => section.visible !== false)) context.addIssue({ code: "custom", path: ["pages", pageIndex, "sections"], message: "Visible pages need a visible section." });
+    const visibleHeroIndexes = page.sections.flatMap((section, index) => section.type === "hero" && section.visible !== false ? [index] : []);
+    if (visibleHeroIndexes.length > 1) {
+      for (const duplicateIndex of visibleHeroIndexes.slice(1)) context.addIssue({ code: "custom", path: ["pages", pageIndex, "sections", duplicateIndex], message: "A page may have only one visible hero section." });
+    }
+    for (const [sectionIndex, section] of page.sections.entries()) {
+      if (sectionIds.has(section.id)) context.addIssue({ code: "custom", path: ["pages", pageIndex, "sections", sectionIndex, "id"], message: "Section IDs must be unique." });
       sectionIds.add(section.id);
     }
+    for (const heroIndex of visibleHeroIndexes) {
+      if (heroIndex > 0) context.addIssue({ code: "custom", path: ["pages", pageIndex, "sections", heroIndex], message: "The visible hero must be the first section." });
+    }
   }
-  if (total > 80) context.addIssue({ code: "custom", message: "A website may contain at most 80 sections." });
+  if (!document.pages.some(page => page.visible !== false)) context.addIssue({ code: "custom", path: ["pages"], message: "At least one page must be visible." });
+  if (total > 80) context.addIssue({ code: "custom", path: ["pages"], message: "A website may contain at most 80 sections." });
 });
 
 export type StoryBuilderV4Document = z.infer<typeof storyBuilderV4DocumentSchema>;
