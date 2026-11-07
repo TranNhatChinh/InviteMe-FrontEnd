@@ -675,7 +675,11 @@
     "placeExistingCompact": "Place {{count}} existing tables",
     "chooseExisting": "Choose a table",
     "placeExistingHint": "Choose a table here, then choose an empty slot. Seated guests remain unchanged.",
-    "seatOption": "{{count}} seats"
+    "seatOption": "{{count}} seats",
+    "confirmDelete": "Delete table",
+    "keepTable": "Keep table",
+    "deleteTable": "Delete {{name}}",
+    "deleteDescription": "This table will be removed. Its guests will return to the unassigned list."
   },
   "arrangement": {
     "title": "Suggest seating",

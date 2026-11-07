@@ -444,14 +444,16 @@ export function SeatingTableDrawer({
               variant="ghost"
               size="sm"
               className="h-8 gap-1 px-0 text-[11px] text-destructive hover:bg-transparent hover:text-destructive/80"
-              disabled={saving || occupied > 0}
+              disabled={saving}
               onClick={() => confirmationRef.current?.showModal()}
             >
               <Trash2 aria-hidden="true" />
               Xoá bàn
             </Button>
             {!!occupied && (
-              <span className="text-[10px] text-muted-foreground">Chỉ xoá được bàn trống</span>
+              <span className="text-[10px] text-muted-foreground">
+                Khách sẽ trở về danh sách chờ xếp
+              </span>
             )}
           </div>
         )}
@@ -470,7 +472,8 @@ export function SeatingTableDrawer({
           Xoá {table.name}?
         </h3>
         <p id={`${id}-delete-description`} className="mt-2 text-sm text-muted-foreground">
-          Bàn trống này sẽ bị xoá khỏi sơ đồ. Bạn có chắc muốn tiếp tục?
+          Bàn sẽ bị xoá khỏi sơ đồ. Khách đang ngồi tại bàn sẽ trở về danh sách chờ xếp. Bạn có chắc
+          muốn tiếp tục?
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <Button
@@ -485,7 +488,7 @@ export function SeatingTableDrawer({
             type="button"
             variant="destructive"
             className="min-h-11"
-            disabled={saving || occupied > 0}
+            disabled={saving}
             onClick={() => {
               confirmationRef.current?.close();
               onDelete();

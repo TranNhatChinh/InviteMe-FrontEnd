@@ -1,6 +1,6 @@
 "use client";
 import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { Plus, Move, Settings2 } from "lucide-react";
+import { Plus, Move, Settings2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
@@ -31,6 +31,7 @@ export function SeatingBoard({
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "layout" });
   const [selected, setSelected] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<SeatingTable | null>(null);
   const [settings, setSettings] = useState(false),
     [confirmed, setConfirmed] = useState(false);
   const [columns, setColumns] = useState(plan.brideTablesPerRow ?? 2);
@@ -197,16 +198,28 @@ export function SeatingBoard({
                                 {renderTable(table)}
                               </div>
                               {editable && !arranging && (
-                                <button
-                                  type="button"
-                                  disabled={saving}
-                                  aria-label={t("moveTable", { name: table.name })}
-                                  title={t("moveTable", { name: table.name })}
-                                  onClick={() => setSelected(table.id)}
-                                  className="absolute right-2 top-2 z-20 flex size-8 items-center justify-center rounded-full border bg-background/90 text-muted-foreground opacity-100 transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-primary sm:opacity-0 sm:group-hover:opacity-100"
-                                >
-                                  <Move className="size-4" />
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    aria-label={t("moveTable", { name: table.name })}
+                                    title={t("moveTable", { name: table.name })}
+                                    onClick={() => setSelected(table.id)}
+                                    className="absolute right-12 top-2 z-20 flex size-8 items-center justify-center rounded-full border bg-background/90 text-muted-foreground hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+                                  >
+                                    <Move className="size-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    aria-label={t("deleteTable", { name: table.name })}
+                                    title={t("deleteTable", { name: table.name })}
+                                    onClick={() => setDeleting(table)}
+                                    className="absolute right-2 top-2 z-20 flex size-8 items-center justify-center rounded-full border border-red-200 bg-background/90 text-red-600 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600"
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </button>
+                                </>
                               )}
                               {arranging && (
                                 <button
@@ -252,6 +265,30 @@ export function SeatingBoard({
         })}
       </div>
       <p className="text-center text-xs text-muted-foreground">{t("entrance")}</p>
+      <Modal
+        open={!!deleting}
+        onClose={() => {
+          if (!saving) setDeleting(null);
+        }}
+        title={t("deleteTable", { name: deleting?.name })}
+        description={t("deleteDescription")}
+      >
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" disabled={saving} onClick={() => setDeleting(null)}>
+            {t("keepTable")}
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={saving}
+            onClick={async () => {
+              if (deleting && (await onChange({ action: "DELETE_TABLE", tableId: deleting.id })))
+                setDeleting(null);
+            }}
+          >
+            {t("confirmDelete")}
+          </Button>
+        </div>
+      </Modal>
       <Modal
         open={settings}
         onClose={() => {

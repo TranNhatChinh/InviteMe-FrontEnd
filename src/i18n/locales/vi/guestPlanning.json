@@ -675,7 +675,11 @@
     "placeExistingCompact": "Đặt {{count}} bàn đã có vào sơ đồ",
     "chooseExisting": "Chọn bàn",
     "placeExistingHint": "Chọn bàn ở đây, sau đó bấm slot trống để đặt bàn. Khách trong bàn được giữ nguyên.",
-    "seatOption": "{{count}} ghế"
+    "seatOption": "{{count}} ghế",
+    "confirmDelete": "Xóa bàn",
+    "keepTable": "Giữ lại",
+    "deleteTable": "Xóa {{name}}",
+    "deleteDescription": "Bàn sẽ bị xóa khỏi sơ đồ. Khách đang ngồi tại bàn sẽ trở về danh sách chờ xếp."
   },
   "arrangement": {
     "title": "Gợi ý sắp xếp",
