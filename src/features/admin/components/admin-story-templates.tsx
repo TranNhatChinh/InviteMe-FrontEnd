@@ -53,6 +53,7 @@ type CatalogFilter = "all" | "published" | "draft" | "archived";
 type PreviewViewport = "desktop" | "tablet" | "mobile";
 type Confirmation = "publish" | "archive" | null;
 type PendingImport = { templates: StoryTemplateConfig[]; existingKeys: string[] };
+type TemplateSectionStyle = NonNullable<StoryTemplateConfig["sections"][number]["style"]>;
 
 const colorFields = ["primary", "background", "accent", "text"] as const;
 const previewViewports = [
@@ -228,6 +229,22 @@ export function AdminStoryTemplates() {
       return { ...section, defaultContent: Object.keys(defaultContent).length ? defaultContent : undefined };
     });
     change({ ...form, sections });
+  };
+
+  const updateSectionStyle = (
+    sectionIndex: number,
+    field: keyof TemplateSectionStyle,
+    value: TemplateSectionStyle[keyof TemplateSectionStyle],
+  ) => {
+    if (!form) return;
+    change({
+      ...form,
+      sections: form.sections.map((section, index) =>
+        index === sectionIndex
+          ? { ...section, style: { ...(section.style ?? {}), [field]: value } as TemplateSectionStyle }
+          : section,
+      ),
+    });
   };
 
   const action = async (run: () => Promise<unknown>, success: string) => {
@@ -844,6 +861,51 @@ export function AdminStoryTemplates() {
                                 </label>}
                               </div>
                             </details>
+                            <details className="mt-2 rounded-md bg-muted/30 px-3 py-2">
+                              <summary className="cursor-pointer text-xs font-medium text-foreground">
+                                {t("storyTemplates.sectionStyleTitle")}
+                              </summary>
+                              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                                {t("storyTemplates.sectionStyleHelp")}
+                              </p>
+                              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                                <label className="grid gap-1 text-xs text-muted-foreground">
+                                  {t("storyTemplates.sectionBackground")}
+                                  <select
+                                    value={section.style?.background ?? "default"}
+                                    onChange={(event) => updateSectionStyle(index, "background", event.target.value as TemplateSectionStyle["background"])}
+                                    className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                                  >
+                                    <option value="default">{t("storyTemplates.sectionBackgrounds.default")}</option>
+                                    <option value="soft">{t("storyTemplates.sectionBackgrounds.soft")}</option>
+                                    <option value="accent">{t("storyTemplates.sectionBackgrounds.accent")}</option>
+                                  </select>
+                                </label>
+                                <label className="grid gap-1 text-xs text-muted-foreground">
+                                  {t("storyTemplates.sectionSpacing")}
+                                  <select
+                                    value={section.style?.spacing ?? "normal"}
+                                    onChange={(event) => updateSectionStyle(index, "spacing", event.target.value as TemplateSectionStyle["spacing"])}
+                                    className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                                  >
+                                    <option value="compact">{t("storyTemplates.sectionSpacings.compact")}</option>
+                                    <option value="normal">{t("storyTemplates.sectionSpacings.normal")}</option>
+                                    <option value="spacious">{t("storyTemplates.sectionSpacings.spacious")}</option>
+                                  </select>
+                                </label>
+                                <label className="grid gap-1 text-xs text-muted-foreground">
+                                  {t("storyTemplates.sectionAnimation")}
+                                  <select
+                                    value={section.style?.animation ?? "none"}
+                                    onChange={(event) => updateSectionStyle(index, "animation", event.target.value as TemplateSectionStyle["animation"])}
+                                    className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                                  >
+                                    <option value="none">{t("storyTemplates.sectionAnimations.none")}</option>
+                                    <option value="fade">{t("storyTemplates.sectionAnimations.fade")}</option>
+                                  </select>
+                                </label>
+                              </div>
+                            </details>
                           </li>
                         ))}
                       </ol>
@@ -1307,7 +1369,7 @@ export function AdminStoryTemplates() {
                           api,
                           selectedTemplate.id,
                           selectedTemplate.version,
-                          selectedTemplate.isArchived,
+                          !selectedTemplate.isArchived,
                         ),
                       selectedTemplate.isArchived
                         ? t("storyTemplates.restored")

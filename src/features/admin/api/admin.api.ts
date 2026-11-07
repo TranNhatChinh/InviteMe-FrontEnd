@@ -16,6 +16,11 @@ const templateDefaultContentSchema = z.object({
 const templateSectionSchema = z.object({
   type: z.string(),
   variant: z.string(),
+  style: z.object({
+    background: z.enum(["default", "soft", "accent"]).optional(),
+    spacing: z.enum(["compact", "normal", "spacious"]).optional(),
+    animation: z.enum(["none", "fade"]).optional(),
+  }).strict().nullable().optional(),
   defaultContent: templateDefaultContentSchema.nullable().optional(),
 }).strict().superRefine((section, context) => {
   const defaults = section.defaultContent;
@@ -89,9 +94,9 @@ export const storyTemplateAdminApi = {
       body: { expectedVersion },
       schema: adminStoryTemplateSchema,
     }),
-  archive: (api: ApiClient, id: string, expectedVersion: number, archived: boolean) =>
+  archive: (api: ApiClient, id: string, expectedVersion: number, shouldArchive: boolean) =>
     api.request(
-      `/admin/story-templates/${encodeURIComponent(id)}/${archived ? "archive" : "unarchive"}`,
+      `/admin/story-templates/${encodeURIComponent(id)}/${shouldArchive ? "archive" : "unarchive"}`,
       {
         method: "POST",
         body: { expectedVersion },

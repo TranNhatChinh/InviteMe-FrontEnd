@@ -42,6 +42,13 @@ const id = () => globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math
 const clone = (value: StoryBuilderV4Document) => structuredClone(value);
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const errText = (error: unknown) => error instanceof Error ? error.message : "Không thể hoàn tất thao tác.";
+function templateGalleryPreview(document: StoryBuilderV4Document): StoryBuilderV4Document {
+  const home = document.pages.find(page => page.isHome);
+  if (!home) return document;
+  const hero = home.sections.find(section => section.type === "hero") ?? home.sections[0];
+  if (!hero) return document;
+  return { ...document, navigationMode: "one-page", pages: [{ ...home, visible: true, sections: [{ ...hero, visible: true }] }] };
+}
 function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
   const destination = index + direction;
   const copy = [...items];
@@ -165,11 +172,12 @@ function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDo
         const preview = currentDocument
           ? applyStoryBuilderV4Template(template, currentDocument, setup)
           : createStoryBuilderV4Document(template, setup, legacyDocument);
+        const galleryPreview = templateGalleryPreview(preview);
         const locked = Boolean(premiumLocked(template) || premiumUnknown(template));
         const isCurrent = currentDocument?.templateKey === template.key && currentDocument.templateVersion === template.version;
         return <article key={template.key} className="min-w-0">
           <button type="button" onClick={() => setSelectedTemplate(template)} className="group relative block w-full overflow-hidden rounded-[18px] border border-border bg-[#f5f1f0] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Xem trước ${template.name}`}>
-            <div className="h-[250px] overflow-hidden" style={{ width: viewport === "mobile" ? "55%" : viewport === "tablet" ? "80%" : "100%", marginInline: "auto" }}><div className="h-[620px] origin-top scale-[0.42]" style={{ width: "238%", transformOrigin: "top left", pointerEvents: "none" }}><StoryBuilderV4Renderer document={preview} /></div></div>
+            <div className="story-gallery-preview" aria-hidden="true" style={{ width: viewport === "mobile" ? "72%" : viewport === "tablet" ? "88%" : "100%", marginInline: "auto" }}><div className="story-gallery-preview__canvas pointer-events-none"><StoryBuilderV4Renderer document={galleryPreview} /></div></div>
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/65 to-transparent px-4 pb-4 pt-12 text-sm text-white"><span>{template.config.category || "Website cưới"}</span>{isCurrent ? <span className="rounded-full bg-white/20 px-2 py-1 text-xs">Đang dùng</span> : <Eye className="size-4 opacity-0 transition group-hover:opacity-100" />}</div>
           </button>
           <div className="mt-4 flex items-start justify-between gap-3">
@@ -292,7 +300,8 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   const templateQuery = useQuery({ queryKey: ["story-templates"], queryFn: () => listStoryTemplates(api), staleTime: 60_000 });
   const mediaLibrary = useQuery({ queryKey: ["wedding-media", weddingId], queryFn: () => listWeddingMedia(api, weddingId), enabled: mediaPickerOpen });
   const currentTemplate = templateQuery.data?.find(item => item.key === doc?.templateKey);
-  const sectionLibraryDefaults = currentTemplate?.config.sections.find(item => item.type === sectionLibraryType)?.defaultContent;
+  const sectionLibraryConfig = currentTemplate?.config.sections.find(item => item.type === sectionLibraryType);
+  const sectionLibraryDefaults = sectionLibraryConfig?.defaultContent;
   const currentTier = currentTemplate?.config.accessTier ?? record(doc?.templateSnapshot).accessTier;
   const currentPage = doc?.pages.find(page => page.id === selectedPageId) ?? doc?.pages.find(page => page.isHome);
   const currentSection = currentPage?.sections.find(section => section.id === selectedSectionId);
@@ -332,11 +341,11 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
     const previewDocument = clone(doc);
     const page = previewDocument.pages.find(item => item.id === currentPage?.id);
     if (!page) return previewDocument;
-    const section = createV4Section(sectionLibraryType, previewDocument.content, setup, sectionLibraryDefaults);
+    const section = createV4Section(sectionLibraryType, previewDocument.content, setup, sectionLibraryDefaults, sectionLibraryConfig?.style);
     section.variant = sectionLibraryVariant as typeof section.variant;
     page.sections = [section];
     return previewDocument;
-  }, [doc, currentPage?.id, sectionLibraryType, sectionLibraryVariant, sectionLibraryDefaults, setup]);
+  }, [doc, currentPage?.id, sectionLibraryType, sectionLibraryVariant, sectionLibraryDefaults, sectionLibraryConfig?.style, setup]);
   const pageIndex = doc?.pages.findIndex(page => page.id === currentPage?.id) ?? -1;
   const sectionIndex = currentPage?.sections.findIndex(section => section.id === currentSection?.id) ?? -1;
   const selectSection = (sectionId: string) => {
@@ -494,7 +503,8 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   function addSection(type: SectionType, variant?: string): boolean {
     const totalSections = doc?.pages.reduce((total, page) => total + page.sections.length, 0) ?? 0;
     if (!doc || !currentPage || currentPage.sections.length >= 24 || totalSections >= 80) return false;
-    const nextSection = createV4Section(type, doc.content, setup, currentTemplate?.config.sections.find(item => item.type === type)?.defaultContent);
+    const templateSection = currentTemplate?.config.sections.find(item => item.type === type);
+    const nextSection = createV4Section(type, doc.content, setup, templateSection?.defaultContent, templateSection?.style);
     if (variant) nextSection.variant = variant as typeof nextSection.variant;
     if (type === "hero" && currentPage.sections.some(item => item.type === "hero")) return false;
     mutate(copy => {
@@ -523,8 +533,10 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   function addPage() {
     if (!doc || doc.pages.length >= 8 || !pageName.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pageSlug.trim())) return;
     if (doc.pages.some(page => page.slug.toLowerCase() === pageSlug.trim().toLowerCase())) { setError("Đường dẫn trang này đã được dùng."); return; }
-    const hero = createV4Section("hero", doc.content, setup, currentTemplate?.config.sections.find(item => item.type === "hero")?.defaultContent);
-    const rsvp = createV4Section("rsvp", doc.content, setup, currentTemplate?.config.sections.find(item => item.type === "rsvp")?.defaultContent);
+    const heroTemplateSection = currentTemplate?.config.sections.find(item => item.type === "hero");
+    const rsvpTemplateSection = currentTemplate?.config.sections.find(item => item.type === "rsvp");
+    const hero = createV4Section("hero", doc.content, setup, heroTemplateSection?.defaultContent, heroTemplateSection?.style);
+    const rsvp = createV4Section("rsvp", doc.content, setup, rsvpTemplateSection?.defaultContent, rsvpTemplateSection?.style);
     const page = { id: id(), slug: pageSlug.trim(), title: pageName.trim(), navigationLabel: pageName.trim(), isHome: false, visible: true, sections: [hero, rsvp] };
     mutate(copy => { copy.pages.push(page); if (copy.navigationMode === "one-page") copy.navigationMode = "multi-page"; });
     setSelectedPageId(page.id); setSelectedSectionId(hero.id); setPageName(""); setPageSlug("");

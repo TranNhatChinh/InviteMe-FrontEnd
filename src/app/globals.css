@@ -2498,3 +2498,218 @@ body:has(.landing-dialog[open]) {
     animation: none;
   }
 }
+
+/* V4 wedding sites use their database category as a visual direction, while all copy,
+   palette, fonts and section data continue to come from the saved template document. */
+.template-canvas[data-design-family="outdoor"] .story-hero--coastal {
+  border-radius: 28px 28px 8px 8px;
+  box-shadow: 0 18px 50px rgb(42 71 77 / 8%);
+}
+.template-canvas[data-design-family="outdoor"] .story-hero--coastal .story-hero__copy-wrap {
+  border-top: 1px solid var(--site-rule);
+  box-shadow: 0 8px 30px rgb(42 71 77 / 6%);
+}
+.template-canvas[data-design-family="outdoor"] .story-section--gallery img {
+  border-radius: 48% 48% 8px 8px;
+}
+.template-canvas[data-design-family="outdoor"] .story-section--events .story-event {
+  border-radius: 18px 18px 4px 18px;
+}
+
+.template-canvas[data-design-family="editorial"] .story-hero--magazine {
+  box-shadow: 0 1px 0 var(--site-rule), 0 18px 40px rgb(30 24 25 / 5%);
+}
+.template-canvas[data-design-family="editorial"] .story-hero--magazine .story-hero__media {
+  padding: 12px 12px 12px 0;
+}
+.template-canvas[data-design-family="editorial"] .story-section__header {
+  text-align: left;
+}
+.template-canvas[data-design-family="editorial"] .story-section__number {
+  font-variant-numeric: tabular-nums;
+}
+.template-canvas[data-design-family="editorial"] .story-timeline--editorial > li {
+  padding-top: 24px;
+}
+
+.template-canvas[data-design-family="autumn"] .story-hero--ceremonial {
+  background-image: radial-gradient(ellipse at 50% 100%, var(--site-primary), transparent 72%);
+}
+.template-canvas[data-design-family="autumn"] .story-hero--ceremonial > div:first-child {
+  box-shadow: 0 16px 45px rgb(75 47 28 / 8%);
+}
+.template-canvas[data-design-family="autumn"] .story-hero--autumn .story-hero__frame {
+  border-radius: 42% 42% 10px 10px;
+  border-style: double;
+  border-width: 3px;
+}
+.template-canvas[data-design-family="autumn"] .story-gallery__image {
+  border: 6px solid var(--site-background);
+  box-shadow: 0 8px 22px rgb(71 48 33 / 10%);
+}
+
+.template-canvas[data-design-family="minimal"] .story-section {
+  max-width: 68rem;
+}
+.template-canvas[data-design-family="minimal"] .story-section__header {
+  border-bottom: 1px solid var(--site-rule);
+  padding-bottom: 18px;
+}
+.template-canvas[data-design-family="minimal"] .story-hero--editorial .story-hero__media {
+  border-radius: 0;
+}
+.template-canvas[data-design-family="minimal"] .story-section--couple .story-couple__image,
+.template-canvas[data-design-family="minimal"] .story-section--gallery .story-gallery__image {
+  border-radius: 0;
+}
+
+.template-canvas[data-design-family="romantic"] .story-hero--floral {
+  box-shadow: inset 0 0 0 1px var(--site-accent), inset 0 0 0 8px var(--site-background), inset 0 0 0 9px var(--site-accent);
+}
+.template-canvas[data-design-family="romantic"] .story-section--couple .story-couple__image {
+  border-radius: 48% 48% 18px 18px;
+}
+.template-canvas[data-design-family="romantic"] .story-section--events .story-event {
+  border-radius: 26px 26px 8px 26px;
+}
+
+.template-canvas[data-design-family="royal"] .story-hero--dark {
+  border: 1px solid color-mix(in srgb, var(--site-accent) 48%, transparent);
+  box-shadow: inset 0 0 0 8px color-mix(in srgb, var(--site-background) 76%, transparent), 0 24px 55px rgb(0 0 0 / 18%);
+}
+.template-canvas[data-design-family="royal"] .story-hero--dark .story-hero__veil {
+  opacity: 0.8;
+}
+.template-canvas[data-design-family="royal"] .story-section__title,
+.template-canvas[data-design-family="royal"] .story-section--couple h3,
+.template-canvas[data-design-family="royal"] .story-section--gift h3 {
+  text-shadow: 0 1px 18px color-mix(in srgb, var(--site-accent) 18%, transparent);
+}
+.template-canvas[data-design-family="royal"] .story-section--events .story-event,
+.template-canvas[data-design-family="royal"] .story-section--couple .story-couple__person {
+  border-color: color-mix(in srgb, var(--site-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--site-primary) 14%, var(--site-background));
+}
+.template-canvas[data-design-family="royal"] .story-gallery__image {
+  border: 1px solid color-mix(in srgb, var(--site-accent) 45%, transparent);
+  padding: 5px;
+}
+
+.template-canvas[data-design-family="traditional"] .story-hero--traditional > div:first-child {
+  outline: 1px solid var(--site-accent);
+  outline-offset: 5px;
+}
+.template-canvas[data-design-family="traditional"] .story-hero--traditional .story-hero__ornament {
+  font-size: 1.35rem;
+}
+.template-canvas[data-design-family="traditional"] .story-section__header {
+  border-bottom: 1px double var(--site-rule);
+  padding-bottom: 16px;
+}
+.template-canvas[data-design-family="traditional"] .story-section--events .story-event {
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 4px var(--site-background), inset 0 0 0 5px var(--site-rule);
+}
+
+.template-canvas[data-design-family="garden"] .story-hero--garden {
+  box-shadow: 0 18px 45px color-mix(in srgb, var(--site-accent) 10%, transparent);
+}
+.template-canvas[data-design-family="garden"] .story-section--couple .story-couple__person:nth-child(2) {
+  border-radius: 48% 48% 22px 22px;
+}
+.template-canvas[data-design-family="garden"] .story-section--gallery .story-gallery__image {
+  border-radius: 40% 40% 14px 14px;
+}
+.template-canvas[data-design-family="garden"] .story-timeline--timeline > li::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 1.5rem;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--site-accent);
+  border-radius: 50%;
+  background: var(--site-background);
+}
+
+.story-gallery-preview {
+  height: 360px;
+  overflow: hidden;
+  background: var(--site-background);
+}
+.story-gallery-preview__canvas {
+  width: 175.44%;
+  transform: scale(0.57);
+  transform-origin: top left;
+}
+.story-gallery-preview .story-section--hero {
+  padding: 18px 20px !important;
+}
+.story-gallery-preview .story-hero {
+  min-height: 320px !important;
+}
+.story-gallery-preview .story-hero--coastal .story-hero__media {
+  height: 320px;
+}
+.story-gallery-preview .story-hero__copy-wrap {
+  padding-block: 22px;
+}
+.story-gallery-preview .story-hero {
+  padding-block: 22px;
+}
+.story-gallery-preview .story-hero--editorial .story-hero__media {
+  height: 340px;
+}
+.story-gallery-preview .story-hero--garden .story-hero__media {
+  height: 320px;
+}
+
+.template-canvas[data-design-family="outdoor"] .story-countdown--classic > div {
+  border-radius: 8px 28px 8px 28px;
+  background: var(--site-primary);
+}
+.template-canvas[data-design-family="editorial"] .story-countdown--inline > div {
+  border-block-width: 2px;
+  padding-block: 20px;
+}
+.template-canvas[data-design-family="autumn"] .story-countdown--banner > div {
+  border-radius: 4px 28px;
+  background-image: linear-gradient(110deg, var(--site-primary), transparent 82%);
+}
+.template-canvas[data-design-family="minimal"] .story-countdown--inline > div {
+  border-block-width: 1px;
+}
+.template-canvas[data-design-family="romantic"] .story-countdown--classic > div {
+  border-color: var(--site-accent);
+  background: var(--site-primary);
+}
+.template-canvas[data-design-family="royal"] .story-countdown--banner > div {
+  border-color: color-mix(in srgb, var(--site-accent) 48%, transparent);
+  background: color-mix(in srgb, var(--site-primary) 30%, var(--site-background));
+}
+.template-canvas[data-design-family="traditional"] .story-countdown--banner > div {
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 4px var(--site-background), inset 0 0 0 5px var(--site-rule);
+}
+.template-canvas[data-design-family="garden"] .story-countdown--classic > div {
+  border-radius: 999px 999px 14px 14px;
+  background: color-mix(in srgb, var(--site-primary) 62%, var(--site-background));
+}
+
+.template-canvas[data-design-family="autumn"] .story-section--events .story-event {
+  border-radius: 4px 22px 4px 4px;
+}
+.template-canvas[data-design-family="garden"] .story-section--events .story-event {
+  border-radius: 24px 24px 4px 24px;
+}
+.template-canvas[data-design-family="minimal"] .story-section--events .story-event {
+  border-radius: 0;
+  box-shadow: none;
+}
+.template-canvas[data-design-family="traditional"] .story-section--gift .story-gift > article {
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 4px var(--site-background), inset 0 0 0 5px var(--site-rule);
+}
+.template-canvas[data-design-family="romantic"] .story-section--gift .story-gift > article {
+  border-radius: 28px 28px 8px 28px;
+}
