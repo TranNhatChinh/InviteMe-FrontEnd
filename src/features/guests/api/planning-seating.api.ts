@@ -42,40 +42,25 @@ export const seatingPlanSchema = z.object({
   ),
 });
 export type SeatingPlan = z.infer<typeof seatingPlanSchema>;
-export type SeatingStrategy = "AFFINITY" | "PARTY" | "COMPACT";
-export type SuggestionMode = "UNASSIGNED" | "REPLACE_ALL";
-export const seatingSuggestionSchema = z.object({
-  strategy: z.enum(["AFFINITY", "PARTY", "COMPACT"]),
-  mode: z.enum(["UNASSIGNED", "REPLACE_ALL"]),
-  sourceVersion: z.number().int(),
-  sourceFingerprint: z.string(),
-  assignments: seatingPlanSchema.shape.assignments,
-  unassigned: z.array(
-    z.object({
-      guestId: z.string(),
-      placeIds: z.array(z.string()),
-      code: z.string(),
-      message: z.string(),
-    }),
-  ),
-  excludedPlaceIds: z.array(z.string()),
-  warnings: z.array(z.string()),
-  reasons: z.array(
-    z.object({
-      tableId: z.string(),
-      sides: z.array(z.string()),
-      groups: z.array(z.string()),
-      count: z.number(),
-      message: z.string(),
-    }),
-  ),
-  changedPlaceCount: z.number(),
-  preservedCount: z.number(),
-});
-export type SeatingSuggestion = z.infer<typeof seatingSuggestionSchema>;
 export type SeatingChange =
-  | { action: "CREATE_TABLE"; name: string; capacity: number; groupId?: string | null }
-  | { action: "CREATE_TABLES"; capacity: number; tableCount: number; groupId?: string | null }
+  | {
+      action: "CREATE_TABLE";
+      name: string;
+      capacity: number;
+      groupId?: string | null;
+      side?: SeatingSide;
+      row?: number;
+      column?: number;
+    }
+  | {
+      action: "CREATE_TABLES";
+      capacity: number;
+      tableCount: number;
+      groupId?: string | null;
+      side?: SeatingSide;
+      row?: number;
+      column?: number;
+    }
   | {
       action: "UPDATE_TABLE";
       tableId: string;
@@ -88,14 +73,8 @@ export type SeatingChange =
   | { action: "MOVE_TABLE_SLOT"; tableId: string; targetRow: number; targetColumn: number }
   | { action: "UPDATE_LAYOUT"; brideTablesPerRow: number; groomTablesPerRow: number }
   | { action: "DELETE_TABLE"; tableId: string }
-  | { action: "MOVE_PLACES"; placeIds: string[]; tableId: string | null; seatNumber?: number }
-  | {
-      action: "APPLY_SUGGESTION";
-      strategy: SeatingStrategy;
-      mode: SuggestionMode;
-      sourceFingerprint: string;
-      confirmReplace: boolean;
-    };
+  | { action: "MOVE_PLACES"; placeIds: string[]; tableId: string | null; seatNumber?: number };
+
 export const seatingKey = (id: string) => ["planning-seating", id] as const;
 export const seatingPublicationKey = (id: string) => ["seating-publication", id] as const;
 export const seatingPublicationSchema = z.object({
@@ -133,20 +112,6 @@ export function changeSeatingPlan(
       ...(dragToken ? { dragToken } : {}),
     },
     schema: seatingPlanSchema,
-  });
-}
-export function suggestSeatingPlan(
-  api: ApiClient,
-  id: string,
-  strategy: SeatingStrategy,
-  mode: SuggestionMode,
-  signal?: AbortSignal,
-) {
-  return api.request(`/weddings/${encodeURIComponent(id)}/guest-planning/seating-suggestions`, {
-    method: "POST",
-    body: { strategy, mode },
-    signal,
-    schema: seatingSuggestionSchema,
   });
 }
 

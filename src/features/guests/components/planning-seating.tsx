@@ -54,7 +54,7 @@ import { GenerateSeatingDialog } from "./generate-seating-dialog";
 import { SeatingBoard } from "./seating-board";
 import { wouldSplitParty } from "../utils/seating-layout";
 import { Modal } from "@/shared/ui/modal";
-import { PlanningSuggestions } from "./planning-suggestions";
+import { AddSeatingTableDialog, type TableSlot } from "./add-seating-table-dialog";
 import { SeatingLegend } from "./seating-legend";
 import { SeatingQueue } from "./seating-queue";
 import { SeatingTableDrawer } from "./seating-table-drawer";
@@ -243,6 +243,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     target: string | null;
     seatNumber?: number;
   } | null>(null);
+  const [tableSlot, setTableSlot] = useState<TableSlot | null>(null);
   const [preview, setPreview] = useState<SeatingPlan | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -721,13 +722,19 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     saveError={failure ? message : undefined}
                   />
                 )}
-              <PlanningSuggestions
-                plan={plan}
-                editable={editable}
-                saving={saving}
-                onChange={change}
-                saveError={failure ? message : undefined}
-              />
+              {editable && (
+                <AddSeatingTableDialog
+                  key={
+                    tableSlot ? `${tableSlot.side}:${tableSlot.row}:${tableSlot.column}` : "toolbar"
+                  }
+                  plan={plan}
+                  disabled={saving}
+                  slot={tableSlot}
+                  onCloseSlot={() => setTableSlot(null)}
+                  onChange={change}
+                  error={failure ? message : undefined}
+                />
+              )}
             </div>
           </div>
           <div className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
@@ -793,10 +800,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 }
                 saving={saving}
                 onChange={change}
-                onInspect={(table) => {
-                  setTableId(table.id);
-                  setPlaceId(null);
-                  setSeat(null);
+                onAddSlot={(slot) => {
+                  setFailure(false);
+                  setMessage("");
+                  setTableSlot(slot);
                 }}
                 renderTable={(table) => {
                   const members = plan.assignments.filter((a) => a.tableId === table.id);
@@ -822,7 +829,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       id={`table:${table.id}`}
                       target={{ tableId: table.id }}
                       disabled={!editable || saving}
-                      className={`relative w-[270px] max-w-full rounded-xl border bg-white/50 p-3 transition-colors ${members.length === table.capacity ? "opacity-60" : ""} ${moving.length ? (shortage ? "border-red-300" : "border-primary/60") : ""}`}
+                      className={`relative h-full w-full max-w-full rounded-xl border bg-white/50 p-3 transition-colors ${members.length === table.capacity ? "opacity-60" : ""} ${moving.length ? (shortage ? "border-red-300" : "border-primary/60") : ""}`}
                       highlighted={dragTarget?.tableId === table.id || remote.length > 0}
                       invalid={
                         dragTarget?.tableId === table.id

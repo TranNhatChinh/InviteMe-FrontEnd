@@ -31,8 +31,7 @@ export function GenerateSeatingDialog({
   const { api } = useRuntime();
   const [open, setOpen] = useState(false);
   const [capacity, setCapacity] = useState<8 | 10 | 12>(10);
-  const [bride, setBride] = useState(2),
-    [groom, setGroom] = useState(2);
+  const [columns, setColumns] = useState(plan.brideTablesPerRow ?? 2);
   const [busy, setBusy] = useState(false),
     [applying, setApplying] = useState(false);
   const [error, setError] = useState("");
@@ -54,7 +53,7 @@ export function GenerateSeatingDialog({
   const config: SeatingGenerationConfig = {
     expectedVersion: plan.version,
     tableCapacity: capacity,
-    tablesPerRow: { bride, groom },
+    tablesPerRow: { bride: columns, groom: columns },
   };
   function reset() {
     request.current?.abort();
@@ -132,27 +131,27 @@ export function GenerateSeatingDialog({
                 </label>
               ))}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {(["bride", "groom"] as const).map((side) => (
-                <label key={side} className="text-sm">
-                  {t(`${side}Columns`)}
-                  <select
-                    className="mt-1 block w-full rounded-lg border bg-background p-2"
-                    value={side === "bride" ? bride : groom}
-                    onChange={(e) => {
-                      reset();
-                      (side === "bride" ? setBride : setGroom)(Number(e.target.value));
-                    }}
-                  >
-                    {[1, 2, 3, 4].map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
+            <label className="block text-sm">
+              {t("sharedColumns")}
+              <select
+                aria-label={t("sharedColumns")}
+                className="mt-1 block w-full rounded-lg border bg-background p-2"
+                value={columns}
+                onChange={(e) => {
+                  reset();
+                  setColumns(Number(e.target.value));
+                }}
+              >
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {t("sharedColumnsHint")}
+              </span>
+            </label>
           </fieldset>
           {issues.missingSide.length > 0 && (
             <div role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">
