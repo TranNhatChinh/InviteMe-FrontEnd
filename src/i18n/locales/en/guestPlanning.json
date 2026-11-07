@@ -668,6 +668,11 @@
     "bulkSlots": "The first table uses the selected slot; remaining tables fill empty slots on the same side. Names are numbered automatically.",
     "placeExisting": "Place table in slot",
     "placeLegacyHint": "{{count}} existing tables need positions. Choose an empty slot, then select a table to place.",
-    "moveHere": "Move table here"
+    "moveHere": "Move table here",
+    "defaultTableName": "Table {{number}}",
+    "moveTable": "Move {{name}}",
+    "placeExistingCompact": "Place {{count}} existing tables",
+    "chooseExisting": "Choose a table",
+    "placeExistingHint": "Choose a table here, then choose an empty slot. Seated guests remain unchanged."
   }
 }

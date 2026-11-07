@@ -1,6 +1,6 @@
 "use client";
-import { Fragment, useState, type CSSProperties, type ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { Plus, Move, Settings2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
@@ -30,17 +30,47 @@ export function SeatingBoard({
   onAddSlot: (slot: TableSlot) => void;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "layout" });
-  const [arranging, setArranging] = useState(false),
-    [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [settings, setSettings] = useState(false),
     [confirmed, setConfirmed] = useState(false);
   const [columns, setColumns] = useState(plan.brideTablesPerRow ?? 2);
   const source = plan.tables.find((table) => table.id === selected);
+  useEffect(() => {
+    if (!selected) return;
+    const cancel = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        !(event.target instanceof Element && event.target.closest("dialog"))
+      ) {
+        event.preventDefault();
+        setSelected(null);
+      }
+    };
+    window.addEventListener("keydown", cancel);
+    return () => window.removeEventListener("keydown", cancel);
+  }, [selected]);
+  const arranging = !!source;
   const legacy = plan.tables.filter((table) => !hasTableSlot(table));
   const occupied = plan.assignments.length;
   const minimumRows = seatingBoardRows(plan);
   async function selectSlot(side: SeatingSide, row: number, column: number, table?: SeatingTable) {
     const width = side === "BRIDE" ? (plan.brideTablesPerRow ?? 2) : (plan.groomTablesPerRow ?? 2);
+    if (source && !hasTableSlot(source)) {
+      if (table) return;
+      if (
+        await onChange({
+          action: "UPDATE_TABLE",
+          tableId: source.id,
+          name: source.name,
+          capacity: source.capacity,
+          side,
+          row,
+          column,
+        })
+      )
+        setSelected(null);
+      return;
+    }
     if (arranging && source) {
       if (!validSlotMove(source, side, row, column, width)) return;
       if (
@@ -72,50 +102,49 @@ export function SeatingBoard({
         ))}
       </div>
       {editable && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex justify-end">
           <Button
             type="button"
-            size="sm"
-            variant={arranging ? "outline" : "default"}
-            disabled={saving}
-            onClick={() => {
-              setArranging(false);
-              setSelected(null);
-            }}
-          >
-            {t("seatGuests")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={arranging ? "default" : "outline"}
-            disabled={saving}
-            onClick={() => {
-              setArranging(true);
-              setSelected(null);
-            }}
-          >
-            {t("arrangeTables")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
             variant="ghost"
+            size="icon"
+            aria-label={t("settings")}
+            title={t("settings")}
             disabled={saving}
+            className="size-8 text-muted-foreground"
             onClick={() => {
               setColumns(plan.brideTablesPerRow ?? 2);
               setConfirmed(false);
               setSettings(true);
             }}
           >
-            {t("settings")}
+            <Settings2 className="size-4" />
           </Button>
         </div>
       )}
-      {legacy.length > 0 && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {t("placeLegacyHint", { count: legacy.length })}
-        </p>
+      {editable && legacy.length > 0 && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">
+            {t("placeExistingCompact", { count: legacy.length })}
+          </summary>
+          <label className="mt-2 block">
+            {t("tableToPlace")}
+            <select
+              aria-label={t("tableToPlace")}
+              disabled={saving}
+              className="ml-2 rounded border bg-background p-2"
+              value={source && !hasTableSlot(source) ? source.id : ""}
+              onChange={(event) => setSelected(event.target.value || null)}
+            >
+              <option value="">{t("chooseExisting")}</option>
+              {legacy.map((table) => (
+                <option key={table.id} value={table.id}>
+                  {table.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="mt-1">{t("placeExistingHint")}</p>
+        </details>
       )}
       {arranging && (
         <p role="status" className="text-sm">
@@ -160,17 +189,32 @@ export function SeatingBoard({
                         <div
                           key={`${row}:${column}`}
                           data-seating-slot={`${side}:${row}:${column}`}
-                          className="relative min-h-[300px] min-w-0"
+                          className="group relative min-h-[300px] min-w-0"
                         >
                           {table ? (
                             <>
                               <div inert={arranging || undefined} className="h-full">
                                 {renderTable(table)}
                               </div>
+                              {editable && !arranging && (
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  aria-label={t("moveTable", { name: table.name })}
+                                  title={t("moveTable", { name: table.name })}
+                                  onClick={() => setSelected(table.id)}
+                                  className="absolute right-2 top-2 z-20 flex size-8 items-center justify-center rounded-full border bg-background/90 text-muted-foreground opacity-100 transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-primary sm:opacity-0 sm:group-hover:opacity-100"
+                                >
+                                  <Move className="size-4" />
+                                </button>
+                              )}
                               {arranging && (
                                 <button
                                   type="button"
-                                  disabled={saving || (!!source && source.side !== side)}
+                                  disabled={
+                                    saving ||
+                                    (!!source && (!hasTableSlot(source) || source.side !== side))
+                                  }
                                   aria-pressed={selected === table.id}
                                   aria-label={t("tableSlot", { name: table.name, row, column })}
                                   onClick={() => void selectSlot(side, row, column, table)}
@@ -183,7 +227,9 @@ export function SeatingBoard({
                           ) : (
                             <button
                               type="button"
-                              disabled={!editable || saving || (!!source && source.side !== side)}
+                              disabled={
+                                !editable || saving || (!!source?.side && source.side !== side)
+                              }
                               aria-label={t("emptySlot", { row, column })}
                               onClick={() => void selectSlot(side, row, column)}
                               className="flex h-full min-h-[300px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-foreground/20 text-sm text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5 disabled:cursor-default disabled:opacity-50"

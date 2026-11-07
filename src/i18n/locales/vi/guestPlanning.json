@@ -668,6 +668,11 @@
     "bulkSlots": "Bàn đầu tiên vào slot đã chọn, các bàn còn lại lấp slot trống cùng phía. Tên bàn được đánh số tự động.",
     "placeExisting": "Đặt bàn vào slot",
     "placeLegacyHint": "Có {{count}} bàn cũ chưa có vị trí. Bấm slot trống rồi chọn bàn để đặt vào sơ đồ.",
-    "moveHere": "Chuyển bàn tới đây"
+    "moveHere": "Chuyển bàn tới đây",
+    "defaultTableName": "Bàn {{number}}",
+    "moveTable": "Đổi vị trí {{name}}",
+    "placeExistingCompact": "Đặt {{count}} bàn đã có vào sơ đồ",
+    "chooseExisting": "Chọn bàn",
+    "placeExistingHint": "Chọn bàn ở đây, sau đó bấm slot trống để đặt bàn. Khách trong bàn được giữ nguyên."
   }
 }

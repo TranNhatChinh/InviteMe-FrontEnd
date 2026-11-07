@@ -722,7 +722,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     saveError={failure ? message : undefined}
                   />
                 )}
-              {editable && (
+              {editable && tableSlot && (
                 <AddSeatingTableDialog
                   key={
                     tableSlot ? `${tableSlot.side}:${tableSlot.row}:${tableSlot.column}` : "toolbar"

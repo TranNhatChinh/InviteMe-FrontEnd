@@ -1,5 +1,16 @@
 import type { SeatingPlan, SeatingSide } from "../api/planning-seating.api";
 export type SeatingTable = SeatingPlan["tables"][number];
+export function nextSeatingTableNumber(tables: SeatingTable[]) {
+  const used = new Set(
+    tables.flatMap((table) => {
+      const match = /^(?:Bàn|Ban|Table|[GT])\s*0*(\d+)$/iu.exec(table.name.trim());
+      return match ? [Number(match[1])] : [];
+    }),
+  );
+  let number = 1;
+  while (used.has(number)) number++;
+  return number;
+}
 export function hasTableSlot(table: SeatingTable): boolean {
   return !!table.side && !!table.row && !!table.column;
 }
