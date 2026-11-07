@@ -15,7 +15,7 @@ import { LoadingState } from "@/shared/feedback/loading-state";
 // eslint-disable-next-line architecture/boundaries -- Template access uses the shared wedding plan entitlement contract.
 import { FeatureLimitNotice, useWeddingPlan } from "@/features/plans";
 import { applyStoryBuilderV4Template, createStoryBuilderV4Document, createV4Section, isStoryBuilderV4Document, summarizeStoryBuilderV4TemplateChange } from "../schemas/story-builder-v4.document";
-import { describeV4ValidationIssues, moveV4Page } from "../schemas/story-builder-v4.helpers";
+import { describeV4Issue, describeV4ValidationIssues, moveV4Page } from "../schemas/story-builder-v4.helpers";
 import { storyBuilderV4DocumentSchema, storyTemplateConfigSchema, type StoryBuilderV4Document, type StoryBuilderV4Section, type StorySectionType, type StoryTemplateSummaryV4 } from "../schemas/story-builder-v4.schema";
 import type { Website } from "../api/website.api";
 import { createWeddingEvent, deleteWeddingEvent, getWebsite, listStoryTemplates, listWeddingEvents, listWeddingMedia, mediaUrl, publishWebsite, saveWebsite, updateWeddingEvent, unpublishWebsite, uploadWeddingMedia, type WeddingEvent, type WeddingEventInput } from "../api/website.api";
@@ -26,6 +26,19 @@ type BuilderProps = { weddingId: string; site: Website; setup: WeddingSetup };
 type Viewport = "desktop" | "tablet" | "mobile";
 type SectionType = StorySectionType;
 type BuilderIssue = { path: readonly PropertyKey[]; message: string };
+function validateBuilderDocument(document: StoryBuilderV4Document, template?: StoryTemplateSummaryV4): BuilderIssue[] {
+  const parsed = storyBuilderV4DocumentSchema.safeParse(document);
+  if (!parsed.success) return parsed.error.issues;
+  if (!template) return [];
+  const issues: BuilderIssue[] = [];
+  if (document.appearance.paletteId && !template.config.palettes.some(palette => palette.id === document.appearance.paletteId))
+    issues.push({ path: ["appearance", "paletteId"], message: "Selected color palette is not part of this template." });
+  if (document.appearance.fontHeading && !template.config.allowedFonts.includes(document.appearance.fontHeading))
+    issues.push({ path: ["appearance", "fontHeading"], message: "Selected heading font is not supported by this template." });
+  if (document.appearance.fontBody && !template.config.allowedFonts.includes(document.appearance.fontBody))
+    issues.push({ path: ["appearance", "fontBody"], message: "Selected body font is not supported by this template." });
+  return issues;
+}
 const sectionNames: Record<SectionType, string> = { hero: "Ảnh bìa", couple: "Cặp đôi", countdown: "Đếm ngược", loveStory: "Chuyện tình", events: "Sự kiện", weddingParty: "Phù dâu & phù rể", gallery: "Album ảnh", rsvp: "Xác nhận tham dự", wishes: "Lời chúc", gift: "Mừng cưới" };
 const sectionDescriptions: Record<SectionType, string> = { hero: "Mở đầu website với tên hai bạn, lời dẫn và ảnh bìa.", couple: "Giới thiệu cô dâu, chú rể và câu chuyện riêng.", countdown: "Đếm số ngày còn lại tới ngày vui.", loveStory: "Kể lại các dấu mốc đáng nhớ của hai bạn.", events: "Quản lý nhiều buổi lễ và chọn buổi hiển thị trên website.", weddingParty: "Giới thiệu những người đồng hành trong ngày cưới.", gallery: "Chia sẻ album ảnh cưới với khách mời.", rsvp: "Đưa khách tới luồng xác nhận tham dự an toàn.", wishes: "Hiển thị lời chúc khách gửi qua thiệp.", gift: "Hiển thị thông tin mừng cưới đã cấu hình." };
 const templateCategoryLabels: Record<string, string> = { garden: "Vườn hoa", editorial: "Tạp chí", traditional: "Truyền thống", minimal: "Tối giản", outdoor: "Ngoài trời", royal: "Dạ tiệc", romantic: "Lãng mạn" };
@@ -45,10 +58,28 @@ const id = () => globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math
 const clone = (value: StoryBuilderV4Document) => structuredClone(value);
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const errText = (error: unknown) => {
-  if (error instanceof ApiError && error.backendCode === "STORY_TEMPLATE_UNAVAILABLE")
-    return "Mẫu website này không còn khả dụng. Hãy chọn mẫu khác để lưu hoặc xuất bản; nội dung hiện tại sẽ được giữ lại.";
-  if (error instanceof ApiError && error.backendCode === "WEBSITE_DRAFT_INVALID")
-    return "Bản nháp chưa hợp lệ với mẫu đã chọn. Chọn mẫu khác rồi lưu lại trước khi xuất bản.";
+  if (error instanceof ApiError) {
+    const messages: Record<string, string> = {
+      STORY_TEMPLATE_UNAVAILABLE: "Mẫu website này không còn khả dụng. Hãy chọn mẫu khác; nội dung hiện tại sẽ được giữ lại.",
+      WEBSITE_OWNER_REQUIRED: "Chỉ chủ tiệc mới có quyền chỉnh sửa hoặc xuất bản website này.",
+      WEBSITE_VERSION_INVALID: "Phiên bản bản nháp không hợp lệ. Hãy tải lại website mới nhất rồi thử lại.",
+      WEBSITE_DRAFT_INVALID: "Máy chủ chưa chấp nhận bản nháp. Hãy xem các lỗi được đánh dấu; nếu không có lỗi nào, tải lại bản mới nhất rồi thử lại.",
+      WEBSITE_DRAFT_REQUIRED: "Chưa có bản nháp hợp lệ để xuất bản. Hãy lưu bản nháp rồi thử lại.",
+      WEBSITE_DOCUMENT_INVALID: "Một phần nội dung không khớp với cấu trúc mẫu. Hãy mở kiểm tra xuất bản để xem trang và trường cần sửa.",
+      WEBSITE_UNAVAILABLE: "Website chưa được xuất bản hoặc hiện không khả dụng.",
+      WEBSITE_NOT_PUBLISHED: "Website chưa được xuất bản nên chưa thể gỡ xuất bản.",
+      WEBSITE_MEDIA_TEMPORARY: "Ảnh đang dùng là ảnh tạm. Hãy tải ảnh đó vào thư viện đám cưới trước khi lưu.",
+      WEBSITE_MEDIA_NOT_OWNED: "Có ảnh không thuộc thư viện của đám cưới này. Hãy chọn ảnh từ thư viện cưới hoặc tải ảnh mới lên.",
+      WEBSITE_MEDIA_MISSING: "Một ảnh trong website không còn tồn tại. Hãy chọn hoặc tải ảnh thay thế.",
+      WEBSITE_VERSION_CONFLICT: "Website đã được cập nhật ở phiên khác. Hãy tải bản mới nhất trước khi tiếp tục.",
+    };
+    const mappedMessage = error.backendCode ? messages[error.backendCode] : undefined;
+    if (mappedMessage) return mappedMessage;
+    if (error.backendCode?.startsWith("WEBSITE_"))
+      return `Máy chủ chưa thể hoàn tất thao tác website. Hãy kiểm tra nội dung rồi thử lại. Mã lỗi: ${error.backendCode}.`;
+    if (error.status === 400) return "Máy chủ chưa chấp nhận dữ liệu website. Hãy mở kiểm tra xuất bản để xem các vị trí cần sửa.";
+    if (error.status === 409) return "Website đã thay đổi ở nơi khác. Hãy tải bản mới nhất rồi thử lại.";
+  }
   return error instanceof Error ? error.message : "Không thể hoàn tất thao tác.";
 };
 function templateGalleryPreview(document: StoryBuilderV4Document): StoryBuilderV4Document {
@@ -350,6 +381,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const mobileActionsRef = useRef<HTMLDivElement>(null);
   const saveInFlight = useRef(false);
+  const autoSaveTimer = useRef<number | null>(null);
   const lastPersistBackendCodeRef = useRef<string | undefined>(undefined);
   const persistRef = useRef<(next: StoryBuilderV4Document, showIssues?: boolean) => Promise<Website | null>>(async () => null);
   const [showFieldErrors, setShowFieldErrors] = useState(false);
@@ -399,10 +431,9 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const premiumUnknown = currentTier === "PREMIUM" && (sitePlan.isPending || sitePlan.isError || !sitePlan.data);
   const validationIssues = useMemo<BuilderIssue[]>(() => {
     if (!showFieldErrors || !doc) return [];
-    const result = storyBuilderV4DocumentSchema.safeParse(doc);
-    return result.success ? [] : result.error.issues;
-  }, [doc, showFieldErrors]);
-  const publishCheck = useMemo(() => doc ? storyBuilderV4DocumentSchema.safeParse(doc) : null, [doc]);
+    return validateBuilderDocument(doc, currentTemplate);
+  }, [currentTemplate, doc, showFieldErrors]);
+  const publishIssues = useMemo(() => doc ? validateBuilderDocument(doc, currentTemplate) : [], [currentTemplate, doc]);
   const hiddenPages = doc?.pages.filter(page => page.visible === false) ?? [];
   const hiddenSections = doc?.pages.flatMap(page => page.sections.filter(section => section.visible === false).map(section => ({ pageId: page.id, sectionId: section.id, page: page.title, section: sectionNames[section.type] }))) ?? [];
   const missingGalleryDescriptions = doc?.pages.flatMap(page => page.sections.filter((section): section is Extract<StoryBuilderV4Section, { type: "gallery" }> => section.type === "gallery").flatMap(section => {
@@ -461,8 +492,15 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   }, [currentSectionId, preview]);
   useEffect(() => {
     if (!dirty || !doc || conflict || !isOwner) return;
-    const timer = window.setTimeout(() => { void persistRef.current(doc); }, 900);
-    return () => window.clearTimeout(timer);
+    if (autoSaveTimer.current !== null) window.clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = window.setTimeout(() => {
+      autoSaveTimer.current = null;
+      void persistRef.current(doc);
+    }, 900);
+    return () => {
+      if (autoSaveTimer.current !== null) window.clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    };
   }, [doc, dirty, conflict, isOwner, premiumLocked, premiumUnknown]);
   useEffect(() => {
     if (!dirty) return;
@@ -492,10 +530,10 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   async function persist(next: StoryBuilderV4Document, showIssues = false): Promise<Website | null> {
     if (saveInFlight.current || conflict || !isOwner || premiumLocked || premiumUnknown) return null;
     lastPersistBackendCodeRef.current = undefined;
-    const validation = storyBuilderV4DocumentSchema.safeParse(next);
-    if (!validation.success) {
+    const validationIssues = validateBuilderDocument(next, currentTemplate);
+    if (validationIssues.length > 0) {
       if (showIssues) setShowFieldErrors(true);
-      setError(describeV4ValidationIssues(validation.error.issues, next));
+      setError(describeV4ValidationIssues(validationIssues, next));
       setSaveState("error");
       return null;
     }
@@ -687,10 +725,13 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   }
   async function publish() {
     const publishDocument = docRef.current;
-    if (!doc || !publishDocument || !isOwner || conflict || premiumLocked || premiumUnknown) return;
-    const validation = storyBuilderV4DocumentSchema.safeParse(publishDocument);
-    if (!validation.success) { setShowFieldErrors(true); setError(describeV4ValidationIssues(validation.error.issues, publishDocument)); return; }
+    if (!doc || !publishDocument || !isOwner || conflict || premiumLocked || premiumUnknown || busy || saveInFlight.current) return;
+    const validationIssues = validateBuilderDocument(publishDocument, currentTemplate);
+    if (validationIssues.length > 0) { setShowFieldErrors(true); setError(describeV4ValidationIssues(validationIssues, publishDocument)); return; }
     setShowFieldErrors(false);
+    if (autoSaveTimer.current !== null) window.clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = null;
+    saveInFlight.current = true;
     setBusy(true); setError("");
     try {
       let currentVersion = versionRef.current;
@@ -704,7 +745,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
       versionRef.current = result.version; setVersion(result.version); setStatus(result.status); cache.setQueryData(["website", weddingId], result);
       setPublishReviewOpen(false);
     } catch (cause) { setError(errText(cause)); void cache.invalidateQueries({ queryKey: ["website", weddingId] }); }
-    finally { setBusy(false); }
+    finally { saveInFlight.current = false; setBusy(false); }
   }
   function dismissQuickStart() {
     setShowQuickStart(false);
@@ -766,8 +807,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
       ...(event.address ? { address: event.address } : {}), ...(event.mapUrl ? { mapUrl: event.mapUrl } : {}), sortOrder: event.sortOrder,
     }));
   }
-  const publishIssues = publishCheck && !publishCheck.success ? publishCheck.error.issues : [];
-  const publishCanProceed = Boolean(publishCheck?.success && !busy && !dirty && saveState === "saved" && !conflict && !premiumLocked && !premiumUnknown);
+  const publishCanProceed = Boolean(doc && publishIssues.length === 0 && !busy && isOwner && !conflict && !premiumLocked && !premiumUnknown);
   const paletteValue = doc.appearance.paletteId ?? currentTemplate?.config.palettes[0]?.id ?? "";
   const inspectorPanel = <Inspector
     section={currentSection}
@@ -821,7 +861,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
         <Button size="sm" variant="outline" onClick={() => setShareSettingsOpen(true)}><Globe className="mr-1.5 size-4" />Chia sẻ & SEO</Button>
         {status === "PUBLISHED" && <Button size="sm" variant="outline" disabled={busy} onClick={() => void unpublish()}>Gỡ</Button>}
         {dirty && <Button size="sm" variant="outline" disabled={busy || conflict} onClick={() => docRef.current && void persist(docRef.current, true)}><Save className="mr-1.5 size-4" />Lưu</Button>}
-        <Button size="sm" disabled={busy || conflict || dirty || saveState === "saving"} onClick={() => setPublishReviewOpen(true)}>{busy ? <LoaderCircle className="mr-1.5 size-4 animate-spin" /> : <Check className="mr-1.5 size-4" />}{status === "PUBLISHED" ? "Xuất bản lại" : "Xuất bản"}</Button>
+        <Button size="sm" disabled={busy} onClick={() => setPublishReviewOpen(true)}>{busy ? <LoaderCircle className="mr-1.5 size-4 animate-spin" /> : <Check className="mr-1.5 size-4" />}{status === "PUBLISHED" ? "Xuất bản lại" : "Xuất bản"}</Button>
       </div>
       <div className="relative flex items-center gap-1 sm:hidden" ref={mobileActionsRef}>
         <Button aria-label={preview ? "Chỉnh sửa" : "Xem trước"} title={preview ? "Chỉnh sửa" : "Xem trước"} variant="outline" size="icon" onClick={() => setPreview(!preview)}>{preview ? <X className="size-4" /> : <Eye className="size-4" />}</Button>
@@ -837,7 +877,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
           {dirty && <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted disabled:opacity-40" disabled={busy || conflict} onClick={() => { const latest = docRef.current; setMobileActionsOpen(false); if (latest) void persist(latest, true); }}><Save className="size-4" />Lưu thay đổi</button>}
           {status === "PUBLISHED" && <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted disabled:opacity-40" disabled={busy} onClick={() => { setMobileActionsOpen(false); void unpublish(); }}>Gỡ xuất bản</button>}
         </div>}
-        <Button size="sm" className="px-2.5" aria-label={status === "PUBLISHED" ? "Xuất bản lại website" : "Xuất bản website"} title={status === "PUBLISHED" ? "Xuất bản lại website" : "Xuất bản website"} disabled={busy || conflict || dirty || saveState === "saving"} onClick={() => setPublishReviewOpen(true)}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}<span className="ml-1 hidden min-[430px]:inline">{status === "PUBLISHED" ? "Xuất bản lại" : "Xuất bản"}</span></Button>
+        <Button size="sm" className="px-2.5" aria-label={status === "PUBLISHED" ? "Xuất bản lại website" : "Xuất bản website"} title={status === "PUBLISHED" ? "Xuất bản lại website" : "Xuất bản website"} disabled={busy} onClick={() => setPublishReviewOpen(true)}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}<span className="ml-1 hidden min-[430px]:inline">{status === "PUBLISHED" ? "Xuất bản lại" : "Xuất bản"}</span></Button>
       </div>
     </header>
     {conflict && <div role="alert" className="z-10 flex flex-wrap items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950"><span>Website đã được cập nhật ở phiên khác. Tải bản mới nhất để tiếp tục chỉnh sửa.</span><Button size="sm" variant="outline" onClick={() => void reloadLatest()}><RefreshCw className="mr-1.5 size-3.5" />Tải bản mới nhất</Button></div>}
@@ -969,8 +1009,8 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     <Modal open={publishReviewOpen} onClose={() => setPublishReviewOpen(false)} title={status === "PUBLISHED" ? "Kiểm tra trước khi xuất bản lại" : "Kiểm tra trước khi xuất bản"} description="Xem lại nội dung website. Bản công khai chỉ thay đổi sau khi bạn xác nhận và máy chủ hoàn tất xuất bản.">
       <div className="space-y-5">
         <div className="grid gap-2 sm:grid-cols-2">
-          <PublishCheckItem ok={publishCheck?.success === true} title="Cấu trúc và nội dung" detail={publishCheck?.success ? "Không phát hiện lỗi cần chặn xuất bản." : `${publishIssues.length} vị trí cần kiểm tra.`} />
-          <PublishCheckItem ok={!dirty && saveState === "saved" && !conflict} title="Bản nháp đã lưu" detail={conflict ? "Có phiên bản mới hơn; hãy tải lại trước." : dirty || saveState !== "saved" ? "Đang có thay đổi chưa được lưu." : `Phiên bản ${version} đã được lưu.`} />
+          <PublishCheckItem ok={publishIssues.length === 0} title="Cấu trúc và nội dung" detail={publishIssues.length === 0 ? "Không phát hiện lỗi cần chặn xuất bản." : `${publishIssues.length} vị trí cần kiểm tra.`} />
+          <PublishCheckItem ok={!dirty && saveState === "saved" && !conflict} title="Bản nháp đã lưu" detail={conflict ? "Có phiên bản mới hơn; hãy tải lại trước." : dirty ? "Còn thay đổi chưa lưu. Khi xác nhận, hệ thống sẽ lưu bản nháp rồi mới xuất bản." : saveState !== "saved" ? "Đang lưu bản nháp; đợi hoàn tất rồi xác nhận." : `Phiên bản ${version} đã được lưu.`} />
         </div>
         {publishIssues.length > 0 && <section aria-labelledby="publish-errors-title" className="rounded-xl border border-destructive/25 bg-destructive/[0.04] p-4">
           <h3 id="publish-errors-title" className="font-semibold text-destructive">Cần sửa trước khi xuất bản</h3>
@@ -1017,7 +1057,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
           <button type="button" className="mt-2 min-h-10 rounded-lg px-2 font-medium underline underline-offset-2" onClick={() => { setPublishReviewOpen(false); setShareSettingsOpen(true); }}>Thiết lập ảnh chia sẻ</button>
         </section>}
         {error && <p role="alert" className="rounded-lg border border-destructive/25 bg-destructive/[0.04] p-3 text-sm text-destructive">{error}</p>}
-        {!publishCanProceed && publishIssues.length === 0 && <p role="status" className="text-sm text-muted-foreground">{conflict ? "Tải phiên bản mới nhất để tiếp tục." : dirty || saveState !== "saved" ? "Đợi bản nháp lưu xong rồi thử lại." : premiumLocked ? "Gói hiện tại chưa hỗ trợ mẫu này." : premiumUnknown ? "Chưa xác minh được quyền dùng mẫu Premium." : "Chưa thể xuất bản ở trạng thái hiện tại."}</p>}
+        {!publishCanProceed && publishIssues.length === 0 && <p role="status" className="text-sm text-muted-foreground">{busy ? "Đang xử lý; vui lòng đợi." : !isOwner ? "Chỉ chủ tiệc mới có quyền xuất bản website." : conflict ? "Tải phiên bản mới nhất để tiếp tục." : premiumLocked ? "Gói hiện tại chưa hỗ trợ mẫu này." : premiumUnknown ? "Chưa xác minh được quyền dùng mẫu Premium." : "Chưa thể xuất bản ở trạng thái hiện tại."}</p>}
         <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-between">
           <Button type="button" variant="outline" onClick={() => { setPublishReviewOpen(false); setPreview(true); }}><Eye className="mr-2 size-4" />Xem trước</Button>
           <div className="flex flex-col-reverse gap-2 sm:flex-row"><Button type="button" variant="ghost" onClick={() => setPublishReviewOpen(false)}>Quay lại chỉnh sửa</Button><Button type="button" disabled={!publishCanProceed} onClick={() => void publish()}>{busy ? <LoaderCircle className="mr-2 size-4 animate-spin" /> : <Check className="mr-2 size-4" />}{status === "PUBLISHED" ? "Xác nhận xuất bản lại" : "Xác nhận xuất bản"}</Button></div>
@@ -1078,7 +1118,7 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
   if (!section) return <div className="p-5 text-sm text-muted-foreground">Chọn một phần trên canvas hoặc trong danh sách để chỉnh nội dung.</div>;
   const errorAt = (path: readonly PropertyKey[]) => {
     const issue = issues.find(item => item.path.length === path.length && path.every((part, index) => item.path[index] === part));
-    return issue ? "Kiểm tra lại nội dung tại đây." : undefined;
+    return issue ? describeV4Issue(issue) : undefined;
   };
   const sectionPath = ["pages", pageIndex, "sections", sectionIndex] as const;
   const contentError = (key: string, ...nested: (string | number)[]) => errorAt([...sectionPath, "content", key, ...nested]);
@@ -1107,16 +1147,18 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
     setBatchUploading(false);
   }
   return <div className="min-h-[300px]">
-    <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3"><p className="text-xs text-muted-foreground">ĐANG CHỈNH SỬA</p><h2 className="mt-1 text-sm font-semibold">{sectionName}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{sectionDescriptions[section.type]}</p></div>
+    <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3"><p className="text-xs text-muted-foreground">ĐANG CHỈNH SỬA</p><h2 className="mt-1 text-sm font-semibold">{sectionName}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{sectionDescriptions[section.type]}</p>{errorAt(sectionPath) && <p role="alert" className="mt-2 text-xs font-medium text-destructive">{errorAt(sectionPath)}</p>}</div>
     <div className="flex border-b border-border px-4" role="group" aria-label={`Chỉnh ${sectionName}`}><button type="button" aria-pressed={tab === "content"} className={`border-b-2 px-3 py-2.5 text-sm ${tab === "content" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("content")}>Nội dung</button><button type="button" aria-pressed={tab === "style"} className={`border-b-2 px-3 py-2.5 text-sm ${tab === "style" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("style")}>Kiểu hiển thị</button></div>
     <div className="space-y-5 p-4">
-      {page && tab === "content" && <details className="border-b border-border pb-4">
+      {page && tab === "content" && <details className="border-b border-border pb-4" open={issues.some(issue => issue.path[0] === "pages" && issue.path[1] === pageIndex && issue.path[2] !== "sections")}>
         <summary className="min-h-10 cursor-pointer py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cài đặt trang · {page.title}</summary>
         <div className="mt-3 space-y-3">
           <Field label="Tên trang" value={page.title} error={errorAt(["pages", pageIndex, "title"])} onChange={value => pageChange({ title: value, navigationLabel: page.navigationLabel || value })} />
           <Field label="Nhãn điều hướng" value={page.navigationLabel ?? page.title} error={errorAt(["pages", pageIndex, "navigationLabel"])} onChange={value => pageChange({ navigationLabel: value })} />
           {page.isHome ? <p className="text-xs text-muted-foreground">Trang chủ dùng đường dẫn gốc của website.</p> : <Field label="Đường dẫn" value={page.slug} placeholder="our-story" error={errorAt(["pages", pageIndex, "slug"])} onChange={value => pageChange({ slug: value.toLocaleLowerCase() })} />}
           <label className="flex min-h-10 items-center justify-between text-sm">Hiển thị trang<input type="checkbox" checked={page.visible !== false} onChange={event => pageChange({ visible: event.target.checked })} /></label>
+          {errorAt(["pages", pageIndex, "visible"]) && <p className="text-xs text-destructive">{errorAt(["pages", pageIndex, "visible"])}</p>}
+          {errorAt(["pages", pageIndex, "sections"]) && <p className="text-xs text-destructive">{errorAt(["pages", pageIndex, "sections"])}</p>}
           {!page.isHome && <Button size="sm" variant="outline" className="text-destructive" onClick={pageDelete}><Trash2 className="mr-1.5 size-3.5" />Xóa trang</Button>}
         </div>
       </details>}
@@ -1159,9 +1201,11 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
         {template && <>
           <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Bảng màu
             <select className={inputClass} value={paletteId} onChange={event => onAppearance({ paletteId: event.target.value })}>{template.config.palettes.map(palette => <option key={palette.id} value={palette.id}>{palette.label}</option>)}</select>
+            {errorAt(["appearance", "paletteId"]) && <span className="text-xs text-destructive">{errorAt(["appearance", "paletteId"])}</span>}
           </label>
           {(["fontHeading", "fontBody"] as const).map(key => <label key={key} className="grid gap-1.5 text-xs font-medium text-muted-foreground">{key === "fontHeading" ? "Phông tiêu đề" : "Phông nội dung"}
             <select className={inputClass} value={appearance[key] ?? template.config.theme[key]} onChange={event => onAppearance({ [key]: event.target.value })}>{template.config.allowedFonts.map(font => <option key={font} value={font}>{font}</option>)}</select>
+            {errorAt(["appearance", key]) && <span className="text-xs text-destructive">{errorAt(["appearance", key])}</span>}
           </label>)}
         </>}
         <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Biến thể
