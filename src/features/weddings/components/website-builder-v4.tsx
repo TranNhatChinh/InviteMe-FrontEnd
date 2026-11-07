@@ -17,7 +17,7 @@ import { applyStoryBuilderV4Template, createStoryBuilderV4Document, createV4Sect
 import { describeV4ValidationIssues, moveV4Page } from "../schemas/story-builder-v4.helpers";
 import { storyBuilderV4DocumentSchema, type StoryBuilderV4Document, type StoryBuilderV4Section, type StorySectionType, type StoryTemplateSummaryV4 } from "../schemas/story-builder-v4.schema";
 import type { Website } from "../api/website.api";
-import { getWebsite, listStoryTemplates, listWeddingMedia, mediaUrl, publishWebsite, saveWebsite, unpublishWebsite, uploadWeddingMedia } from "../api/website.api";
+import { createWeddingEvent, deleteWeddingEvent, getWebsite, listStoryTemplates, listWeddingEvents, listWeddingMedia, mediaUrl, publishWebsite, saveWebsite, updateWeddingEvent, unpublishWebsite, uploadWeddingMedia, type WeddingEvent, type WeddingEventInput } from "../api/website.api";
 import { isoToLocalDateTime, localDateTimeToIso, type WeddingSetup } from "../schemas/wedding.schema";
 import { StoryBuilderV4Renderer } from "./story-builder-v4-renderer";
 
@@ -25,8 +25,8 @@ type BuilderProps = { weddingId: string; site: Website; setup: WeddingSetup };
 type Viewport = "desktop" | "tablet" | "mobile";
 type SectionType = StorySectionType;
 type BuilderIssue = { path: readonly PropertyKey[]; message: string };
-const sectionNames: Record<SectionType, string> = { hero: "Ảnh bìa", couple: "Cặp đôi", countdown: "Đếm ngược", loveStory: "Chuyện tình", events: "Sự kiện", gallery: "Album ảnh", rsvp: "Xác nhận tham dự", wishes: "Lời chúc", gift: "Mừng cưới" };
-const sectionDescriptions: Record<SectionType, string> = { hero: "Mở đầu website với tên hai bạn, lời dẫn và ảnh bìa.", couple: "Giới thiệu cô dâu, chú rể và câu chuyện riêng.", countdown: "Đếm số ngày còn lại tới ngày vui.", loveStory: "Kể lại các dấu mốc đáng nhớ của hai bạn.", events: "Cung cấp thời gian, địa điểm và bản đồ sự kiện.", gallery: "Chia sẻ album ảnh cưới với khách mời.", rsvp: "Đưa khách tới luồng xác nhận tham dự an toàn.", wishes: "Hiển thị lời chúc khách gửi qua thiệp.", gift: "Hiển thị thông tin mừng cưới đã cấu hình." };
+const sectionNames: Record<SectionType, string> = { hero: "Ảnh bìa", couple: "Cặp đôi", countdown: "Đếm ngược", loveStory: "Chuyện tình", events: "Sự kiện", weddingParty: "Phù dâu & phù rể", gallery: "Album ảnh", rsvp: "Xác nhận tham dự", wishes: "Lời chúc", gift: "Mừng cưới" };
+const sectionDescriptions: Record<SectionType, string> = { hero: "Mở đầu website với tên hai bạn, lời dẫn và ảnh bìa.", couple: "Giới thiệu cô dâu, chú rể và câu chuyện riêng.", countdown: "Đếm số ngày còn lại tới ngày vui.", loveStory: "Kể lại các dấu mốc đáng nhớ của hai bạn.", events: "Quản lý nhiều buổi lễ và chọn buổi hiển thị trên website.", weddingParty: "Giới thiệu những người đồng hành trong ngày cưới.", gallery: "Chia sẻ album ảnh cưới với khách mời.", rsvp: "Đưa khách tới luồng xác nhận tham dự an toàn.", wishes: "Hiển thị lời chúc khách gửi qua thiệp.", gift: "Hiển thị thông tin mừng cưới đã cấu hình." };
 const sectionTypes = Object.keys(sectionNames) as SectionType[];
 const setupBindings: Partial<Record<SectionType, Array<{ target: string; source: string; label: string }>>> = {
   hero: [{ target: "heroImageUrl", source: "wedding.coverImageUrl", label: "Ảnh bìa" }],
@@ -47,7 +47,8 @@ function templateGalleryPreview(document: StoryBuilderV4Document): StoryBuilderV
   if (!home) return document;
   const hero = home.sections.find(section => section.type === "hero") ?? home.sections[0];
   if (!hero) return document;
-  return { ...document, navigationMode: "one-page", pages: [{ ...home, visible: true, sections: [{ ...hero, visible: true }] }] };
+  const supportingSections = home.sections.filter(section => section.id !== hero.id && section.visible !== false).slice(0, 2);
+  return { ...document, navigationMode: "one-page", pages: [{ ...home, visible: true, sections: [{ ...hero, visible: true }, ...supportingSections] }] };
 }
 function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
   const destination = index + direction;
@@ -130,6 +131,8 @@ function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDo
   const [search, setSearch] = useState(""); const [category, setCategory] = useState("all");
   const [tier, setTier] = useState("all"); const [viewport, setViewport] = useState<Viewport>("desktop");
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState("");
+  const [compareKeys, setCompareKeys] = useState<string[]>([]); const [compareOpen, setCompareOpen] = useState(false);
+  const compareTemplates = compareKeys.map(key => templates.find(template => template.key === key)).filter((template): template is StoryTemplateSummaryV4 => Boolean(template));
   const filtered = useMemo(() => templates.filter(template => {
     const matchesSearch = `${template.name} ${template.key} ${template.config.category ?? ""}`.toLocaleLowerCase().includes(search.toLocaleLowerCase());
     const matchesCategory = category === "all" || (template.config.category ?? "Chưa phân loại") === category;
@@ -166,6 +169,13 @@ function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDo
       <select className="h-11 rounded-xl border border-input bg-background px-3 text-sm" value={tier} onChange={event => setTier(event.target.value)} aria-label="Lọc theo gói"><option value="all">Tất cả gói</option><option value="FREE">Miễn phí</option><option value="PREMIUM">Premium</option><option value="UNCLASSIFIED">Chưa phân loại</option></select>
     </div>
     {plan.isError && <FeatureLimitNotice title="Chưa xác minh được quyền lợi gói" description="Mẫu Premium sẽ được mở khi kiểm tra quyền lợi thành công. Các mẫu còn lại vẫn có thể xem." status="unavailable" variant="compact" onRetry={() => void plan.refetch()} retryLabel="Thử lại" />}
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3">
+      <p className="text-sm text-muted-foreground">Chọn hai mẫu để xem trước bố cục, màu sắc và nội dung cạnh nhau. <span className="font-medium text-foreground">Đã chọn {compareKeys.length}/2</span></p>
+      <div className="flex items-center gap-2">
+        {compareKeys.length > 0 && <Button type="button" size="sm" variant="ghost" onClick={() => setCompareKeys([])}>Bỏ chọn</Button>}
+        <Button type="button" size="sm" disabled={compareTemplates.length !== 2} onClick={() => setCompareOpen(true)}>So sánh hai mẫu</Button>
+      </div>
+    </div>
     {message && <p role="alert" className="rounded-xl border border-destructive/30 p-3 text-sm text-destructive">{message}</p>}
     {filtered.length === 0 ? <p className="border-y border-border py-12 text-center text-sm text-muted-foreground">Không tìm thấy mẫu phù hợp.</p> : <div className="grid gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3">
       {filtered.map(template => {
@@ -180,16 +190,54 @@ function V4TemplateGallery({ weddingId, setup, templates, siteVersion, currentDo
             <div className="story-gallery-preview" aria-hidden="true" style={{ width: viewport === "mobile" ? "72%" : viewport === "tablet" ? "88%" : "100%", marginInline: "auto" }}><div className="story-gallery-preview__canvas pointer-events-none"><StoryBuilderV4Renderer document={galleryPreview} /></div></div>
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/65 to-transparent px-4 pb-4 pt-12 text-sm text-white"><span>{template.config.category || "Website cưới"}</span>{isCurrent ? <span className="rounded-full bg-white/20 px-2 py-1 text-xs">Đang dùng</span> : <Eye className="size-4 opacity-0 transition group-hover:opacity-100" />}</div>
           </button>
-          <div className="mt-4 flex items-start justify-between gap-3">
-            <div className="min-w-0"><h2 className="font-display text-xl text-foreground">{template.name}</h2><p className="mt-1 text-xs text-muted-foreground">{template.config.accessTier === "PREMIUM" ? "Premium" : template.config.accessTier === "FREE" ? "Miễn phí" : "Chưa phân loại"} · {template.config.sections.length} phần gợi ý</p><div className="mt-3 flex items-center gap-2"><span className="flex gap-1.5" aria-label="Bảng màu của mẫu">{[template.config.theme.colors.primary, template.config.theme.colors.background, template.config.theme.colors.accent].map((color, index) => <span key={`${color}-${index}`} className="size-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}</span><span className="truncate text-[11px] text-muted-foreground">{template.config.theme.fontHeading} · {template.config.category || "Website cưới"}</span></div></div>
-            {premiumLocked(template) ? <Button asChild size="sm"><Link href={`/weddings/${encodeURIComponent(weddingId)}/plan`}>Xem các gói</Link></Button> : <Button size="sm" disabled={busy || locked || isCurrent} onClick={() => { setMessage(""); setSelectedTemplate(template); }}>{locked ? "Đang kiểm tra gói" : isCurrent ? "Mẫu đang dùng" : currentDocument ? "Xem & đổi mẫu" : legacyDocument ? "Xem & chuyển" : "Xem mẫu"}</Button>}
+          <div className="mt-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0"><h2 className="font-display text-xl text-foreground">{template.name}</h2><p className="mt-1 text-xs text-muted-foreground">{template.config.accessTier === "PREMIUM" ? "Premium" : template.config.accessTier === "FREE" ? "Miễn phí" : "Chưa phân loại"} · {template.config.sections.length} phần gợi ý</p><div className="mt-3 flex items-center gap-2"><span className="flex gap-1.5" aria-label="Bảng màu của mẫu">{[template.config.theme.colors.primary, template.config.theme.colors.background, template.config.theme.colors.accent].map((color, index) => <span key={`${color}-${index}`} className="size-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}</span><span className="truncate text-[11px] text-muted-foreground">{template.config.theme.fontHeading} · {template.config.category || "Website cưới"}</span></div></div>
+            </div>
+            <p className="truncate text-xs text-muted-foreground">{template.config.sections.slice(0, 4).map(section => sectionNames[section.type as SectionType] ?? section.type).join(" · ")}</p>
+            <div className="flex flex-wrap gap-2">
+              {premiumLocked(template) ? <Button asChild size="sm"><Link href={`/weddings/${encodeURIComponent(weddingId)}/plan`}>Xem các gói</Link></Button> : <Button size="sm" disabled={busy || locked || isCurrent} onClick={() => { setMessage(""); setSelectedTemplate(template); }}>{locked ? "Đang kiểm tra gói" : isCurrent ? "Mẫu đang dùng" : currentDocument ? "Xem & đổi mẫu" : legacyDocument ? "Xem & chuyển" : "Xem mẫu"}</Button>}
+              <Button type="button" size="sm" variant="outline" aria-pressed={compareKeys.includes(template.key)} disabled={!compareKeys.includes(template.key) && compareKeys.length >= 2} onClick={() => setCompareKeys(current => current.includes(template.key) ? current.filter(key => key !== template.key) : [...current, template.key])}><Check className={`mr-1.5 size-3.5 ${compareKeys.includes(template.key) ? "opacity-100" : "opacity-35"}`} />{compareKeys.includes(template.key) ? "Đã chọn" : "So sánh"}</Button>
+            </div>
           </div>
           {template.config.accessTier === "UNCLASSIFIED" && <p className="mt-2 text-xs text-muted-foreground">Mẫu chưa được Admin phân loại gói.</p>}
         </article>;
       })}
     </div>}
     {selectedTemplate && <TemplatePreviewDialog template={selectedTemplate} setup={setup} currentDocument={currentDocument} oldDocument={legacyDocument} error={message} viewport={viewport} setViewport={setViewport} busy={busy} locked={Boolean(premiumLocked(selectedTemplate) || premiumUnknown(selectedTemplate))} canUpgrade={Boolean(premiumLocked(selectedTemplate))} weddingId={weddingId} onClose={() => { setSelectedTemplate(null); setMessage(""); }} onChoose={(version, document) => void createDraft(selectedTemplate, version, document)} />}
+    <TemplateCompareDialog open={compareOpen} onClose={() => setCompareOpen(false)} templates={compareTemplates} setup={setup} currentDocument={currentDocument} oldDocument={legacyDocument} viewport={viewport} setViewport={setViewport} onOpenTemplate={template => { setCompareOpen(false); setSelectedTemplate(template); }} />
   </main>;
+}
+
+function TemplateCompareDialog({ open, onClose, templates, setup, currentDocument, oldDocument, viewport, setViewport, onOpenTemplate }: {
+  open: boolean; onClose: () => void; templates: StoryTemplateSummaryV4[]; setup: WeddingSetup; currentDocument?: StoryBuilderV4Document; oldDocument?: unknown;
+  viewport: Viewport; setViewport: (viewport: Viewport) => void; onOpenTemplate: (template: StoryTemplateSummaryV4) => void;
+}) {
+  return <Modal open={open} onClose={onClose} title="So sánh mẫu website" description="Xem cùng nội dung cưới trong hai thiết kế trước khi chọn mẫu." size="wide">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <p className="text-sm text-muted-foreground">Preview dùng chung tên, ngày cưới và ảnh hiện có để bạn dễ so sánh cách mỗi mẫu trình bày.</p>
+      <div className="flex items-center gap-1" aria-label="Kích thước xem trước">
+        <ViewportButton label="Desktop" active={viewport === "desktop"} onClick={() => setViewport("desktop")}><Monitor className="size-4" /></ViewportButton>
+        <ViewportButton label="Tablet" active={viewport === "tablet"} onClick={() => setViewport("tablet")}><Tablet className="size-4" /></ViewportButton>
+        <ViewportButton label="Điện thoại" active={viewport === "mobile"} onClick={() => setViewport("mobile")}><Smartphone className="size-4" /></ViewportButton>
+      </div>
+    </div>
+    <div className="grid gap-5 lg:grid-cols-2">
+      {templates.map(template => {
+        const document = currentDocument ? applyStoryBuilderV4Template(template, currentDocument, setup) : createStoryBuilderV4Document(template, setup, oldDocument);
+        const preview = templateGalleryPreview(document);
+        const width = viewport === "mobile" ? "72%" : viewport === "tablet" ? "88%" : "100%";
+        return <article key={template.key} className="min-w-0 overflow-hidden rounded-xl border border-border bg-background">
+          <header className="flex items-start justify-between gap-3 border-b border-border p-4">
+            <div className="min-w-0"><p className="text-xs uppercase tracking-wide text-primary">{template.config.category || "Website cưới"}</p><h3 className="mt-1 truncate font-display text-xl">{template.name}</h3><p className="mt-1 text-xs text-muted-foreground">{template.config.theme.fontHeading} · {template.config.sections.length} phần gợi ý</p></div>
+            <Button type="button" size="sm" variant="outline" onClick={() => onOpenTemplate(template)}>Xem chi tiết</Button>
+          </header>
+          <div className="story-gallery-preview" style={{ width, marginInline: "auto" }}><div className="story-gallery-preview__canvas pointer-events-none"><StoryBuilderV4Renderer document={preview} /></div></div>
+          <div className="border-t border-border p-4"><div className="flex items-center gap-2"><span className="flex gap-1.5" aria-label="Bảng màu của mẫu">{[template.config.theme.colors.primary, template.config.theme.colors.background, template.config.theme.colors.accent].map((color, index) => <span key={`${color}-${index}`} className="size-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />)}</span><span className="text-xs text-muted-foreground">{template.config.theme.fontBody}</span></div><p className="mt-3 text-xs leading-5 text-muted-foreground">{template.config.sections.slice(0, 5).map(section => sectionNames[section.type as SectionType] ?? section.type).join(" → ")}</p></div>
+        </article>;
+      })}
+    </div>
+  </Modal>;
 }
 
 // Gallery may be opened before a document exists; GET supplies the optimistic concurrency version.
@@ -297,6 +345,8 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   const [dropSectionId, setDropSectionId] = useState<string | null>(null);
   const [pageName, setPageName] = useState(""); const [pageSlug, setPageSlug] = useState("");
   const [status, setStatus] = useState(initialSite.status);
+  const hasEventsSection = Boolean(doc?.pages.some(page => page.sections.some(section => section.type === "events")));
+  const weddingEventsQuery = useQuery({ queryKey: ["wedding-events", weddingId], queryFn: () => listWeddingEvents(api, weddingId), enabled: hasEventsSection, staleTime: 30_000 });
   const templateQuery = useQuery({ queryKey: ["story-templates"], queryFn: () => listStoryTemplates(api), staleTime: 60_000 });
   const mediaLibrary = useQuery({ queryKey: ["wedding-media", weddingId], queryFn: () => listWeddingMedia(api, weddingId), enabled: mediaPickerOpen });
   const currentTemplate = templateQuery.data?.find(item => item.key === doc?.templateKey);
@@ -657,7 +707,20 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   if (!doc) return <p className="p-6 text-sm text-muted-foreground">Website chưa có bản nháp V4. Quay lại thư viện mẫu để bắt đầu.</p>;
   if (!isOwner) return <div className="mx-auto max-w-3xl p-8"><FeatureLimitNotice title="Chỉ chủ tiệc mới có thể chỉnh sửa website" description="Bạn vẫn có thể xem website đã xuất bản. Hãy nhờ chủ tiệc mở trình dựng website." status="unavailable" variant="full" /></div>;
   const viewportWidth = viewport === "desktop" ? 1120 : viewport === "tablet" ? 768 : 390;
-  const renderedDocument = doc;
+  const renderedDocument = clone(doc);
+  const mainWeddingEvent: WeddingEvent = { id: "main", title: "Lễ cưới", startsAt: setup.eventDateTime, timeZoneId: setup.timeZoneId, venueName: setup.venueName, address: setup.venueAddress, sortOrder: 0 };
+  const eventById = new Map([[mainWeddingEvent.id, mainWeddingEvent], ...(weddingEventsQuery.data ?? []).map(event => [event.id, event] as const)]);
+  for (const page of renderedDocument.pages) for (const section of page.sections) {
+    if (section.type !== "events") continue;
+    const content = section.content;
+    const ids = content.eventIds ?? (content.events?.length ? null : ["main"]);
+    if (ids) content.events = ids.map(eventId => eventById.get(eventId)).filter((event): event is WeddingEvent => Boolean(event)).map(event => ({
+      id: event.id, title: event.title, timeZoneId: event.timeZoneId,
+      ...(event.description ? { description: event.description } : {}), ...(event.startsAt ? { startsAt: event.startsAt } : {}),
+      ...(event.endsAt ? { endsAt: event.endsAt } : {}), ...(event.venueName ? { venueName: event.venueName } : {}),
+      ...(event.address ? { address: event.address } : {}), ...(event.mapUrl ? { mapUrl: event.mapUrl } : {}), sortOrder: event.sortOrder,
+    }));
+  }
   const publishIssues = publishCheck && !publishCheck.success ? publishCheck.error.issues : [];
   const publishCanProceed = Boolean(publishCheck?.success && !busy && !dirty && saveState === "saved" && !conflict && !premiumLocked && !premiumUnknown);
   const paletteValue = doc.appearance.paletteId ?? currentTemplate?.config.palettes[0]?.id ?? "";
@@ -695,6 +758,9 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
     issues={validationIssues}
     pageIndex={pageIndex}
     sectionIndex={sectionIndex}
+    weddingId={weddingId}
+    selectedEventIds={currentSection?.type === "events" ? currentSection.content.eventIds ?? (currentSection.content.events?.length ? [] : ["main"]) : []}
+    onEventIds={ids => currentSection?.type === "events" && editContent(currentSection.id, "eventIds", ids)}
   />;
 
   return <div className="fixed inset-0 z-40 flex flex-col bg-[#faf8f7] text-foreground">
@@ -944,7 +1010,7 @@ function V4Studio({ weddingId, initialSite, setup, onChooseOtherTemplate }: { we
   </div>;
 }
 
-function Inspector({ section, page, sectionName, onSection, onContent, onNested, onAppendGalleryImages, onUpload, onChooseMedia, setup, onBinding, onDuplicate, onDelete, pageChange, pageDelete, appearance, paletteId, template, onAppearance, gift, onGift, issues, pageIndex, sectionIndex }: {
+function Inspector({ section, page, sectionName, onSection, onContent, onNested, onAppendGalleryImages, onUpload, onChooseMedia, setup, onBinding, onDuplicate, onDelete, pageChange, pageDelete, appearance, paletteId, template, onAppearance, gift, onGift, issues, pageIndex, sectionIndex, weddingId, selectedEventIds, onEventIds }: {
   section?: StoryBuilderV4Section; page?: StoryBuilderV4Document["pages"][number]; sectionName?: string;
   onSection: (patch: Partial<StoryBuilderV4Section>) => void; onContent: (key: string, value: unknown) => void;
   onNested: (key: string, field: string, value: unknown) => void;
@@ -959,6 +1025,7 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
   onAppearance: (patch: Partial<StoryBuilderV4Document["appearance"]>) => void;
   gift?: StoryBuilderV4Document["content"]["gift"]; onGift: (patch: Partial<NonNullable<StoryBuilderV4Document["content"]["gift"]>>) => void;
   issues: readonly BuilderIssue[]; pageIndex: number; sectionIndex: number;
+  weddingId: string; selectedEventIds: string[]; onEventIds: (ids: string[]) => void;
 }) {
   const content = record(section?.content); const [tab, setTab] = useState<"content" | "style">("content");
   const [batchUploading, setBatchUploading] = useState(false); const [batchStatus, setBatchStatus] = useState("");
@@ -973,7 +1040,7 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
   const inputClass = "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const availableBindings = setupBindings[section.type] ?? [];
   const bindings = section.bindings ?? [];
-  const list = (key: "items" | "images" | "events") => Array.isArray(content[key]) ? content[key] as Record<string, unknown>[] : [];
+  const list = (key: "items" | "images" | "events" | "groom" | "bride") => Array.isArray(content[key]) ? content[key] as Record<string, unknown>[] : [];
   async function uploadGalleryBatch(files: File[]) {
     const remaining = Math.max(0, 30 - list("images").length);
     const selected = files.slice(0, remaining);
@@ -1009,14 +1076,15 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
       </details>}
       {tab === "content" ? <>
         <Field label="Tiêu đề điều hướng" value={section.navigationLabel ?? ""} error={errorAt([...sectionPath, "navigationLabel"])} onChange={value => onSection({ navigationLabel: value })} placeholder={sectionName} />
-        {section.type === "hero" && <>{field("Tiêu đề lớn", "title", "Tên hai bạn hoặc tên đám cưới")}{field("Lời dẫn", "subtitle", "Lời mời ngắn")} {field("Dòng nhấn", "eyebrow", "")}
+        {section.type === "hero" && <>{field("Tiêu đề lớn", "title", "Tên hai bạn hoặc tên đám cưới")}{field("Lời dẫn", "subtitle", "Lời mời ngắn")}{field("Nhãn nút chính", "ctaLabel", "Ví dụ: Xem lịch trình")}{field("Dòng nhấn", "eyebrow", "")}
           <ImageField label="Ảnh bìa" value={String(content.imageUrl ?? "")} placeholder="Dán liên kết ảnh hoặc tải từ thiết bị" error={contentError("imageUrl")} onChange={value => onContent("imageUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} />
         </>}
-        {section.type === "couple" && <>{field("Giới thiệu", "intro", "", true)}{(["groom", "bride"] as const).map((personKey, index) => { const person = record(content[personKey]); return <fieldset key={personKey} className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold text-muted-foreground">{index === 0 ? "Chú rể" : "Cô dâu"}</legend><Field label="Tên hiển thị" value={String(person.displayName ?? person.fullName ?? "")} error={contentError(personKey, "displayName")} onChange={value => onNested(personKey, "displayName", value)} /><Field label="Giới thiệu" value={String(person.bio ?? "")} multiline error={contentError(personKey, "bio")} onChange={value => onNested(personKey, "bio", value)} /><ImageField label="Ảnh chân dung" value={String(person.photoUrl ?? "")} error={contentError(personKey, "photoUrl")} onChange={value => onNested(personKey, "photoUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} /></fieldset>; })}</>}
+        {section.type === "couple" && <>{field("Giới thiệu", "intro", "", true)}{(["groom", "bride"] as const).map((personKey, index) => { const person = record(content[personKey]); return <fieldset key={personKey} className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold text-muted-foreground">{index === 0 ? "Chú rể" : "Cô dâu"}</legend><Field label="Tên hiển thị" value={String(person.displayName ?? person.fullName ?? "")} error={contentError(personKey, "displayName")} onChange={value => onNested(personKey, "displayName", value)} /><Field label="Giới thiệu" value={String(person.bio ?? "")} multiline error={contentError(personKey, "bio")} onChange={value => onNested(personKey, "bio", value)} /><Field label="Tên cha" value={String(person.fatherName ?? "")} error={contentError(personKey, "fatherName")} onChange={value => onNested(personKey, "fatherName", value)} /><Field label="Tên mẹ" value={String(person.motherName ?? "")} error={contentError(personKey, "motherName")} onChange={value => onNested(personKey, "motherName", value)} /><ImageField label="Ảnh chân dung" value={String(person.photoUrl ?? "")} error={contentError(personKey, "photoUrl")} onChange={value => onNested(personKey, "photoUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} /></fieldset>; })}</>}
         {section.type === "countdown" && <>{field("Tiêu đề", "title")}<DateTimeField label="Ngày giờ mục tiêu" value={String(content.targetDate ?? "")} timeZone={setup.timeZoneId} error={contentError("targetDate")} onChange={value => onContent("targetDate", value)} /></>}
         {section.type === "loveStory" && <>{field("Giới thiệu", "intro", "", true)}<div className="space-y-3">{list("items").map((item, index) => <fieldset key={String(item.id)} className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between"><span className="text-sm font-semibold">Dấu mốc {index + 1} / {list("items").length}</span><button type="button" className="min-h-10 rounded-lg px-2 text-sm text-destructive hover:bg-destructive/5" onClick={() => onContent("items", list("items").filter((_, i) => i !== index))}>Xóa</button></div><Field label="Tiêu đề" value={String(item.title ?? "")} error={contentError("items", index, "title")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, title: value } : entry))} /><Field label="Ngày hoặc dấu mốc" value={String(item.date ?? "")} error={contentError("items", index, "date")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, date: value } : entry))} /><Field label="Mô tả" value={String(item.body ?? "")} multiline error={contentError("items", index, "body")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, body: value } : entry))} /><ImageField label="Ảnh dấu mốc" value={String(item.imageUrl ?? "")} error={contentError("items", index, "imageUrl")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, imageUrl: value } : entry))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("items", moveItem(list("items"), index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === list("items").length - 1} onClick={() => onContent("items", moveItem(list("items"), index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></fieldset>)}<Button type="button" size="sm" variant="outline" disabled={list("items").length >= 20} onClick={() => onContent("items", [...list("items"), { id: id(), title: "", date: "", body: "" }])}><Plus className="mr-1 size-3.5" />{list("items").length >= 20 ? "Đã đạt tối đa 20 dấu mốc" : "Thêm dấu mốc"}</Button></div></>}
         {section.type === "gallery" && <>{field("Giới thiệu album", "intro", "", true)}<div className="space-y-3">{list("images").map((image, index) => <fieldset key={String(image.id)} className="rounded-xl border border-border p-3"><div className="mb-3 flex items-center justify-between"><span className="text-sm font-semibold">Ảnh {index + 1} / {list("images").length}</span><button type="button" className="grid size-9 place-items-center rounded-lg text-destructive hover:bg-destructive/5" aria-label={`Xóa ảnh ${index + 1}`} onClick={() => onContent("images", list("images").filter((_, i) => i !== index))}><Trash2 className="size-4" /></button></div><ImageField label="Ảnh album" value={String(image.imageUrl ?? "")} error={contentError("images", index, "imageUrl")} onChange={value => onContent("images", list("images").map((entry, i) => i === index ? { ...entry, imageUrl: value } : entry))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><Field label="Mô tả ảnh (văn bản thay thế)" value={String(image.alt ?? "")} placeholder="Mô tả ngắn nội dung ảnh" error={contentError("images", index, "alt")} onChange={value => onContent("images", list("images").map((entry, i) => i === index ? { ...entry, alt: value } : entry))} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("images", moveItem(list("images"), index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === list("images").length - 1} onClick={() => onContent("images", moveItem(list("images"), index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></fieldset>)}{list("images").length < 30 && <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted ${batchUploading ? "pointer-events-none opacity-60" : ""}`}><Upload className="size-4" />{batchUploading ? "Đang tải album…" : "Chọn ảnh cho album"}<input type="file" multiple disabled={batchUploading} accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void uploadGalleryBatch(files); }} /></label>}{list("images").length >= 30 && <p className="text-xs text-muted-foreground">Album đã đạt giới hạn 30 ảnh.</p>}{batchStatus && <p aria-live="polite" role="status" className="text-xs text-muted-foreground">{batchStatus}</p>}</div></>}
-        {section.type === "events" && <><Field label="Giới thiệu" value={String(content.intro ?? "")} multiline error={contentError("intro")} onChange={value => onContent("intro", value)} /><div className="space-y-3">{list("events").map((event, index) => <fieldset key={String(event.id)} className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between"><span className="text-sm font-semibold">Sự kiện {index + 1} / {list("events").length}</span><button type="button" className="min-h-10 rounded-lg px-2 text-sm text-destructive hover:bg-destructive/5" onClick={() => onContent("events", list("events").filter((_, i) => i !== index))}>Xóa</button></div><Field label="Tên sự kiện" value={String(event.title ?? "")} placeholder="Lễ cưới" error={contentError("events", index, "title")} onChange={value => onContent("events", list("events").map((entry, i) => i === index ? { ...entry, title: value } : entry))} /><DateTimeField label="Ngày giờ" value={String(event.startsAt ?? "")} timeZone={String(event.timeZoneId ?? setup.timeZoneId ?? "Asia/Ho_Chi_Minh")} error={contentError("events", index, "startsAt")} onChange={value => onContent("events", list("events").map((entry, i) => i === index ? { ...entry, startsAt: value, timeZoneId: String(event.timeZoneId ?? setup.timeZoneId ?? "Asia/Ho_Chi_Minh") } : entry))} /><Field label="Địa điểm" value={String(event.venueName ?? "")} error={contentError("events", index, "venueName")} onChange={value => onContent("events", list("events").map((entry, i) => i === index ? { ...entry, venueName: value } : entry))} /><Field label="Địa chỉ" value={String(event.address ?? "")} error={contentError("events", index, "address")} onChange={value => onContent("events", list("events").map((entry, i) => i === index ? { ...entry, address: value } : entry))} /><Field label="Link bản đồ HTTPS" value={String(event.mapUrl ?? "")} error={contentError("events", index, "mapUrl")} onChange={value => onContent("events", list("events").map((entry, i) => i === index ? { ...entry, mapUrl: value } : entry))} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("events", moveItem(list("events"), index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === list("events").length - 1} onClick={() => onContent("events", moveItem(list("events"), index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></fieldset>)}<Button type="button" size="sm" variant="outline" disabled={list("events").length >= 20} onClick={() => onContent("events", [...list("events"), { id: id(), title: "Sự kiện mới" }])}><Plus className="mr-1 size-3.5" />{list("events").length >= 20 ? "Đã đạt tối đa 20 sự kiện" : "Thêm sự kiện"}</Button></div></>}
+        {section.type === "events" && <><Field label="Giới thiệu" value={String(content.intro ?? "")} multiline error={contentError("intro")} onChange={value => onContent("intro", value)} /><WeddingEventPicker weddingId={weddingId} setup={setup} selectedIds={selectedEventIds} onChange={onEventIds} /><details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Dữ liệu sự kiện cũ của website</summary><p className="mt-2 text-xs leading-5 text-muted-foreground">Các sự kiện đã lưu trực tiếp trong bản V4 cũ vẫn được giữ nguyên. Hãy dùng danh sách phía trên cho sự kiện mới.</p>{list("events").map(event => <p key={String(event.id)} className="mt-2 text-sm">{String(event.title ?? "Sự kiện")}</p>)}</details></>}
+        {section.type === "weddingParty" && <>{field("Giới thiệu", "intro", "", true)}{(["groom", "bride"] as const).map((side, sideIndex) => { const members = list(side); return <fieldset key={side} className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold text-muted-foreground">{sideIndex === 0 ? "Phù rể" : "Phù dâu"}</legend>{members.map((member, index) => <div key={String(member.id)} className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between"><span className="text-sm font-medium">Thành viên {index + 1}</span><button type="button" className="min-h-10 px-2 text-sm text-destructive" onClick={() => onContent(side, members.filter((_, i) => i !== index))}>Xóa</button></div><Field label="Họ tên" value={String(member.name ?? "")} error={contentError(side, index, "name")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, name: value } : item))} /><Field label="Vai trò" value={String(member.role ?? "")} placeholder={side === "groom" ? "Bạn thân chú rể" : "Bạn thân cô dâu"} error={contentError(side, index, "role")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, role: value } : item))} /><Field label="Lời giới thiệu" value={String(member.bio ?? "")} multiline error={contentError(side, index, "bio")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, bio: value } : item))} /><ImageField label="Ảnh thành viên" value={String(member.photoUrl ?? "")} error={contentError(side, index, "photoUrl")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, photoUrl: value } : item))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent(side, moveItem(members, index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === members.length - 1} onClick={() => onContent(side, moveItem(members, index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></div>)}<Button type="button" size="sm" variant="outline" disabled={members.length >= 12} onClick={() => onContent(side, [...members, { id: id(), name: "", role: "" }])}><Plus className="mr-1 size-3.5" />Thêm {sideIndex === 0 ? "phù rể" : "phù dâu"}</Button></fieldset>; })}</>}
         {section.type === "rsvp" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}{field("Nhãn nút", "submitLabel")}</>}
         {section.type === "wishes" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}</>}
         {section.type === "gift" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}<label className="flex min-h-10 items-center justify-between border-t border-border pt-3 text-sm">Hiển thị thông tin mừng cưới<input type="checkbox" checked={gift?.enabled ?? false} onChange={event => onGift({ enabled: event.target.checked })} /></label>{gift?.enabled && (["groomBank", "groomHolder", "groomAccount", "brideBank", "brideHolder", "brideAccount"] as const).map(key => <Field key={key} label={{ groomBank: "Ngân hàng chú rể", groomHolder: "Chủ tài khoản chú rể", groomAccount: "Số tài khoản chú rể", brideBank: "Ngân hàng cô dâu", brideHolder: "Chủ tài khoản cô dâu", brideAccount: "Số tài khoản cô dâu" }[key]} value={gift[key] ?? ""} error={errorAt(["content", "gift", key])} onChange={value => onGift({ [key]: value })} />)}</>}
@@ -1035,6 +1103,13 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
           {availableBindings.some(option => !bindings.some(binding => binding.target === option.target)) && <select className={inputClass} value="" aria-label="Thêm liên kết Wedding Setup" onChange={event => { if (event.target.value) onBinding(event.target.value, "dynamic"); }}><option value="">+ Thêm dữ liệu từ Wedding Setup</option>{availableBindings.filter(option => !bindings.some(binding => binding.target === option.target)).map(option => <option key={option.target} value={option.target}>{option.label}</option>)}</select>}
         </fieldset>}
       </> : <>
+        <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Hiệu ứng toàn website
+          <select className={inputClass} value={appearance.motion ?? "template"} onChange={event => onAppearance({ motion: event.target.value as "template" | "off" })}>
+            <option value="template">Theo hiệu ứng của mẫu và từng phần</option>
+            <option value="off">Tắt toàn bộ hiệu ứng</option>
+          </select>
+          <span className="text-[11px] font-normal leading-5">Hiệu ứng luôn được tắt nếu thiết bị yêu cầu giảm chuyển động.</span>
+        </label>
         {template && <>
           <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Bảng màu
             <select className={inputClass} value={paletteId} onChange={event => onAppearance({ paletteId: event.target.value })}>{template.config.palettes.map(palette => <option key={palette.id} value={palette.id}>{palette.label}</option>)}</select>
@@ -1053,8 +1128,8 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
           <select className={inputClass} value={section.style?.background ?? "default"} onChange={event => onSection({ style: { ...section.style, background: event.target.value as "default" | "soft" | "accent" } })}><option value="default">Mặc định</option><option value="soft">Nền dịu</option><option value="accent">Nền nhấn</option></select>
         </label>
         <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Chuyển động
-          <select className={inputClass} value={section.style?.animation ?? "none"} onChange={event => onSection({ style: { ...section.style, animation: event.target.value as "none" | "fade" } })}><option value="none">Không chuyển động</option><option value="fade">Hiện nhẹ khi tải trang</option></select>
-          <span className="text-[11px] font-normal leading-5">Tự tắt hiệu ứng khi thiết bị bật giảm chuyển động.</span>
+          <select className={inputClass} value={section.style?.animation ?? "none"} onChange={event => onSection({ style: { ...section.style, animation: event.target.value as "none" | "fade" | "rise" | "stagger" } })}><option value="none">Không dùng</option><option value="fade">Mờ dần khi cuộn đến</option><option value="rise">Mờ dần và trượt nhẹ</option><option value="stagger">Nội dung hiện lần lượt</option></select>
+          <span className="text-[11px] font-normal leading-5">Tự tắt nếu chủ website chọn tắt hiệu ứng hoặc thiết bị bật giảm chuyển động.</span>
         </label>
       </>}
       <div className="flex gap-2 border-t border-border pt-4"><Button type="button" size="sm" variant="outline" onClick={onDuplicate} disabled={section.type === "hero"}><Copy className="mr-1.5 size-3.5" />Nhân bản</Button><Button type="button" size="sm" variant="outline" className="text-destructive" onClick={onDelete} disabled={section.type === "hero" && page?.sections.length === 1}><Trash2 className="mr-1.5 size-3.5" />Xóa phần</Button></div>
@@ -1062,8 +1137,55 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
   </div>;
 }
 
-const variantOptions: Record<SectionType, string[]> = { hero: ["floral", "dark", "split", "editorial", "ceremonial"], couple: ["alternating", "two-columns", "editorial"], countdown: ["classic", "banner", "inline"], loveStory: ["timeline", "editorial"], events: ["cards", "minimal"], gallery: ["grid", "masonry"], rsvp: ["default"], wishes: ["default"], gift: ["default", "minimal"] };
+const variantOptions: Record<SectionType, string[]> = { hero: ["floral", "dark", "split", "editorial", "ceremonial"], couple: ["alternating", "two-columns", "editorial"], countdown: ["classic", "banner", "inline"], loveStory: ["timeline", "editorial"], events: ["cards", "minimal"], weddingParty: ["classic", "editorial"], gallery: ["grid", "masonry"], rsvp: ["default"], wishes: ["default"], gift: ["default", "minimal"] };
 const variantNames: Record<string, string> = { floral: "Hoa nhẹ nhàng", dark: "Nền trầm", split: "Chia đôi", editorial: "Biên tập", ceremonial: "Trang trọng", alternating: "Xen kẽ", "two-columns": "Hai cột", classic: "Cổ điển", banner: "Dải ngang", inline: "Ngang gọn", timeline: "Dòng thời gian", cards: "Thẻ sự kiện", minimal: "Tối giản", grid: "Lưới", masonry: "So le", default: "Mặc định" };
+
+function WeddingEventPicker({ weddingId, setup, selectedIds, onChange }: { weddingId: string; setup: WeddingSetup; selectedIds: string[]; onChange: (ids: string[]) => void }) {
+  const { api } = useRuntime(); const cache = useQueryClient(); const checkboxPrefix = useId();
+  const events = useQuery({ queryKey: ["wedding-events", weddingId], queryFn: () => listWeddingEvents(api, weddingId), staleTime: 30_000 });
+  const [editingId, setEditingId] = useState<string | null>(null); const [formOpen, setFormOpen] = useState(false);
+  const [title, setTitle] = useState(""); const [description, setDescription] = useState(""); const [startsAt, setStartsAt] = useState("");
+  const [venueName, setVenueName] = useState(""); const [address, setAddress] = useState(""); const [mapUrl, setMapUrl] = useState("");
+  const [busy, setBusy] = useState(false); const [message, setMessage] = useState("");
+  const main: WeddingEvent = { id: "main", title: "Lễ cưới chính", startsAt: setup.eventDateTime, timeZoneId: setup.timeZoneId, venueName: setup.venueName, address: setup.venueAddress, sortOrder: 0 };
+  const rows = [main, ...(events.data ?? [])];
+  const resetForm = () => { setEditingId(null); setTitle(""); setDescription(""); setStartsAt(""); setVenueName(""); setAddress(""); setMapUrl(""); setFormOpen(false); };
+  const beginEdit = (item: WeddingEvent) => { setEditingId(item.id); setTitle(item.title); setDescription(item.description ?? ""); setStartsAt(item.startsAt ?? ""); setVenueName(item.venueName ?? ""); setAddress(item.address ?? ""); setMapUrl(item.mapUrl ?? ""); setFormOpen(true); setMessage(""); };
+  const toggle = (eventId: string, checked: boolean) => onChange(checked ? [...new Set([...selectedIds, eventId])] : selectedIds.filter(item => item !== eventId));
+  async function saveEvent() {
+    if (busy) return;
+    setMessage(""); setBusy(true);
+    const input: WeddingEventInput = { title, description: description || null, startsAt: startsAt || null, endsAt: null,
+      timeZoneId: setup.timeZoneId || "Asia/Ho_Chi_Minh", venueName: venueName || null, address: address || null,
+      mapUrl: mapUrl || null, sortOrder: (events.data?.length ?? 0) + 1 };
+    try {
+      const saved = editingId ? await updateWeddingEvent(api, weddingId, editingId, input) : await createWeddingEvent(api, weddingId, input);
+      await cache.invalidateQueries({ queryKey: ["wedding-events", weddingId] });
+      if (!editingId) onChange([...new Set([...selectedIds, saved.id])]);
+      resetForm();
+    } catch (error) { setMessage(errText(error)); }
+    finally { setBusy(false); }
+  }
+  async function removeEvent(item: WeddingEvent) {
+    if (item.id === "main" || !window.confirm(`Xóa sự kiện “${item.title}”?`)) return;
+    setMessage(""); setBusy(true);
+    try { await deleteWeddingEvent(api, weddingId, item.id); onChange(selectedIds.filter(id => id !== item.id)); await cache.invalidateQueries({ queryKey: ["wedding-events", weddingId] }); }
+    catch (error) { setMessage(errText(error)); }
+    finally { setBusy(false); }
+  }
+  return <div className="space-y-3 rounded-xl border border-border p-3">
+    <div><p className="text-sm font-medium">Chọn lịch trình hiển thị</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Ngày và địa điểm chính được đồng bộ từ Wedding Setup. Bạn có thể bổ sung lễ gia tiên, tiệc cưới hoặc buổi gặp mặt.</p></div>
+    {events.isPending && <p className="text-xs text-muted-foreground">Đang tải lịch trình…</p>}
+    {events.isError && <div role="alert" className="rounded-lg bg-destructive/5 p-3 text-xs text-destructive">Không tải được lịch trình. <button type="button" className="underline" onClick={() => void events.refetch()}>Thử lại</button></div>}
+    <div className="space-y-2">{rows.map((item, index) => { const checkboxId = `${checkboxPrefix}-event-${index}`; return <div key={item.id} className="flex items-start gap-3 rounded-lg bg-muted/35 p-3">
+      <input id={checkboxId} type="checkbox" className="mt-1 accent-primary" checked={selectedIds.includes(item.id)} onChange={event => toggle(item.id, event.target.checked)} />
+      <div className="min-w-0 flex-1"><label htmlFor={checkboxId} className="block cursor-pointer text-sm font-medium">{item.title}{item.id === "main" ? " · Wedding Setup" : ""}</label><span className="mt-1 block text-xs leading-5 text-muted-foreground">{[item.startsAt ? new Date(item.startsAt).toLocaleString("vi-VN") : "", item.venueName, item.address].filter(Boolean).join(" · ") || "Chưa có ngày hoặc địa điểm"}</span></div>
+      {item.id !== "main" && <span className="flex shrink-0 gap-2"><button type="button" className="text-xs text-primary underline" onClick={() => beginEdit(item)}>Sửa</button><button type="button" className="text-xs text-destructive underline" onClick={() => void removeEvent(item)}>Xóa</button></span>}
+    </div>; })}</div>
+    {!formOpen ? <Button type="button" size="sm" variant="outline" onClick={() => { resetForm(); setFormOpen(true); }}><Plus className="mr-1.5 size-3.5" />Thêm sự kiện</Button> : <fieldset className="space-y-3 border-t border-border pt-3"><legend className="px-1 text-xs font-semibold">{editingId ? "Chỉnh sửa sự kiện" : "Sự kiện mới"}</legend><Field label="Tên sự kiện" value={title} onChange={setTitle} placeholder="Lễ gia tiên, tiệc cưới…" /><Field label="Mô tả" value={description} multiline onChange={setDescription} /><DateTimeField label="Ngày giờ" value={startsAt} timeZone={setup.timeZoneId} onChange={value => setStartsAt(value ?? "")} /><Field label="Địa điểm" value={venueName} onChange={setVenueName} /><Field label="Địa chỉ" value={address} onChange={setAddress} /><Field label="Link bản đồ HTTPS" value={mapUrl} onChange={setMapUrl} /><div className="flex gap-2"><Button type="button" size="sm" disabled={busy || !title.trim()} onClick={() => void saveEvent()}>{busy ? "Đang lưu…" : "Lưu sự kiện"}</Button><Button type="button" size="sm" variant="outline" disabled={busy} onClick={resetForm}>Hủy</Button></div></fieldset>}
+    {message && <p role="alert" className="text-xs text-destructive">{message}</p>}
+  </div>;
+}
 function setupBindingValue(target: string, setup: WeddingSetup) {
   switch (target) {
     case "heroImageUrl": return setup.coverImageUrl || "";

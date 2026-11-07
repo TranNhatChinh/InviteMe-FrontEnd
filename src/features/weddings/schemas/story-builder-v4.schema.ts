@@ -43,13 +43,17 @@ const personSchema = z.object({
   social: z.object({ facebook: socialUrlSchema.optional(), instagram: socialUrlSchema.optional() }).strict().optional(),
 }).strict();
 const eventSchema = z.object({
-  id: z.string().min(1).max(100), title: z.string().min(1).max(150), startsAt: z.iso.datetime({ offset: true }).optional(),
+  id: z.string().min(1).max(100), title: z.string().min(1).max(150), description: z.string().max(1000).optional(), startsAt: z.iso.datetime({ offset: true }).optional(), endsAt: z.iso.datetime({ offset: true }).optional(), sortOrder: z.number().int().min(0).optional(),
   timeZoneId: z.string().max(100).optional(), venueName: z.string().max(150).optional(),
   address: z.string().max(300).optional(), mapUrl: httpsUrlSchema.optional(),
 }).strict();
 const storyItemSchema = z.object({
   id: z.string().min(1).max(100), title: z.string().min(1).max(150), date: z.string().max(50).optional(),
   body: z.string().max(3000).optional(), imageUrl: imageUrlSchema.optional(),
+}).strict();
+const weddingPartyMemberSchema = z.object({
+  id: z.string().min(1).max(100), name: z.string().min(1).max(100), role: z.string().max(100).optional(),
+  bio: z.string().max(1000).optional(), photoUrl: imageUrlSchema.optional(),
 }).strict();
 
 const storyTemplateConfigSectionSchema = z.object({
@@ -58,7 +62,7 @@ const storyTemplateConfigSectionSchema = z.object({
   style: z.object({
     background: z.enum(["default", "soft", "accent"]).optional(),
     spacing: z.enum(["compact", "normal", "spacious"]).optional(),
-    animation: z.enum(["none", "fade"]).optional(),
+    animation: z.enum(["none", "fade", "rise", "stagger"]).optional(),
   }).strict().nullable().optional(),
   defaultContent: z.object({
     title: z.string().max(150).optional(),
@@ -103,14 +107,15 @@ export const storyTemplateSummarySchema = z.object({
 const sectionCommon = {
   id: z.string().min(1).max(100), visible: z.boolean().optional(), title: z.string().max(150).optional(),
   intro: z.string().max(1000).optional(), navigationLabel: z.string().max(100).optional(),
-  style: z.object({ background: z.enum(["default", "soft", "accent"]).optional(), spacing: z.enum(["compact", "normal", "spacious"]).optional(), animation: z.enum(["none", "fade"]).optional() }).strict().optional(),
+  style: z.object({ background: z.enum(["default", "soft", "accent"]).optional(), spacing: z.enum(["compact", "normal", "spacious"]).optional(), animation: z.enum(["none", "fade", "rise", "stagger"]).optional() }).strict().optional(),
   bindings: z.array(z.object({ target: z.string().min(1).max(100), source: z.string().min(1).max(100), mode: z.enum(["dynamic", "manual", "static"]).optional() }).strict()).max(4).optional(),
 };
-const heroContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), eyebrow: z.string().max(120).optional(), subtitle: z.string().max(500).optional(), imageUrl: imageUrlSchema.optional(), slides: z.array(imageItemSchema).max(3).optional() }).strict();
+const heroContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), eyebrow: z.string().max(120).optional(), subtitle: z.string().max(500).optional(), ctaLabel: z.string().max(60).optional(), imageUrl: imageUrlSchema.optional(), slides: z.array(imageItemSchema).max(3).optional() }).strict();
 const coupleContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(1000).optional(), groom: personSchema.optional(), bride: personSchema.optional() }).strict();
 const countdownContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), targetDate: z.iso.datetime({ offset: true }).optional(), targetEventId: z.string().max(100).optional() }).strict();
 const loveStoryContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), items: z.array(storyItemSchema).max(20).optional() }).strict();
-const eventsContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), events: z.array(eventSchema).max(20).optional() }).strict();
+const eventsContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), events: z.array(eventSchema).max(20).optional(), eventIds: z.array(z.string().min(1).max(100)).max(20).optional() }).strict();
+const weddingPartyContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), groom: z.array(weddingPartyMemberSchema).max(12).optional(), bride: z.array(weddingPartyMemberSchema).max(12).optional() }).strict();
 const galleryContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), images: z.array(imageItemSchema).max(30).optional() }).strict();
 const rsvpContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), submitLabel: z.string().max(60).optional() }).strict();
 const simpleContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional() }).strict();
@@ -121,6 +126,7 @@ const variants = {
   countdown: ["classic", "banner", "inline"],
   loveStory: ["timeline", "editorial"],
   events: ["cards", "minimal"],
+  weddingParty: ["classic", "editorial"],
   gallery: ["grid", "masonry"],
   rsvp: ["default"], wishes: ["default"], gift: ["default", "minimal"],
 } as const;
@@ -131,6 +137,7 @@ export const storyBuilderV4SectionSchema = z.discriminatedUnion("type", [
   makeSection("hero", variants.hero, heroContent), makeSection("couple", variants.couple, coupleContent),
   makeSection("countdown", variants.countdown, countdownContent), makeSection("loveStory", variants.loveStory, loveStoryContent),
   makeSection("events", variants.events, eventsContent), makeSection("gallery", variants.gallery, galleryContent),
+  makeSection("weddingParty", variants.weddingParty, weddingPartyContent),
   makeSection("rsvp", variants.rsvp, rsvpContent), makeSection("wishes", variants.wishes, simpleContent),
   makeSection("gift", variants.gift, simpleContent),
 ]);

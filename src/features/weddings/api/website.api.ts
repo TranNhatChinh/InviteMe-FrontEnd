@@ -79,6 +79,22 @@ export const storyWishSchema = z.object({
   message: z.string(),
   createdAt: z.string(),
 });
+export const weddingEventSchema = z.object({
+  id: z.string(), title: z.string(), description: z.string().nullable().optional(), startsAt: z.string().nullable().optional(),
+  endsAt: z.string().nullable().optional(), timeZoneId: z.string(), venueName: z.string().nullable().optional(),
+  address: z.string().nullable().optional(), mapUrl: z.string().nullable().optional(), sortOrder: z.number().int(),
+}).strict();
+export type WeddingEvent = z.infer<typeof weddingEventSchema>;
+export type WeddingEventInput = Omit<WeddingEvent, "id">;
+const weddingEventsPath = (id: string) => `/weddings/${encodeURIComponent(id)}/events`;
+export const listWeddingEvents = (api: ApiClient, id: string) =>
+  api.request(weddingEventsPath(id), { schema: z.array(weddingEventSchema) });
+export const createWeddingEvent = (api: ApiClient, id: string, input: WeddingEventInput) =>
+  api.request(weddingEventsPath(id), { method: "POST", body: input, schema: weddingEventSchema });
+export const updateWeddingEvent = (api: ApiClient, id: string, eventId: string, input: WeddingEventInput) =>
+  api.request(`${weddingEventsPath(id)}/${encodeURIComponent(eventId)}`, { method: "PUT", body: input, schema: weddingEventSchema });
+export const deleteWeddingEvent = (api: ApiClient, id: string, eventId: string) =>
+  api.request(`${weddingEventsPath(id)}/${encodeURIComponent(eventId)}`, { method: "DELETE", schema: z.undefined() });
 export { storyTemplateSummarySchema };
 export type PublicStoryTemplate = z.infer<typeof storyTemplateSummarySchema>;
 export const listStoryTemplates = (api: ApiClient) =>

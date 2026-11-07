@@ -17,9 +17,11 @@ const templateSectionSchema = z.object({
   type: z.string(),
   variant: z.string(),
   style: z.object({
-    background: z.enum(["default", "soft", "accent"]).optional(),
-    spacing: z.enum(["compact", "normal", "spacious"]).optional(),
-    animation: z.enum(["none", "fade"]).optional(),
+    // StorySectionStyle's backend fields are nullable. Treat null as "use the default"
+    // so existing database snapshots still load in the Admin editor.
+    background: z.enum(["default", "soft", "accent"]).nullish().transform((value) => value ?? undefined),
+    spacing: z.enum(["compact", "normal", "spacious"]).nullish().transform((value) => value ?? undefined),
+    animation: z.enum(["none", "fade", "rise", "stagger"]).nullish().transform((value) => value ?? undefined),
   }).strict().nullable().optional(),
   defaultContent: templateDefaultContentSchema.nullable().optional(),
 }).strict().superRefine((section, context) => {
@@ -103,6 +105,11 @@ export const storyTemplateAdminApi = {
         schema: adminStoryTemplateSchema,
       },
     ),
+  delete: (api: ApiClient, id: string, expectedVersion: number) =>
+    api.request(`/admin/story-templates/${encodeURIComponent(id)}?expectedVersion=${expectedVersion}`, {
+      method: "DELETE",
+      schema: z.undefined(),
+    }),
 };
 
 export const storyTemplateMetaApi = {

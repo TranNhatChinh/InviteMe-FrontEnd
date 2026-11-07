@@ -38,11 +38,42 @@ function templateFamily(document: StoryBuilderV4Document) {
   return /^[a-z0-9-]{1,80}$/.test(category) ? category : "classic";
 }
 
+function defaultRevealEffect(family: string, sectionType: string): "fade" | "rise" | "stagger" {
+  if (["garden", "outdoor", "autumn"].includes(family) && ["gallery", "events", "weddingParty", "loveStory"].includes(sectionType)) return "stagger";
+  if (["editorial", "minimal"].includes(family)) return "fade";
+  if (["traditional", "royal"].includes(family)) return sectionType === "gallery" ? "stagger" : "rise";
+  return "rise";
+}
+
 function dateLabel(value: string, locale = "vi-VN", timeZone?: string) {
   if (!value) return "";
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return value;
   return new Intl.DateTimeFormat(locale, { dateStyle: "long", timeStyle: value.includes("T") ? "short" : undefined, timeZone }).format(date);
+}
+
+function calendarLinks(event: Record<string, unknown>) {
+  const start = Date.parse(text(event.startsAt));
+  if (!Number.isFinite(start)) return null;
+  const endValue = Date.parse(text(event.endsAt));
+  const end = Number.isFinite(endValue) && endValue > start ? endValue : start + 60 * 60 * 1000;
+  const stamp = (value: number) => new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const title = text(event.title) || "Ngày vui";
+  const location = [text(event.venueName), text(event.address)].filter(Boolean).join(", ");
+  const details = text(event.description);
+  const google = new URL("https://calendar.google.com/calendar/render");
+  google.searchParams.set("action", "TEMPLATE");
+  google.searchParams.set("text", title);
+  google.searchParams.set("dates", `${stamp(start)}/${stamp(end)}`);
+  if (location) google.searchParams.set("location", location);
+  if (details) google.searchParams.set("details", details);
+  const escapeIcs = (value: string) => value.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+  const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//InviteMe//Wedding Event//VI", "BEGIN:VEVENT",
+    `UID:${encodeURIComponent(text(event.id) || `${start}`)}@inviteme.asia`, `DTSTAMP:${stamp(Date.now())}`,
+    `DTSTART:${stamp(start)}`, `DTEND:${stamp(end)}`, `SUMMARY:${escapeIcs(title)}`,
+    ...(location ? [`LOCATION:${escapeIcs(location)}`] : []), ...(details ? [`DESCRIPTION:${escapeIcs(details)}`] : []),
+    "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  return { google: google.toString(), ics: `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}` };
 }
 
 function Countdown({ target, variant }: { target: string; variant: string }) {
@@ -84,6 +115,8 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
 }) {
   const content = record(section.content);
   const hidden = section.visible === false;
+  const configuredEffect = section.style?.animation;
+  const revealEffect = configuredEffect === "none" ? undefined : configuredEffect ?? defaultRevealEffect(family, section.type);
   const classes = `story-section story-section--${section.type} relative mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24 ${hidden ? "opacity-45" : ""}`;
   const title = text(content.title || section.title);
   const intro = text(content.intro || section.intro);
@@ -97,9 +130,9 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
         {text(content.eyebrow) && <p className="mb-5 text-xs uppercase tracking-[0.24em] opacity-75">{text(content.eyebrow)}</p>}
         <InlineText tag="h1" editable={editable} value={text(content.title) || "Ngày vui của chúng mình"} onSave={value => onInlineEdit?.(section.id, "title", value)} className="font-serif text-4xl leading-[1.06] sm:text-6xl" style={{ fontFamily: "var(--site-heading)" }} />
         {text(content.subtitle) && <InlineText tag="p" editable={editable} value={text(content.subtitle)} onSave={value => onInlineEdit?.(section.id, "subtitle", value)} className="mt-5 max-w-2xl text-base leading-7 opacity-80 sm:text-lg" />}
-        {slug && ctaTarget && <a href={`#${ctaTarget}`} className="mt-8 inline-flex min-h-11 items-center rounded-full bg-[var(--site-text)] px-6 text-sm font-medium text-[var(--site-background)] transition hover:opacity-85">{ctaLabel ?? "Xem ngày vui"}</a>}
+        {ctaTarget && <a href={`#${ctaTarget}`} className="mt-8 inline-flex min-h-11 items-center rounded-full bg-[var(--site-text)] px-6 text-sm font-medium text-[var(--site-background)] transition hover:opacity-85">{text(content.ctaLabel) || ctaLabel || "Xem ngày vui"}</a>}
       </div>;
-      const image = imageUrl ? <img src={imageUrl} alt="Ảnh bìa đám cưới" className="story-hero__image size-full object-cover" /> : <div aria-hidden="true" className="story-hero__image grid size-full min-h-64 place-items-center bg-[var(--site-primary)]/30"><span className="size-24 rounded-full border border-[var(--site-accent)]/40" /></div>;
+      const image = imageUrl ? <img src={imageUrl} alt="Ảnh bìa đám cưới" decoding="async" className="story-hero__image size-full object-cover" /> : <div aria-hidden="true" className="story-hero__image grid size-full min-h-64 place-items-center bg-[var(--site-primary)]/30"><span className="size-24 rounded-full border border-[var(--site-accent)]/40" /></div>;
       if (section.variant === "split") {
         body = family === "outdoor"
           ? <div className="story-hero story-hero--coastal overflow-hidden border border-[var(--site-rule)] bg-[var(--site-background)]">
@@ -158,11 +191,12 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
       const couple = ([{ key: "groom", person: groom }, { key: "bride", person: bride }] as const).filter(({ person }) => text(person.displayName || person.fullName));
       body = <div className={`story-couple story-couple--${section.variant} relative grid gap-7 ${section.variant === "editorial" ? "md:grid-cols-[0.82fr_1.18fr] md:gap-12" : "sm:grid-cols-2 sm:gap-10"}`}>
         {couple.map(({ key, person }, index) => <article key={key} className={`story-couple__person flex flex-col ${section.variant === "alternating" && index === 1 ? "sm:mt-16" : ""} ${section.variant === "two-columns" ? "items-center rounded-2xl bg-[var(--site-primary)]/15 px-5 pb-6 text-center sm:px-7" : section.variant === "editorial" ? "grid grid-cols-1 items-center gap-5 sm:grid-cols-[0.8fr_1fr]" : ""}`}>
-          {text(person.photoUrl) && <img className={`story-couple__image w-full object-cover ${section.variant === "two-columns" ? "-mt-2 aspect-[4/5] rounded-xl sm:mt-0 sm:aspect-[5/4]" : section.variant === "editorial" ? "aspect-[4/5]" : "aspect-[4/5] rounded-[22px]"}`} src={text(person.photoUrl)} alt={text(person.displayName || person.fullName)} />}
+          {text(person.photoUrl) && <img loading="lazy" decoding="async" className={`story-couple__image w-full object-cover ${section.variant === "two-columns" ? "-mt-2 aspect-[4/5] rounded-xl sm:mt-0 sm:aspect-[5/4]" : section.variant === "editorial" ? "aspect-[4/5]" : "aspect-[4/5] rounded-[22px]"}`} src={text(person.photoUrl)} alt={text(person.displayName || person.fullName)} />}
           <div className={section.variant === "two-columns" ? "pt-5" : ""}>
             <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--site-accent)]">{key === "groom" ? "Chú rể" : "Cô dâu"}</p>
             <InlineText tag="h3" editable={editable} value={text(person.displayName || person.fullName)} onSave={value => onInlineEdit?.(section.id, key, { ...person, displayName: value })} className="mt-2 font-serif text-3xl sm:text-4xl" style={{ fontFamily: "var(--site-heading)" }} />
             {text(person.bio) && <p className="mt-3 max-w-prose whitespace-pre-line leading-7 opacity-80">{text(person.bio)}</p>}
+            {(text(person.fatherName) || text(person.motherName)) && <p className="mt-3 text-sm leading-6 opacity-70">{text(person.fatherName) && <>Cha: {text(person.fatherName)}</>}{text(person.fatherName) && text(person.motherName) ? " · " : ""}{text(person.motherName) && <>Mẹ: {text(person.motherName)}</>}</p>}
           </div>
         </article>)}
         {section.variant === "two-columns" && <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 font-serif text-3xl text-[var(--site-accent)] sm:block">&</span>}
@@ -180,7 +214,7 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
         {section.variant === "timeline" && <span aria-hidden="true" className="absolute bottom-4 left-[7px] top-2 w-px bg-[var(--site-accent)]/35 sm:left-[11px]" />}
         {array(content.items).map((item, index) => <li key={text(item.id) || index} className={section.variant === "editorial" ? "overflow-hidden border-t border-[var(--site-rule)] pt-5" : "relative grid gap-4 border-t border-[var(--site-rule)] py-5 sm:grid-cols-[120px_1fr]"}>
           {section.variant === "timeline" && <span aria-hidden="true" className="absolute -left-[25px] top-7 size-3 rounded-full border-2 border-[var(--site-background)] bg-[var(--site-accent)] sm:-left-[35px]" />}
-          {text(item.imageUrl) && <img src={text(item.imageUrl)} alt={text(item.title)} className={`w-full object-cover ${section.variant === "editorial" ? "mb-5 aspect-[4/3]" : "aspect-square max-h-56 rounded-xl sm:max-h-none"}`} />}
+          {text(item.imageUrl) && <img loading="lazy" decoding="async" src={text(item.imageUrl)} alt={text(item.title)} className={`w-full object-cover ${section.variant === "editorial" ? "mb-5 aspect-[4/3]" : "aspect-square max-h-56 rounded-xl sm:max-h-none"}`} />}
           <div className={section.variant === "editorial" ? "pb-4" : ""}><p className="text-xs uppercase tracking-[0.16em] text-[var(--site-accent)]">{text(item.date) || String(index + 1).padStart(2, "0")}</p><InlineText tag="h3" editable={editable} value={text(item.title)} onSave={value => onInlineEdit?.(section.id, "items", array(content.items).map((entry, itemIndex) => itemIndex === index ? { ...entry, title: value } : entry))} className={`mt-2 font-serif ${section.variant === "editorial" ? "text-3xl sm:text-4xl" : "text-2xl"}`} style={{ fontFamily: "var(--site-heading)" }} /><InlineText tag="p" editable={editable} value={text(item.body)} onSave={value => onInlineEdit?.(section.id, "items", array(content.items).map((entry, itemIndex) => itemIndex === index ? { ...entry, body: value } : entry))} className="mt-3 whitespace-pre-line leading-7 opacity-80" /></div>
         </li>)}
         {!array(content.items).length && <li className="text-sm opacity-65">Thêm những dấu mốc hai bạn muốn chia sẻ.</li>}
@@ -188,19 +222,34 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
       break;
     case "events":
       body = <div className={`story-events story-events--${section.variant} grid gap-5 ${section.variant === "minimal" ? "" : "sm:grid-cols-2"}`}>
-        {array(content.events).map((event, index) => <article key={text(event.id) || index} className={`story-event ${section.variant === "minimal" ? "border-t border-[var(--site-rule)] py-5" : "rounded-2xl border border-[var(--site-rule)] bg-[var(--site-background)]/80 p-5 sm:p-6"}`}>
+        {array(content.events).map((event, index) => { const links = calendarLinks(event); return <article key={text(event.id) || index} className={`story-event ${section.variant === "minimal" ? "border-t border-[var(--site-rule)] py-5" : "rounded-2xl border border-[var(--site-rule)] bg-[var(--site-background)]/80 p-5 sm:p-6"}`}>
           <p className="text-xs uppercase tracking-[0.16em] text-[var(--site-accent)]">{dateLabel(text(event.startsAt), "vi-VN", text(event.timeZoneId) || undefined)}</p>
-          <InlineText tag="h3" editable={editable} value={text(event.title)} onSave={value => onInlineEdit?.(section.id, "events", array(content.events).map((entry, eventIndex) => eventIndex === index ? { ...entry, title: value } : entry))} className="mt-2 font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }} />
+          <InlineText tag="h3" editable={editable && !Array.isArray(content.eventIds)} value={text(event.title)} onSave={value => onInlineEdit?.(section.id, "events", array(content.events).map((entry, eventIndex) => eventIndex === index ? { ...entry, title: value } : entry))} className="mt-2 font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }} />
           {text(event.venueName) && <p className="mt-2 font-medium">{text(event.venueName)}</p>}
           {text(event.address) && <p className="mt-1 opacity-75">{text(event.address)}</p>}
           {text(event.mapUrl).startsWith("https://") && <a className="mt-3 inline-block text-sm text-[var(--site-accent)] underline" href={text(event.mapUrl)} target="_blank" rel="noreferrer">Mở bản đồ</a>}
-        </article>)}
+          {links && <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-[var(--site-rule)] pt-3 text-sm"><a className="text-[var(--site-accent)] underline underline-offset-4" href={links.google} target="_blank" rel="noreferrer">Google Calendar</a><a className="text-[var(--site-accent)] underline underline-offset-4" href={links.ics} download="inviteme-event.ics">Tải lịch (.ics)</a></div>}
+        </article>; })}
         {!array(content.events).length && <p className="text-sm opacity-65">Chưa có thông tin sự kiện.</p>}
+      </div>;
+      break;
+    case "weddingParty":
+      body = <div className={`story-wedding-party grid gap-10 ${section.variant === "editorial" ? "md:grid-cols-2 md:gap-14" : "sm:grid-cols-2"}`}>
+        {([ ["groom", "Phù rể"], ["bride", "Phù dâu"] ] as const).map(([side, label]) => <section key={side} aria-label={label}>
+          <h3 className="mb-5 border-b border-[var(--site-rule)] pb-3 font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }}>{label}</h3>
+          <div className={`grid gap-4 ${section.variant === "editorial" ? "sm:grid-cols-2" : ""}`}>
+            {array(content[side]).map((member, index) => <article key={text(member.id) || index} className={`flex items-center gap-4 ${section.variant === "classic" ? "border-b border-[var(--site-rule)] pb-4" : "flex-col items-start"}`}>
+              {text(member.photoUrl) ? <img loading="lazy" decoding="async" src={text(member.photoUrl)} alt={text(member.name)} className={`shrink-0 object-cover ${section.variant === "editorial" ? "aspect-[4/3] w-full rounded-xl" : "size-16 rounded-full"}`} /> : <span aria-hidden="true" className="grid size-16 shrink-0 place-items-center rounded-full bg-[var(--site-primary)]/25 font-serif text-xl text-[var(--site-accent)]">{text(member.name).slice(0, 1)}</span>}
+              <div><p className="font-medium">{text(member.name) || "Tên thành viên"}</p>{text(member.role) && <p className="mt-1 text-sm text-[var(--site-accent)]">{text(member.role)}</p>}{text(member.bio) && <p className="mt-2 text-sm leading-6 opacity-75">{text(member.bio)}</p>}</div>
+            </article>)}
+            {!array(content[side]).length && <p className="text-sm opacity-65">Chưa thêm thành viên.</p>}
+          </div>
+        </section>)}
       </div>;
       break;
     case "gallery":
       body = <div className={`story-gallery story-gallery--${section.variant} ${section.variant === "masonry" ? "columns-2 gap-3 sm:columns-3 sm:gap-4" : "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4"}`}>
-        {array(content.images).map((image, index) => <img key={text(image.id) || index} src={text(image.imageUrl)} alt={text(image.alt) || `Ảnh cưới ${index + 1}`} className={`story-gallery__image w-full object-cover ${section.variant === "masonry" ? `mb-3 break-inside-avoid sm:mb-4 ${index % 3 === 1 ? "aspect-[4/5]" : "aspect-square"}` : `rounded-xl ${index % 4 === 0 ? "aspect-[4/5]" : "aspect-square"}`}`} />)}
+        {array(content.images).map((image, index) => <img key={text(image.id) || index} loading="lazy" decoding="async" src={text(image.imageUrl)} alt={text(image.alt) || `Ảnh cưới ${index + 1}`} className={`story-gallery__image w-full object-cover ${section.variant === "masonry" ? `mb-3 break-inside-avoid sm:mb-4 ${index % 3 === 1 ? "aspect-[4/5]" : "aspect-square"}` : `rounded-xl ${index % 4 === 0 ? "aspect-[4/5]" : "aspect-square"}`}`} />)}
         {!array(content.images).length && <p className="col-span-full text-sm opacity-65">Thêm ảnh để tạo album cưới.</p>}
       </div>;
       break;
@@ -229,7 +278,7 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
   const spacing = section.style?.spacing === "compact" ? "py-10 sm:py-14" : section.style?.spacing === "spacious" ? "py-24 sm:py-32" : "";
   const surface = section.style?.background === "soft" ? "bg-[var(--site-primary)]/10" : section.style?.background === "accent" ? "bg-[var(--site-accent)]/5" : "";
   const sectionHeaderClass = `story-section__header ${section.variant === "editorial" ? "mx-auto mb-10 max-w-3xl text-center" : "mb-8 max-w-2xl"}`;
-  return <section id={section.id} data-section-type={section.type} data-variant={section.variant} data-section-number={String(sectionIndex + 1).padStart(2, "0")} tabIndex={editable ? 0 : undefined} aria-label={editable ? `${title || section.type}, chọn để chỉnh sửa` : undefined} onClick={editable ? event => { if (event.target instanceof Element && event.target.closest("a, button, input, textarea, select, [contenteditable='true']")) return; onSelectSection?.(section.id); } : undefined} onKeyDown={editable ? event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectSection?.(section.id); } } : undefined} className={`${classes} ${spacing} ${surface} ${section.style?.animation === "fade" ? "story-section--fade" : ""} ${editable ? "cursor-pointer outline-offset-[-1px] hover:outline hover:outline-1 hover:outline-primary/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" : ""} ${editable && selected ? "outline outline-2 outline-primary" : ""}`}>
+  return <section id={section.id} data-section-type={section.type} data-variant={section.variant} data-section-number={String(sectionIndex + 1).padStart(2, "0")} data-reveal-effect={revealEffect} tabIndex={editable ? 0 : undefined} aria-label={editable ? `${title || section.type}, chọn để chỉnh sửa` : undefined} onClick={editable ? event => { if (event.target instanceof Element && event.target.closest("a, button, input, textarea, select, [contenteditable='true']")) return; onSelectSection?.(section.id); } : undefined} onKeyDown={editable ? event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectSection?.(section.id); } } : undefined} className={`${classes} ${spacing} ${surface} ${editable ? "cursor-pointer outline-offset-[-1px] hover:outline hover:outline-1 hover:outline-primary/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" : ""} ${editable && selected ? "outline outline-2 outline-primary" : ""}`}>
     {hidden && <span className="absolute right-5 top-4 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">Đang ẩn</span>}
     {section.type !== "hero" && <header className={sectionHeaderClass}>
       {family === "editorial" && <span className="story-section__number mb-2 block text-xs font-semibold tracking-[0.24em] text-[var(--site-accent)]">{String(sectionIndex + 1).padStart(2, "0")}</span>}
@@ -241,9 +290,39 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
 }
 
 export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = false, editable = false, selectedSectionId, onInlineEdit, onSelectSection, onNavigatePage }: Props) {
+  const motionRoot = useRef<HTMLDivElement>(null);
   const page = useMemo(() => pagePath === undefined ? document.pages.find(item => item.isHome) : document.pages.find(item => item.slug === pagePath), [document.pages, pagePath]);
   const { colors, heading, body } = templateColors(document);
   const family = templateFamily(document);
+  useEffect(() => {
+    const root = motionRoot.current;
+    if (!root || editable || document.appearance.motion === "off" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const targets = Array.from(root.querySelectorAll<HTMLElement>("[data-reveal-effect]"));
+    if (!targets.length) return;
+
+    root.dataset.motionReady = "true";
+    if (!("IntersectionObserver" in window)) {
+      targets.forEach(target => { target.dataset.revealed = "true"; });
+      return () => {
+        delete root.dataset.motionReady;
+        targets.forEach(target => { delete target.dataset.revealed; });
+      };
+    }
+
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        (entry.target as HTMLElement).dataset.revealed = "true";
+        observer.unobserve(entry.target);
+      }
+    }, { threshold: 0.12, rootMargin: "0px 0px -36px 0px" });
+    targets.forEach(target => observer.observe(target));
+    return () => {
+      observer.disconnect();
+      delete root.dataset.motionReady;
+      targets.forEach(target => { delete target.dataset.revealed; });
+    };
+  }, [document.appearance.motion, editable, page]);
   if (!page) return <main className="mx-auto max-w-xl px-6 py-24 text-center"><h1 className="font-serif text-3xl">Không tìm thấy trang</h1><p className="mt-3 opacity-70">Trang này có thể chưa được xuất bản.</p></main>;
   const eventsTarget = page.sections.find(section => section.type === "events" && section.visible !== false)?.id;
   const rsvpTarget = page.sections.find(section => section.type === "rsvp" && section.visible !== false)?.id;
@@ -255,7 +334,7 @@ export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = 
     background: "var(--site-background)", color: "var(--site-text)", fontFamily: "var(--site-body)",
   } as CSSProperties;
   const visiblePages = document.pages.filter(item => item.visible !== false);
-  return <div style={style} data-design-family={family} className="template-canvas min-h-full">
+  return <div ref={motionRoot} style={style} data-design-family={family} data-motion-mode={document.appearance.motion ?? "template"} className="template-canvas min-h-full">
     {visiblePages.length > 1 && <nav aria-label="Các trang website cưới" className="sticky top-0 z-10 flex justify-center gap-4 border-b border-[var(--site-rule)] bg-[var(--site-background)]/95 px-4 py-3 backdrop-blur sm:gap-8">
       {visiblePages.map(item => {
         const href = item.isHome ? `/wedding/${encodeURIComponent(slug ?? "")}` : `/wedding/${encodeURIComponent(slug ?? "")}/${item.slug}`;

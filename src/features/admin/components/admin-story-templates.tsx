@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Eye, Monitor, Plus, Search, Smartphone, Tablet, Upload } from "lucide-react";
+import { Archive, Download, Eye, Monitor, Plus, Search, Smartphone, Tablet, Trash2, Upload } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { PageHeader } from "@/shared/components/page-header";
 import { Button } from "@/shared/ui/button";
@@ -49,9 +49,11 @@ const catalogBundleSchema = z
     });
   });
 
-type CatalogFilter = "all" | "published" | "draft" | "archived";
+type CatalogView = "library" | "archive";
+type ArchiveCategory = "archived" | "draft";
+type CatalogStatus = "published" | "draft" | "archived";
 type PreviewViewport = "desktop" | "tablet" | "mobile";
-type Confirmation = "publish" | "archive" | null;
+type Confirmation = "publish" | "archive" | "delete" | null;
 type PendingImport = { templates: StoryTemplateConfig[]; existingKeys: string[] };
 type TemplateSectionStyle = NonNullable<StoryTemplateConfig["sections"][number]["style"]>;
 
@@ -85,7 +87,7 @@ function createEmptyTemplate(): StoryTemplateConfig {
   };
 }
 
-function statusOf(template: AdminStoryTemplate): Exclude<CatalogFilter, "all"> {
+function statusOf(template: AdminStoryTemplate): CatalogStatus {
   if (template.isArchived) return "archived";
   return template.published ? "published" : "draft";
 }
@@ -152,7 +154,8 @@ export function AdminStoryTemplates() {
   const [selected, setSelected] = useState<AdminStoryTemplate | null>(null);
   const [form, setForm] = useState<StoryTemplateConfig | null>(null);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<CatalogFilter>("all");
+  const [catalogView, setCatalogView] = useState<CatalogView>("library");
+  const [archiveCategory, setArchiveCategory] = useState<ArchiveCategory>("archived");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [viewport, setViewport] = useState<PreviewViewport>("desktop");
   const [previewVersion, setPreviewVersion] = useState<"draft" | "published">("draft");
@@ -161,24 +164,27 @@ export function AdminStoryTemplates() {
   const [message, setMessage] = useState("");
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
 
   const templates = query.data ?? emptyTemplates;
+  const catalogStatus: CatalogStatus = catalogView === "library" ? "published" : archiveCategory;
   const filtered = useMemo(
     () =>
       templates.filter((row) => {
         const haystack = `${row.name} ${row.key} ${row.draft.category ?? ""}`.toLocaleLowerCase();
         return (
           haystack.includes(search.trim().toLocaleLowerCase()) &&
-          (filter === "all" || statusOf(row) === filter)
+          statusOf(row) === catalogStatus
         );
       }),
-    [filter, search, templates],
+    [catalogStatus, search, templates],
   );
   const counts = useMemo(
     () => ({
       published: templates.filter((row) => statusOf(row) === "published").length,
       draft: templates.filter((row) => statusOf(row) === "draft").length,
       archived: templates.filter((row) => statusOf(row) === "archived").length,
+      archive: templates.filter((row) => statusOf(row) !== "published").length,
     }),
     [templates],
   );
@@ -258,12 +264,41 @@ export function AdminStoryTemplates() {
       setPreviewVersion("draft");
       setMessage(success);
       await refresh();
+      return true;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("storyTemplates.actionFailed"));
+      await refresh();
+      return false;
+    } finally {
+      setBusy(false);
+      setConfirmation(null);
+      setDeleteConfirmationText("");
+    }
+  };
+
+  const permanentlyDeleteSelected = async () => {
+    if (!selectedTemplate || deleteConfirmationText.trim() !== selectedTemplate.key) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await storyTemplateAdminApi.delete(api, selectedTemplate.id, selectedTemplate.version);
+      setSelected(null);
+      setForm(null);
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(selectedTemplate.id);
+        return next;
+      });
+      setMessage(t("storyTemplates.deletedMessage"));
+      await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("storyTemplates.actionFailed"));
       await refresh();
     } finally {
       setBusy(false);
       setConfirmation(null);
+      setDeleteConfirmationText("");
     }
   };
 
@@ -430,7 +465,7 @@ export function AdminStoryTemplates() {
         description={t("storyTemplates.description")}
         action={
           canManage ? (
-            <Button onClick={() => edit(null)}>
+            <Button onClick={() => { setCatalogView("archive"); setArchiveCategory("draft"); edit(null); }}>
               <Plus className="mr-2 size-4" />
               {t("storyTemplates.create")}
             </Button>
@@ -450,20 +485,26 @@ export function AdminStoryTemplates() {
       {query.data && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border pb-4">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-semibold tabular-nums text-foreground">{counts.published}</span>{" "}
-              {t("storyTemplates.publishedCount")}
-              <span className="mx-3 text-border">·</span>
-              <span className="font-semibold tabular-nums text-foreground">
-                {counts.draft}
-              </span>{" "}
-              {t("storyTemplates.draftCount")}
-              <span className="mx-3 text-border">·</span>
-              <span className="font-semibold tabular-nums text-foreground">
-                {counts.archived}
-              </span>{" "}
-              {t("storyTemplates.archivedCount")}
-            </p>
+            <div className="inline-flex rounded-lg border border-border bg-muted/30 p-1" role="group" aria-label={t("storyTemplates.areasLabel")}>
+              <Button
+                type="button"
+                aria-pressed={catalogView === "library"}
+                variant={catalogView === "library" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setCatalogView("library")}
+              >
+                {t("storyTemplates.libraryArea")} <span className="tabular-nums opacity-80">{counts.published}</span>
+              </Button>
+              <Button
+                type="button"
+                aria-pressed={catalogView === "archive"}
+                variant={catalogView === "archive" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setCatalogView("archive")}
+              >
+                <Archive /> {t("storyTemplates.archiveArea")} <span className="tabular-nums opacity-80">{counts.archive}</span>
+              </Button>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
@@ -501,11 +542,30 @@ export function AdminStoryTemplates() {
           <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
             <aside className="min-w-0" aria-label={t("storyTemplates.catalogLabel")}>
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold">{t("storyTemplates.catalogLabel")}</h2>
+                <h2 className="text-sm font-semibold">
+                  {catalogView === "library" ? t("storyTemplates.libraryArea") : t("storyTemplates.archiveArea")}
+                </h2>
                 <span className="font-mono text-xs text-muted-foreground">
-                  {filtered.length}/{templates.length}
+                  {filtered.length}/{catalogView === "library" ? counts.published : counts.archive}
                 </span>
               </div>
+              {catalogView === "archive" && (
+                <div className="mt-3 grid grid-cols-2 rounded-lg border border-border bg-muted/30 p-1" role="group" aria-label={t("storyTemplates.archiveCategoriesLabel")}>
+                  {(["archived", "draft"] as const).map((category) => (
+                    <Button
+                      key={category}
+                      type="button"
+                      aria-pressed={archiveCategory === category}
+                      variant={archiveCategory === category ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setArchiveCategory(category)}
+                    >
+                      {t(`storyTemplates.archiveCategories.${category}`)}
+                      <span className="tabular-nums opacity-80">{counts[category]}</span>
+                    </Button>
+                  ))}
+                </div>
+              )}
               <div className="mt-3 grid gap-2">
                 <label className="relative block">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -517,18 +577,6 @@ export function AdminStoryTemplates() {
                     aria-label={t("storyTemplates.search")}
                   />
                 </label>
-                <select
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value as CatalogFilter)}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  aria-label={t("storyTemplates.filter")}
-                >
-                  {(["all", "published", "draft", "archived"] as const).map((value) => (
-                    <option key={value} value={value}>
-                      {t(`storyTemplates.filters.${value}`)}
-                    </option>
-                  ))}
-                </select>
                 <label className="flex min-h-9 items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
@@ -600,7 +648,11 @@ export function AdminStoryTemplates() {
                 })}
                 {filtered.length === 0 && (
                   <p className="py-8 text-center text-sm text-muted-foreground">
-                    {templates.length ? t("storyTemplates.noResults") : t("storyTemplates.empty")}
+                    {search.trim()
+                      ? t("storyTemplates.noResults")
+                      : catalogView === "library"
+                        ? t("storyTemplates.emptyLibrary")
+                        : t(`storyTemplates.emptyArchive.${archiveCategory}`)}
                   </p>
                 )}
               </div>
@@ -902,6 +954,8 @@ export function AdminStoryTemplates() {
                                   >
                                     <option value="none">{t("storyTemplates.sectionAnimations.none")}</option>
                                     <option value="fade">{t("storyTemplates.sectionAnimations.fade")}</option>
+                                    <option value="rise">{t("storyTemplates.sectionAnimations.rise")}</option>
+                                    <option value="stagger">{t("storyTemplates.sectionAnimations.stagger")}</option>
                                   </select>
                                 </label>
                               </div>
@@ -1151,12 +1205,28 @@ export function AdminStoryTemplates() {
                           <Button
                             variant="outline"
                             disabled={busy}
-                            onClick={() => setConfirmation("archive")}
+                            onClick={() => {
+                              setDeleteConfirmationText("");
+                              setConfirmation("archive");
+                            }}
                           >
                             {selectedTemplate.isArchived
                               ? t("storyTemplates.restore")
                               : t("storyTemplates.archive")}
                           </Button>
+                          {catalogView === "archive" && statusOf(selectedTemplate) !== "published" && (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              disabled={busy}
+                              onClick={() => {
+                                setDeleteConfirmationText("");
+                                setConfirmation("delete");
+                              }}
+                            >
+                              <Trash2 /> {t("storyTemplates.deletePermanently")}
+                            </Button>
+                          )}
                         </>
                       )}
                     </div>
@@ -1329,28 +1399,44 @@ export function AdminStoryTemplates() {
                 {t(
                   confirmation === "publish"
                     ? "storyTemplates.confirmPublishTitle"
-                    : selectedTemplate.isArchived
-                      ? "storyTemplates.confirmRestoreTitle"
-                      : "storyTemplates.confirmArchiveTitle",
+                    : confirmation === "delete"
+                      ? "storyTemplates.confirmDeleteTitle"
+                      : selectedTemplate.isArchived
+                        ? "storyTemplates.confirmRestoreTitle"
+                        : "storyTemplates.confirmArchiveTitle",
                 )}
               </h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 {t(
                   confirmation === "publish"
                     ? "storyTemplates.confirmPublish"
-                    : selectedTemplate.isArchived
-                      ? "storyTemplates.confirmRestore"
-                      : "storyTemplates.confirmArchive",
-                  { name: selectedTemplate.name },
+                    : confirmation === "delete"
+                      ? "storyTemplates.confirmDelete"
+                      : selectedTemplate.isArchived
+                        ? "storyTemplates.confirmRestore"
+                        : "storyTemplates.confirmArchive",
+                  { name: selectedTemplate.name, key: selectedTemplate.key },
                 )}
               </p>
             </div>
+            {confirmation === "delete" && (
+              <label className="grid gap-1.5 text-sm">
+                <span>{t("storyTemplates.deleteConfirmationPrompt", { key: selectedTemplate.key })}</span>
+                <Input
+                  value={deleteConfirmationText}
+                  onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                  autoComplete="off"
+                  aria-label={t("storyTemplates.deleteConfirmationPrompt", { key: selectedTemplate.key })}
+                />
+              </label>
+            )}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" disabled={busy} onClick={() => setConfirmation(null)}>
+              <Button variant="outline" disabled={busy} onClick={() => { setConfirmation(null); setDeleteConfirmationText(""); }}>
                 {t("storyTemplates.cancel")}
               </Button>
               <Button
-                disabled={busy}
+                variant={confirmation === "delete" ? "destructive" : "default"}
+                disabled={busy || (confirmation === "delete" && deleteConfirmationText.trim() !== selectedTemplate.key)}
                 onClick={() => {
                   if (confirmation === "publish")
                     void action(
@@ -1362,26 +1448,35 @@ export function AdminStoryTemplates() {
                         ),
                       t("storyTemplates.publishedMessage"),
                     );
-                  else
+                  else if (confirmation === "delete") void permanentlyDeleteSelected();
+                  else {
+                    const archiving = !selectedTemplate.isArchived;
                     void action(
                       () =>
                         storyTemplateAdminApi.archive(
                           api,
                           selectedTemplate.id,
                           selectedTemplate.version,
-                          !selectedTemplate.isArchived,
+                          archiving,
                         ),
                       selectedTemplate.isArchived
                         ? t("storyTemplates.restored")
                         : t("storyTemplates.archivedMessage"),
-                    );
+                    ).then((succeeded) => {
+                      if (!succeeded) return;
+                      setCatalogView(archiving ? "archive" : "library");
+                      if (archiving) setArchiveCategory("archived");
+                    });
+                  }
                 }}
               >
                 {confirmation === "publish"
                   ? t("storyTemplates.publish")
-                  : selectedTemplate.isArchived
-                    ? t("storyTemplates.restore")
-                    : t("storyTemplates.archive")}
+                  : confirmation === "delete"
+                    ? t("storyTemplates.deletePermanently")
+                    : selectedTemplate.isArchived
+                      ? t("storyTemplates.restore")
+                      : t("storyTemplates.archive")}
               </Button>
             </div>
           </section>
