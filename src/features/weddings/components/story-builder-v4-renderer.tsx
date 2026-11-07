@@ -3,15 +3,18 @@
 /* eslint-disable @next/next/no-img-element -- Wedding media is served from the wedding-owned media API. */
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { ArrowUp, Share2 } from "lucide-react";
+import { ArrowUp, CalendarDays, Gift, Heart, MessageCircle, Share2 } from "lucide-react";
 import type { StoryBuilderV4Document, StoryBuilderV4Section } from "../schemas/story-builder-v4.schema";
 import { StoryRsvp } from "./story-rsvp";
 import { StoryWishes } from "./story-wishes";
 import { StoryGalleryLightbox } from "./story-gallery-lightbox";
 
 type InlineEdit = (sectionId: string, key: string, value: unknown) => void;
-type Props = { document: StoryBuilderV4Document; slug?: string; pagePath?: string; showHidden?: boolean; editable?: boolean; selectedSectionId?: string; onInlineEdit?: InlineEdit; onSelectSection?: (sectionId: string) => void; onNavigatePage?: (pagePath: string) => void };
+type Props = { document: StoryBuilderV4Document; slug?: string; pagePath?: string; showHidden?: boolean; editable?: boolean; showGuestExperiencePreview?: boolean; selectedSectionId?: string; onInlineEdit?: InlineEdit; onSelectSection?: (sectionId: string) => void; onNavigatePage?: (pagePath: string) => void };
 type Colors = { primary: string; background: string; accent: string; text: string };
+type GuestTool = "rsvp" | "calendar" | "gift" | "wishes" | "share";
+type GuestDecoration = "none" | "petals" | "sparkles";
+type GuestExperienceSettings = { tools: GuestTool[]; decoration: GuestDecoration; intensity: "light" | "medium" };
 const fallbackColors: Colors = { primary: "#e98ca3", background: "#fffaf8", accent: "#9d4d62", text: "#34242a" };
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const text = (value: unknown) => typeof value === "string" ? value : "";
@@ -77,6 +80,109 @@ function calendarLinks(event: Record<string, unknown>) {
     ...(location ? [`LOCATION:${escapeIcs(location)}`] : []), ...(details ? [`DESCRIPTION:${escapeIcs(details)}`] : []),
     "END:VEVENT", "END:VCALENDAR"].join("\r\n");
   return { google: google.toString(), ics: `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}` };
+}
+
+function GuestDecoration({ effect, intensity, fixed }: { effect: GuestDecoration; intensity: "light" | "medium"; fixed: boolean }) {
+  if (effect === "none") return null;
+  const count = effect === "petals" ? (intensity === "medium" ? 18 : 12) : (intensity === "medium" ? 16 : 10);
+  return <div className={`inviteme-guest-decoration ${fixed ? "inviteme-guest-decoration--fixed" : ""}`} data-effect={effect} data-intensity={intensity} aria-hidden="true">
+    {Array.from({ length: count }, (_, index) => {
+      const style = {
+        "--particle-x": `${(index * 37 + 11) % 100}%`,
+        "--particle-y": `${(index * 29 + 7) % 88}%`,
+        "--particle-delay": `${(index * 1.73) % 12}s`,
+        "--particle-duration": `${13 + (index % 7) * 1.8}s`,
+        "--particle-drift": `${((index * 19) % 120) - 60}px`,
+        "--particle-scale": `${0.7 + (index % 4) * 0.16}`,
+      } as CSSProperties;
+      return <span key={index} className="inviteme-guest-decoration__particle" style={style} />;
+    })}
+  </div>;
+}
+
+const guestToolLabels: Record<GuestTool, { label: string; short: string; Icon: typeof Heart }> = {
+  rsvp: { label: "Xác nhận tham dự", short: "Xác nhận", Icon: Heart },
+  calendar: { label: "Thêm vào lịch", short: "Lịch", Icon: CalendarDays },
+  gift: { label: "Quà mừng", short: "Quà mừng", Icon: Gift },
+  wishes: { label: "Gửi lời chúc", short: "Lời chúc", Icon: MessageCircle },
+  share: { label: "Chia sẻ website", short: "Chia sẻ", Icon: Share2 },
+};
+
+function GuestUtilityBar({
+  tools, targets, events, slug, onNavigatePage,
+}: {
+  tools: GuestTool[];
+  targets: Partial<Record<Exclude<GuestTool, "calendar" | "share">, { sectionId: string; pageSlug: string }>>;
+  events: Record<string, unknown>[];
+  slug?: string;
+  onNavigatePage?: (pagePath: string) => void;
+}) {
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const event = events.find(item => Boolean(calendarLinks(item)));
+  const calendar = event ? calendarLinks(event) : null;
+  const visibleTools = tools.filter(tool => tool === "share" ? true : tool === "calendar" ? Boolean(calendar) : Boolean(targets[tool]));
+  const [shareStatus, setShareStatus] = useState("");
+  if (!visibleTools.length) return null;
+
+  function goToSection(tool: Exclude<GuestTool, "calendar" | "share">) {
+    const target = targets[tool];
+    if (!target) return;
+    if (slug) {
+      const path = target.pageSlug
+        ? `/wedding/${encodeURIComponent(slug)}/${target.pageSlug}`
+        : `/wedding/${encodeURIComponent(slug)}`;
+      const url = new URL(path, window.location.origin);
+      if (tool === "rsvp") {
+        const inviteToken = new URLSearchParams(window.location.search).get("inviteToken");
+        if (inviteToken) url.searchParams.set("inviteToken", inviteToken);
+      }
+      url.hash = target.sectionId;
+      window.location.assign(url.toString());
+      return;
+    }
+    if (target.pageSlug && onNavigatePage) {
+      onNavigatePage(target.pageSlug);
+      window.setTimeout(() => document.getElementById(target.sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+      return;
+    }
+    document.getElementById(target.sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function shareWebsite() {
+    if (!slug) {
+      setShareStatus("Chia sẻ liên kết công khai sau khi xuất bản website.");
+      window.setTimeout(() => setShareStatus(""), 2500);
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("inviteToken");
+    try {
+      if (navigator.share) await navigator.share({ title: document.title || "Website cưới", url: url.toString() });
+      else { await navigator.clipboard.writeText(url.toString()); setShareStatus("Đã sao chép liên kết website."); }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      try { await navigator.clipboard.writeText(url.toString()); setShareStatus("Đã sao chép liên kết website."); }
+      catch { setShareStatus("Không thể chia sẻ liên kết trên thiết bị này."); }
+    }
+    window.setTimeout(() => setShareStatus(""), 2500);
+  }
+
+  return <nav aria-label="Tiện ích cho khách mời" style={{ gridTemplateColumns: `repeat(${visibleTools.length}, minmax(0, 1fr))` }} className="inviteme-guest-tools fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 grid gap-1 rounded-2xl border border-[var(--site-rule)] bg-[var(--site-background)]/95 p-1.5 shadow-[0_12px_36px_rgba(52,36,42,0.16)] backdrop-blur sm:inset-x-auto sm:bottom-6 sm:right-5 sm:flex sm:flex-col sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
+    {visibleTools.map(tool => {
+      const { label, short, Icon } = guestToolLabels[tool];
+      const buttonClass = "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium text-[var(--site-text)] transition hover:bg-[var(--site-primary)]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)] sm:min-h-11 sm:flex-row sm:justify-start sm:gap-2 sm:rounded-full sm:border sm:border-[var(--site-rule)] sm:bg-[var(--site-background)] sm:px-4 sm:text-xs sm:shadow-md";
+      if (tool === "calendar") return <div key={tool} className="relative">
+        <button type="button" className={`${buttonClass} w-full`} aria-label={label} aria-expanded={calendarOpen} onClick={() => setCalendarOpen(open => !open)}><Icon className="size-4 shrink-0" /><span>{short}</span></button>
+        {calendarOpen && calendar && <div className="absolute bottom-full right-0 mb-2 grid min-w-48 gap-1 rounded-xl border border-[var(--site-rule)] bg-[var(--site-background)] p-2 text-[var(--site-text)] shadow-xl sm:right-full sm:bottom-0 sm:mr-2 sm:mb-0">
+          <a className="rounded-lg px-3 py-2 text-sm hover:bg-[var(--site-primary)]/20" href={calendar.google} target="_blank" rel="noopener noreferrer">Mở Google Calendar</a>
+          <a className="rounded-lg px-3 py-2 text-sm hover:bg-[var(--site-primary)]/20" href={calendar.ics} download="ngay-cuoi.ics">Tải tệp lịch (.ics)</a>
+        </div>}
+      </div>;
+      if (tool === "share") return <button key={tool} type="button" className={buttonClass} aria-label={label} onClick={() => void shareWebsite()}><Icon className="size-4 shrink-0" /><span>{short}</span></button>;
+      return <button key={tool} type="button" className={buttonClass} aria-label={label} onClick={() => goToSection(tool)}><Icon className="size-4 shrink-0" /><span>{short}</span></button>;
+    })}
+    {shareStatus && <span role="status" aria-live="polite" className="absolute bottom-full right-0 mb-2 rounded-lg bg-[var(--site-text)] px-3 py-2 text-xs text-[var(--site-background)] shadow-lg">{shareStatus}</span>}
+  </nav>;
 }
 
 function Countdown({ target, variant }: { target: string; variant: string }) {
@@ -293,13 +399,18 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
   </section>;
 }
 
-export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = false, editable = false, selectedSectionId, onInlineEdit, onSelectSection, onNavigatePage }: Props) {
+export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = false, editable = false, showGuestExperiencePreview = false, selectedSectionId, onInlineEdit, onSelectSection, onNavigatePage }: Props) {
   const motionRoot = useRef<HTMLDivElement>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [shareStatus, setShareStatus] = useState("");
   const page = useMemo(() => pagePath === undefined ? document.pages.find(item => item.isHome) : document.pages.find(item => item.slug === pagePath), [document.pages, pagePath]);
   const { colors, heading, body } = templateColors(document);
   const family = templateFamily(document);
+  const guestExperience: GuestExperienceSettings = {
+    tools: document.appearance.guestExperience?.tools ?? [],
+    decoration: document.appearance.guestExperience?.decoration ?? "none",
+    intensity: document.appearance.guestExperience?.intensity ?? "light",
+  };
   useEffect(() => {
     const root = motionRoot.current;
     if (!root || editable || document.appearance.motion === "off" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -338,18 +449,20 @@ export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = 
   }, [editable, slug]);
   async function shareWebsite() {
     const title = document.seo?.title || "Website cưới";
+    const url = new URL(window.location.href);
+    url.searchParams.delete("inviteToken");
     try {
       if (navigator.share) {
-        await navigator.share({ title, url: window.location.href });
+        await navigator.share({ title, url: url.toString() });
         setShareStatus("Đã mở chia sẻ.");
       } else {
-        await navigator.clipboard.writeText(window.location.href);
+        await navigator.clipboard.writeText(url.toString());
         setShareStatus("Đã sao chép liên kết website.");
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       try {
-        await navigator.clipboard.writeText(window.location.href);
+        await navigator.clipboard.writeText(url.toString());
         setShareStatus("Đã sao chép liên kết website.");
       } catch {
         setShareStatus("Không thể chia sẻ liên kết trên thiết bị này.");
@@ -362,13 +475,34 @@ export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = 
   const rsvpTarget = page.sections.find(section => section.type === "rsvp" && section.visible !== false)?.id;
   const ctaTarget = eventsTarget ?? rsvpTarget;
   const ctaLabel = eventsTarget ? "Xem ngày vui" : "Xác nhận tham dự";
+  const visibleSections = document.pages.filter(item => item.visible !== false)
+    .flatMap(item => item.sections.filter(section => section.visible !== false).map(section => ({ section, pageSlug: item.slug })));
+  const findTarget = (type: "rsvp" | "gift" | "wishes") => {
+    const match = visibleSections.find(item => item.section.type === type);
+    return match ? { sectionId: match.section.id, pageSlug: match.pageSlug } : undefined;
+  };
+  const hasEnabledGift = document.content.gift?.enabled === true;
+  const eventList = visibleSections.filter(item => item.section.type === "events")
+    .flatMap(item => array(record(item.section.content).events));
+  const toolTargets = {
+    rsvp: findTarget("rsvp"),
+    gift: hasEnabledGift ? findTarget("gift") : undefined,
+    wishes: findTarget("wishes"),
+  };
+  const rsvpAlreadyLinkedFromHero = Boolean(rsvpTarget && ctaTarget === rsvpTarget &&
+    page.sections.some(section => section.type === "hero" && section.visible !== false));
+  const guestTools = guestExperience.tools.filter(tool => !(tool === "rsvp" && rsvpAlreadyLinkedFromHero));
+  const showGuestTools = !editable && (Boolean(slug) || showGuestExperiencePreview) && guestTools.length > 0;
+  const showDecoration = guestExperience.decoration !== "none" && (Boolean(slug) || showGuestExperiencePreview);
+  const showLegacyFooterShare = Boolean(slug) && !editable && !document.appearance.guestExperience && !guestTools.includes("share");
   const style = {
     "--site-primary": colors.primary, "--site-background": colors.background, "--site-accent": colors.accent,
     "--site-text": colors.text, "--site-rule": `${colors.text}26`, "--site-heading": heading, "--site-body": body,
     background: "var(--site-background)", color: "var(--site-text)", fontFamily: "var(--site-body)",
   } as CSSProperties;
   const visiblePages = document.pages.filter(item => item.visible !== false);
-  return <div ref={motionRoot} style={style} data-design-family={family} data-motion-mode={document.appearance.motion ?? "template"} className="template-canvas min-h-full">
+  return <div ref={motionRoot} style={style} data-design-family={family} data-motion-mode={document.appearance.motion ?? "template"} className={`template-canvas relative min-h-full ${showGuestTools ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:pb-0" : ""}`}>
+    {showDecoration && <GuestDecoration effect={guestExperience.decoration} intensity={guestExperience.intensity} fixed={Boolean(slug)} />}
     {visiblePages.length > 1 && <nav aria-label="Các trang website cưới" className="sticky top-0 z-10 flex justify-center gap-4 border-b border-[var(--site-rule)] bg-[var(--site-background)]/95 px-4 py-3 backdrop-blur sm:gap-8">
       {visiblePages.map(item => {
         const href = item.isHome ? `/wedding/${encodeURIComponent(slug ?? "")}` : `/wedding/${encodeURIComponent(slug ?? "")}/${item.slug}`;
@@ -378,16 +512,17 @@ export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = 
           : <span key={item.id} className="pb-1 opacity-75" aria-current={item.id === page.id ? "page" : undefined}>{item.navigationLabel || item.title}</span>;
       })}
     </nav>}
-    <main>
+    <main className="relative z-[1]">
       {page.sections.map((section, index) => <SectionView key={section.id} section={section} family={family} sectionIndex={index} slug={slug} ctaTarget={ctaTarget} ctaLabel={ctaLabel} showHidden={showHidden} gift={document.content.gift} editable={editable} selected={selectedSectionId === section.id} onInlineEdit={onInlineEdit} onSelectSection={onSelectSection} />)}
     </main>
-    <footer className="border-t border-[var(--site-rule)] px-5 py-8 text-center">
-      {slug && !editable && <div className="mb-5 flex flex-col items-center gap-2">
+    <footer className="relative z-[1] border-t border-[var(--site-rule)] px-5 py-8 text-center">
+      {showLegacyFooterShare && <div className="mb-5 flex flex-col items-center gap-2">
         <button type="button" onClick={() => void shareWebsite()} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--site-rule)] px-4 text-sm transition hover:bg-[var(--site-primary)]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]"><Share2 className="size-4" />Chia sẻ website</button>
         {shareStatus && <p role="status" aria-live="polite" className="text-xs opacity-70">{shareStatus}</p>}
       </div>}
       <p className="text-xs tracking-wide opacity-65">Được tạo cùng InviteMe</p>
     </footer>
-    {showBackToTop && !editable && <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="fixed bottom-5 right-5 z-20 grid size-11 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)] text-[var(--site-text)] shadow-lg transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]" aria-label="Lên đầu trang"><ArrowUp className="size-5" /></button>}
+    {showGuestTools && <GuestUtilityBar tools={guestTools} targets={toolTargets} events={eventList} slug={slug} onNavigatePage={onNavigatePage} />}
+    {showBackToTop && !editable && <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-5 z-20 grid size-11 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)] text-[var(--site-text)] shadow-lg transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)] sm:bottom-6 sm:right-[5.5rem]" aria-label="Lên đầu trang"><ArrowUp className="size-5" /></button>}
   </div>;
 }

@@ -172,7 +172,17 @@ export function createStoryBuilderV4Document(
     kind: "wedding-website" as const, schemaVersion: 4 as const, builderVersion: 2 as const,
     templateKey: template.key, templateVersion: template.version, templateSnapshot: template.config,
     navigationMode: "one-page" as const, content: shared,
-    appearance: { paletteId: template.config.palettes[0]?.id, fontHeading: template.config.theme.fontHeading, fontBody: template.config.theme.fontBody, motion: "template" as const },
+    appearance: {
+      paletteId: template.config.palettes[0]?.id,
+      fontHeading: template.config.theme.fontHeading,
+      fontBody: template.config.theme.fontBody,
+      motion: "template" as const,
+      guestExperience: {
+        tools: template.config.guestExperienceDefaults?.tools ?? ["rsvp", "calendar", "gift", "wishes"],
+        decoration: template.config.guestExperienceDefaults?.decoration ?? "none",
+        intensity: template.config.guestExperienceDefaults?.intensity ?? "light",
+      },
+    },
     pages: [{ id: id(), slug: "", title: homeTitle, navigationLabel: "Trang chủ", visible: true, isHome: true, sections: safeSections }],
   };
   return storyBuilderV4DocumentSchema.parse(document);

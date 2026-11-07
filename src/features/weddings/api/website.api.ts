@@ -281,6 +281,12 @@ export const uploadWeddingMedia = (api: ApiClient, id: string, file: File) => {
   });
 };
 
+export const deleteWeddingMedia = (api: ApiClient, weddingId: string, mediaId: string) =>
+  api.request(`/weddings/${encodeURIComponent(weddingId)}/media/${encodeURIComponent(mediaId)}`, {
+    method: "DELETE",
+    schema: z.object({ id: z.string() }),
+  });
+
 export function mediaUrl(value: string | null | undefined) {
   return resolveMediaUrl(value);
 }

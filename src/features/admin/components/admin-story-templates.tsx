@@ -83,6 +83,7 @@ function createEmptyTemplate(): StoryTemplateConfig {
     palettes: [{ id: "blush", label: "Hồng phấn", colors }],
     allowedFonts: ["Georgia"],
     accessTier: "UNCLASSIFIED",
+    guestExperienceDefaults: { tools: ["rsvp", "calendar", "gift", "wishes"], decoration: "none", intensity: "light" },
     category: null,
     previewImageUrl: null,
   };
@@ -209,6 +210,11 @@ export function AdminStoryTemplates() {
     previewVersion === "published" && selectedTemplate?.published
       ? selectedTemplate.publishedVersion
       : (selectedTemplate?.version ?? 1);
+  const guestDefaults = {
+    tools: form?.guestExperienceDefaults?.tools ?? [],
+    decoration: form?.guestExperienceDefaults?.decoration ?? "none" as const,
+    intensity: form?.guestExperienceDefaults?.intensity ?? "light" as const,
+  };
 
   const refresh = async () => {
     await cache.invalidateQueries({ queryKey: ["admin-story-templates"] });
@@ -767,6 +773,40 @@ export function AdminStoryTemplates() {
                           </select>
                         </label>
                       </div>
+                    </section>
+
+                    <section className="space-y-3 border-b border-border pb-5">
+                      <div>
+                        <h3 className="text-sm font-semibold">{t("storyTemplates.guestExperienceTitle")}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">{t("storyTemplates.guestExperienceHelp")}</p>
+                      </div>
+                      <fieldset className="space-y-2">
+                        <legend className="text-xs font-medium text-muted-foreground">{t("storyTemplates.guestToolsLabel")}</legend>
+                        {(["rsvp", "calendar", "gift", "wishes", "share"] as const).map((tool) => {
+                          const checked = guestDefaults.tools.includes(tool);
+                          const disabled = !checked && guestDefaults.tools.length >= 4;
+                          return <label key={tool} className={`flex min-h-9 items-center gap-2 text-sm ${disabled ? "opacity-50" : ""}`}>
+                            <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => {
+                              if (!form) return;
+                              const tools = event.target.checked
+                                ? [...guestDefaults.tools, tool]
+                                : guestDefaults.tools.filter((item) => item !== tool);
+                              change({ ...form, guestExperienceDefaults: { ...guestDefaults, tools } });
+                            }} className="size-4 accent-primary" />
+                            <span>{t(`storyTemplates.guestTools.${tool}`)}</span>
+                          </label>;
+                        })}
+                      </fieldset>
+                      <label className="grid gap-1 text-xs text-muted-foreground">{t("storyTemplates.guestDecorationLabel")}
+                        <select className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={guestDefaults.decoration} onChange={(event) => form && change({ ...form, guestExperienceDefaults: { ...guestDefaults, decoration: event.target.value as "none" | "petals" | "sparkles" } })}>
+                          {(["none", "petals", "sparkles"] as const).map((effect) => <option key={effect} value={effect}>{t(`storyTemplates.guestDecorations.${effect}`)}</option>)}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-xs text-muted-foreground">{t("storyTemplates.guestIntensityLabel")}
+                        <select className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={guestDefaults.intensity} onChange={(event) => form && change({ ...form, guestExperienceDefaults: { ...guestDefaults, intensity: event.target.value as "light" | "medium" } })}>
+                          {(["light", "medium"] as const).map((level) => <option key={level} value={level}>{t(`storyTemplates.guestIntensities.${level}`)}</option>)}
+                        </select>
+                      </label>
                     </section>
 
                     <section className="space-y-3 border-b border-border pb-5">

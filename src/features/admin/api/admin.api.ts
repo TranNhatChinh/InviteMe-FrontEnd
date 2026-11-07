@@ -13,6 +13,12 @@ const templateDefaultContentSchema = z.object({
   subtitle: z.string().max(500).optional(),
   submitLabel: z.string().max(60).optional(),
 }).strict();
+const guestExperienceDefaultsSchema = z.object({
+  tools: z.array(z.enum(["rsvp", "calendar", "gift", "wishes", "share"]))
+    .max(4).refine(items => new Set(items).size === items.length).nullish(),
+  decoration: z.enum(["none", "petals", "sparkles"]).nullish(),
+  intensity: z.enum(["light", "medium"]).nullish(),
+}).strict();
 const templateSectionSchema = z.object({
   type: z.string(),
   variant: z.string(),
@@ -49,6 +55,7 @@ export const storyTemplateConfigSchema = z
     allowedFonts: z.array(z.string()),
     assets: z.record(z.string(), z.string()).nullable().optional(),
     accessTier: z.enum(["UNCLASSIFIED", "FREE", "PREMIUM"]).default("UNCLASSIFIED"),
+    guestExperienceDefaults: guestExperienceDefaultsSchema.nullish(),
     // Keep reads compatible with the V4 builder's string categories and older catalog values.
     category: z.string().max(80).nullable().optional(),
     previewImageUrl: z
