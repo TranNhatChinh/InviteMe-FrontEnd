@@ -52,89 +52,143 @@ export function SavedInvitation({ weddingId }: { weddingId: string }) {
   const template = findTemplate(doc?.templateId);
   return (
     <section
-      className="max-w-3xl rounded-2xl border bg-card p-5 sm:p-7"
+      className="overflow-hidden rounded-2xl border bg-card"
       aria-label={t("saved.designAlt")}
     >
       {doc ? (
-        <div className="flex flex-col gap-6 sm:flex-row">
-          <div
-            className="w-60 shrink-0 overflow-hidden rounded-xl border bg-background"
-            aria-hidden="true"
-          >
-            {cover?.enabled ? (
-              <div className="relative h-[300px] w-60 overflow-hidden">
-                <div
-                  style={{
-                    position: "relative",
-                    width: 480,
-                    height: 600,
-                    transform: "scale(0.5)",
-                    transformOrigin: "top left",
-                    pointerEvents: "none",
-                  }}
-                >
-                  <InvitationCover config={cover} editing onOpen={() => {}} />
+        <div className="grid xl:grid-cols-[19rem_minmax(0,1fr)]">
+          <div className="flex justify-center border-b bg-muted/40 p-5 sm:p-7 xl:border-b-0 xl:border-r">
+            <div
+              className="w-60 shrink-0 self-start overflow-hidden rounded-xl border bg-background"
+              aria-hidden="true"
+            >
+              {cover?.enabled ? (
+                <div className="relative h-[300px] w-60 overflow-hidden">
+                  <div
+                    style={{
+                      position: "relative",
+                      width: 480,
+                      height: 600,
+                      transform: "scale(0.5)",
+                      transformOrigin: "top left",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <InvitationCover config={cover} editing onOpen={() => {}} />
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <TemplateThumbnail document={doc} scale={0.5} height={300} />
-            )}
+              ) : (
+                <TemplateThumbnail document={doc} scale={0.5} height={300} />
+              )}
+            </div>
           </div>
-          <div className="flex flex-col items-start gap-3">
-            <p className="text-sm text-muted-foreground">{t("saved.design")}</p>
-            <h2 className="font-display text-2xl">{template?.name ?? t("saved.customDesign")}</h2>
-            <p className="text-sm">{t("saved.version", { version: design.data.version })}</p>
-            <p className="max-w-sm text-sm text-muted-foreground">{t("saved.personalLinks")}</p>
-            <p className="text-sm">
-              {design.data.status === "PUBLISHED" ? t("saved.published") : t("saved.unpublished")}
-              {design.data.hasUnpublishedChanges ? t("saved.unpublishedChanges") : ""}
+          <div className="flex min-w-0 flex-col gap-5 p-5 sm:p-7 lg:p-8">
+            <div>
+              <p className="text-sm text-muted-foreground">{t("saved.design")}</p>
+              <h2 className="mt-1 font-display text-2xl">
+                {template?.name ?? t("saved.customDesign")}
+              </h2>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <span>
+                {t(
+                  design.data.status === "PUBLISHED" && !design.data.hasUnpublishedChanges
+                    ? "saved.versionPublished"
+                    : "saved.versionDraft",
+                  { version: design.data.version },
+                )}
+              </span>
+              <span
+                className={`rounded-md px-2.5 py-1 ${
+                  design.data.status === "PUBLISHED"
+                    ? "bg-success/20 text-success-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {design.data.status === "PUBLISHED" ? t("saved.published") : t("saved.unpublished")}
+              </span>
+              {design.data.status === "PUBLISHED" && design.data.hasUnpublishedChanges && (
+                <span className="rounded-md bg-warning/30 px-2.5 py-1 text-warning-foreground">
+                  {t("saved.unpublishedChanges")}
+                </span>
+              )}
+            </div>
+
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              {t("saved.personalLinks")}
             </p>
-            <p className="text-sm text-muted-foreground">{t("saved.draftHelp")}</p>
+            <p className="max-w-2xl text-sm leading-6">
+              {design.data.status === "PUBLISHED"
+                ? design.data.hasUnpublishedChanges
+                  ? t("saved.pendingChangesHelp")
+                  : t("saved.publishedHelp")
+                : t("saved.draftHelp")}
+            </p>
+
             {design.data.warnings.map((warning) => (
-              <p role="alert" className="text-sm text-amber-800" key={warning}>
+              <p role="alert" className="text-sm text-warning-foreground" key={warning}>
                 {warning}
               </p>
             ))}
-            {isOwner && (
-              <Button
-                disabled={busy || !design.data.hasUnpublishedChanges}
-                onClick={() => void publish()}
-              >
-                {busy ? t("saved.publishing") : t("saved.publish")}
-              </Button>
-            )}
             {message && (
               <p role="status" className="text-sm">
                 {message}
               </p>
             )}
+
+            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+              {isOwner &&
+                (design.data.hasUnpublishedChanges || design.data.status !== "PUBLISHED") && (
+                  <Button disabled={busy} onClick={() => void publish()}>
+                    {busy ? t("saved.publishing") : t("saved.publish")}
+                  </Button>
+                )}
+              {can("WEDDING_EDIT") && (
+                <Button asChild variant="outline">
+                  <Link href={`/weddings/${encodeURIComponent(weddingId)}/studio`}>
+                    {t("saved.edit")}
+                  </Link>
+                </Button>
+              )}
+              {can("WEDDING_EDIT") && (
+                <Button asChild variant="ghost">
+                  <Link href={`/weddings/${encodeURIComponent(weddingId)}/invitation-templates`}>
+                    {t("picker.changeTemplate")}
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.65fr)] lg:items-center lg:gap-10 lg:p-8">
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground">{t("saved.design")}</p>
+              <h2 className="mt-1 font-display text-2xl">{t("saved.emptyTitle")}</h2>
+            </div>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              {t("saved.emptyDescription")}
+            </p>
             {can("WEDDING_EDIT") && (
               <Button asChild>
-                <Link href={`/weddings/${encodeURIComponent(weddingId)}/studio`}>
-                  {t("saved.edit")}
-                </Link>
-              </Button>
-            )}
-            {can("WEDDING_EDIT") && (
-              <Button asChild variant="outline">
                 <Link href={`/weddings/${encodeURIComponent(weddingId)}/invitation-templates`}>
-                  {t("picker.changeTemplate")}
+                  {t("saved.chooseTemplate")}
                 </Link>
               </Button>
             )}
           </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <h2 className="font-display text-2xl">{t("saved.emptyTitle")}</h2>
-          <p className="text-sm text-muted-foreground">{t("saved.emptyDescription")}</p>
-          {can("WEDDING_EDIT") && (
-            <Button asChild>
-              <Link href={`/weddings/${encodeURIComponent(weddingId)}/invitation-templates`}>
-                {t("saved.chooseTemplate")}
-              </Link>
-            </Button>
-          )}
+          <ol className="grid gap-3 border-t pt-5 text-sm sm:grid-cols-3 lg:grid-cols-1 lg:border-l lg:border-t-0 lg:py-1 lg:pl-7 lg:pt-1">
+            {["stepChoose", "stepEdit", "stepPublish"].map((step, index) => (
+              <li key={step} className="flex items-start gap-3">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold">
+                  {index + 1}
+                </span>
+                <span className="pt-1 leading-5">{t(`saved.${step}`)}</span>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
     </section>
