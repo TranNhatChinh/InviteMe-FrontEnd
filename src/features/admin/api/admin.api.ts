@@ -16,8 +16,8 @@ const templateDefaultContentSchema = z.object({
 const guestExperienceDefaultsSchema = z.object({
   tools: z.array(z.enum(["rsvp", "calendar", "gift", "wishes", "share"]))
     .max(4).refine(items => new Set(items).size === items.length).nullish(),
-  decoration: z.enum(["none", "petals", "sparkles"]).nullish(),
-  intensity: z.enum(["light", "medium"]).nullish(),
+  decoration: z.enum(["none", "petals", "sparkles", "hearts", "fireflies"]).nullish(),
+  intensity: z.enum(["light", "medium", "vivid"]).nullish(),
 }).strict();
 const templateSectionSchema = z.object({
   type: z.string(),

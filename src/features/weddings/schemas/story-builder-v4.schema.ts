@@ -38,14 +38,14 @@ const socialUrlSchema = z.string().max(500).refine(isSafeHttps, "Liên kết m�
 const guestExperienceSettingsSchema = z.object({
   tools: z.array(z.enum(["rsvp", "calendar", "gift", "wishes", "share"]))
     .max(4).refine(items => new Set(items).size === items.length, "Không chọn tiện ích trùng nhau." ).optional(),
-  decoration: z.enum(["none", "petals", "sparkles"]).optional(),
-  intensity: z.enum(["light", "medium"]).optional(),
+  decoration: z.enum(["none", "petals", "sparkles", "hearts", "fireflies"]).optional(),
+  intensity: z.enum(["light", "medium", "vivid"]).optional(),
 }).strict();
 const guestExperienceDefaultsSchema = z.object({
   tools: z.array(z.enum(["rsvp", "calendar", "gift", "wishes", "share"]))
     .max(4).refine(items => new Set(items).size === items.length).nullish(),
-  decoration: z.enum(["none", "petals", "sparkles"]).nullish(),
-  intensity: z.enum(["light", "medium"]).nullish(),
+  decoration: z.enum(["none", "petals", "sparkles", "hearts", "fireflies"]).nullish(),
+  intensity: z.enum(["light", "medium", "vivid"]).nullish(),
 }).strict();
 const imageItemSchema = z.object({ id: z.string().min(1).max(100), imageUrl: imageUrlSchema, alt: z.string().max(200).optional() }).strict();
 const personSchema = z.object({

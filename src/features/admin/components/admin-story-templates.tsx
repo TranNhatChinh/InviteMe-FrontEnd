@@ -798,13 +798,13 @@ export function AdminStoryTemplates() {
                         })}
                       </fieldset>
                       <label className="grid gap-1 text-xs text-muted-foreground">{t("storyTemplates.guestDecorationLabel")}
-                        <select className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={guestDefaults.decoration} onChange={(event) => form && change({ ...form, guestExperienceDefaults: { ...guestDefaults, decoration: event.target.value as "none" | "petals" | "sparkles" } })}>
-                          {(["none", "petals", "sparkles"] as const).map((effect) => <option key={effect} value={effect}>{t(`storyTemplates.guestDecorations.${effect}`)}</option>)}
+                        <select className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={guestDefaults.decoration} onChange={(event) => form && change({ ...form, guestExperienceDefaults: { ...guestDefaults, decoration: event.target.value as "none" | "petals" | "sparkles" | "hearts" | "fireflies" } })}>
+                          {(["none", "petals", "sparkles", "hearts", "fireflies"] as const).map((effect) => <option key={effect} value={effect}>{t(`storyTemplates.guestDecorations.${effect}`)}</option>)}
                         </select>
                       </label>
                       <label className="grid gap-1 text-xs text-muted-foreground">{t("storyTemplates.guestIntensityLabel")}
-                        <select className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={guestDefaults.intensity} onChange={(event) => form && change({ ...form, guestExperienceDefaults: { ...guestDefaults, intensity: event.target.value as "light" | "medium" } })}>
-                          {(["light", "medium"] as const).map((level) => <option key={level} value={level}>{t(`storyTemplates.guestIntensities.${level}`)}</option>)}
+                        <select className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={guestDefaults.intensity} onChange={(event) => form && change({ ...form, guestExperienceDefaults: { ...guestDefaults, intensity: event.target.value as "light" | "medium" | "vivid" } })}>
+                          {(["light", "medium", "vivid"] as const).map((level) => <option key={level} value={level}>{t(`storyTemplates.guestIntensities.${level}`)}</option>)}
                         </select>
                       </label>
                     </section>
