@@ -13,8 +13,9 @@ type InlineEdit = (sectionId: string, key: string, value: unknown) => void;
 type Props = { document: StoryBuilderV4Document; slug?: string; pagePath?: string; showHidden?: boolean; editable?: boolean; showGuestExperiencePreview?: boolean; selectedSectionId?: string; onInlineEdit?: InlineEdit; onSelectSection?: (sectionId: string) => void; onNavigatePage?: (pagePath: string) => void };
 type Colors = { primary: string; background: string; accent: string; text: string };
 type GuestTool = "rsvp" | "calendar" | "gift" | "wishes" | "share";
-type GuestDecoration = "none" | "petals" | "sparkles";
-type GuestExperienceSettings = { tools: GuestTool[]; decoration: GuestDecoration; intensity: "light" | "medium" };
+type GuestDecoration = "none" | "petals" | "sparkles" | "hearts" | "fireflies";
+type GuestIntensity = "light" | "medium" | "vivid";
+type GuestExperienceSettings = { tools: GuestTool[]; decoration: GuestDecoration; intensity: GuestIntensity };
 const fallbackColors: Colors = { primary: "#e98ca3", background: "#fffaf8", accent: "#9d4d62", text: "#34242a" };
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const text = (value: unknown) => typeof value === "string" ? value : "";
@@ -82,15 +83,17 @@ function calendarLinks(event: Record<string, unknown>) {
   return { google: google.toString(), ics: `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}` };
 }
 
-function GuestDecoration({ effect, intensity, fixed }: { effect: GuestDecoration; intensity: "light" | "medium"; fixed: boolean }) {
+function GuestDecoration({ effect, intensity, fixed }: { effect: GuestDecoration; intensity: GuestIntensity; fixed: boolean }) {
   if (effect === "none") return null;
-  const count = effect === "petals" ? (intensity === "medium" ? 18 : 12) : (intensity === "medium" ? 16 : 10);
+  const count = effect === "petals"
+    ? (intensity === "vivid" ? 30 : intensity === "medium" ? 20 : 13)
+    : (intensity === "vivid" ? 26 : intensity === "medium" ? 18 : 11);
   return <div className={`inviteme-guest-decoration ${fixed ? "inviteme-guest-decoration--fixed" : ""}`} data-effect={effect} data-intensity={intensity} aria-hidden="true">
     {Array.from({ length: count }, (_, index) => {
       const style = {
         "--particle-x": `${(index * 37 + 11) % 100}%`,
         "--particle-y": `${(index * 29 + 7) % 88}%`,
-        "--particle-delay": `${(index * 1.73) % 12}s`,
+        "--particle-delay": `${-((index * 1.13) % 8)}s`,
         "--particle-duration": `${13 + (index % 7) * 1.8}s`,
         "--particle-drift": `${((index * 19) % 120) - 60}px`,
         "--particle-scale": `${0.7 + (index % 4) * 0.16}`,

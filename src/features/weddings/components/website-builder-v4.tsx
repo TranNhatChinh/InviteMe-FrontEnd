@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useId, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,7 +27,7 @@ type Viewport = "desktop" | "tablet" | "mobile";
 type SectionType = StorySectionType;
 type BuilderIssue = { path: readonly PropertyKey[]; message: string };
 type GuestTool = "rsvp" | "calendar" | "gift" | "wishes" | "share";
-type GuestExperienceSettings = { tools: GuestTool[]; decoration: "none" | "petals" | "sparkles"; intensity: "light" | "medium" };
+type GuestExperienceSettings = { tools: GuestTool[]; decoration: "none" | "petals" | "sparkles" | "hearts" | "fireflies"; intensity: "light" | "medium" | "vivid" };
 function validateBuilderDocument(document: StoryBuilderV4Document, template?: StoryTemplateSummaryV4): BuilderIssue[] {
   const parsed = storyBuilderV4DocumentSchema.safeParse(document);
   if (!parsed.success) return parsed.error.issues;
@@ -1150,6 +1150,16 @@ function GuestExperienceInspector({ document, settings, onChange }: {
 }) {
   const visibleSections = document.pages.filter(page => page.visible !== false)
     .flatMap(page => page.sections.filter(section => section.visible !== false));
+  const snapshot = record(document.templateSnapshot);
+  const themeColors = record(record(snapshot.theme).colors);
+  const palettes = Array.isArray(snapshot.palettes) ? snapshot.palettes.map(record) : [];
+  const selectedPaletteColors = record(palettes.find(palette => palette.id === document.appearance.paletteId)?.colors);
+  const previewStyle = {
+    "--site-primary": String(selectedPaletteColors.primary ?? themeColors.primary ?? "#e98ca3"),
+    "--site-accent": String(selectedPaletteColors.accent ?? themeColors.accent ?? "#9d4d62"),
+    "--site-background": String(selectedPaletteColors.background ?? themeColors.background ?? "#fffaf8"),
+    "--site-text": String(selectedPaletteColors.text ?? themeColors.text ?? "#34242a"),
+  } as CSSProperties;
   const events = visibleSections.filter(section => section.type === "events")
     .flatMap(section => Array.isArray(record(section.content).events) ? record(section.content).events as Record<string, unknown>[] : []);
   const availability: Record<GuestTool, boolean> = {
@@ -1177,7 +1187,11 @@ function GuestExperienceInspector({ document, settings, onChange }: {
     const destination = index + direction;
     if (destination < 0 || destination >= settings.tools.length) return;
     const tools = [...settings.tools];
-    [tools[index], tools[destination]] = [tools[destination]!, tools[index]!];
+    const currentTool = tools[index];
+    const destinationTool = tools[destination];
+    if (!currentTool || !destinationTool) return;
+    tools[index] = destinationTool;
+    tools[destination] = currentTool;
     onChange({ ...settings, tools });
   };
   return <div className="min-h-[300px]">
@@ -1203,17 +1217,27 @@ function GuestExperienceInspector({ document, settings, onChange }: {
         <p className="text-xs leading-5 text-muted-foreground">Trên điện thoại, nút nằm ở cạnh dưới và chừa vùng an toàn màn hình. RSVP sẽ giữ liên kết thiệp cá nhân; chia sẻ loại bỏ mã khách khỏi đường dẫn.</p>
       </section>
       <section className="space-y-3 border-t border-border pt-5">
-        <div><h3 className="text-sm font-semibold">Hiệu ứng trang trí</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Dùng màu nhấn của mẫu, không chặn thao tác và tự tắt khi thiết bị bật giảm chuyển động.</p></div>
+        <div><h3 className="text-sm font-semibold">Hiệu ứng trang trí</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Dùng màu của mẫu, không chặn thao tác; khi bật giảm chuyển động, hiệu ứng sẽ chuyển thành trang trí tĩnh.</p></div>
         <label className="grid gap-1 text-xs text-muted-foreground">Hiệu ứng
           <select className={inputClass} value={settings.decoration} onChange={event => onChange({ ...settings, decoration: event.target.value as GuestExperienceSettings["decoration"] })}>
-            <option value="none">Không hiệu ứng</option><option value="petals">Cánh hoa rơi</option><option value="sparkles">Ánh sáng lấp lánh nhẹ</option>
+            <option value="none">Không hiệu ứng</option><option value="petals">Cánh hoa rơi</option><option value="sparkles">Ánh sáng lấp lánh nhẹ</option><option value="hearts">Trái tim bay nhẹ</option><option value="fireflies">Đom đóm phát sáng</option>
           </select>
         </label>
         <label className="grid gap-1 text-xs text-muted-foreground">Mức độ
           <select className={inputClass} disabled={settings.decoration === "none"} value={settings.intensity} onChange={event => onChange({ ...settings, intensity: event.target.value as GuestExperienceSettings["intensity"] })}>
-            <option value="light">Nhẹ</option><option value="medium">Vừa</option>
+            <option value="light">Nhẹ</option><option value="medium">Vừa</option><option value="vivid">Nổi bật</option>
           </select>
         </label>
+        {settings.decoration !== "none" && <div className="space-y-2 rounded-xl border border-border bg-muted/25 p-3">
+          <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-foreground">Xem thử hiệu ứng</p><span className="text-[11px] text-muted-foreground">Cập nhật trực tiếp trên website</span></div>
+          <div className="relative isolate h-24 overflow-hidden rounded-lg border border-primary/20" style={previewStyle}>
+            <div aria-hidden="true" className="absolute inset-0 overflow-hidden" data-effect={settings.decoration} data-intensity={settings.intensity}>
+              {Array.from({ length: settings.intensity === "vivid" ? 14 : settings.intensity === "medium" ? 10 : 7 }, (_, index) => <span key={index} className={`inviteme-decoration-preview__particle inviteme-decoration-preview__particle--${settings.decoration}`} style={{ "--particle-x": `${(index * 37 + 9) % 96}%`, "--particle-y": `${(index * 31 + 8) % 78}%`, "--particle-delay": `${(index * 0.57) % 3}s`, "--particle-duration": `${3.6 + index % 4}s`, "--particle-scale": `${0.8 + (index % 4) * 0.15}`, "--particle-drift": `${((index * 13) % 38) - 19}px` } as CSSProperties} />)}
+            </div>
+            <div className="absolute inset-0 -z-[1] bg-[radial-gradient(ellipse_at_50%_120%,color-mix(in_srgb,var(--site-primary)_18%,transparent),transparent_68%),var(--site-background)]" />
+            <div className="absolute inset-x-4 bottom-3 z-[1] text-center"><span className="font-serif text-sm" style={{ color: "var(--site-text)" }}>Ngày vui của chúng mình</span><span className="mx-auto mt-1 block h-px w-12" style={{ backgroundColor: "var(--site-accent)" }} /></div>
+          </div>
+        </div>}
       </section>
     </div>
   </div>;
