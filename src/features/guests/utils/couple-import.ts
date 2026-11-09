@@ -158,11 +158,11 @@ export function validateCoupleRows(rows: { line: number; values: string[] }[]): 
     if ((values[1] ?? "").length > 50) errors.push("Danh xưng không được vượt quá 50 ký tự.");
     if ((values[6] ?? "").length > 2000) errors.push("Ghi chú không được vượt quá 2.000 ký tự.");
     const expected = rawCount === "" ? 1 : /^\d+$/.test(rawCount) ? Number(rawCount) : null;
-    if (expected === null || !Number.isSafeInteger(expected) || expected < 1 || expected > 500)
+    if (expected === null || !Number.isSafeInteger(expected) || expected < 1 || expected > 10)
       errors.push(
         rawCount
-          ? `Số suất phải từ 1 đến 500 (đang là ${rawCount})`
-          : "Tổng người dự kiến phải là số nguyên từ 1 đến 500.",
+          ? `Số suất phải từ 1 đến 10 (đang là ${rawCount})`
+          : "Tổng người dự kiến phải là số nguyên từ 1 đến 10.",
       );
     const rawGroup = values[4] ?? "";
     const group = findGroup(rawGroup, defaultGroups);

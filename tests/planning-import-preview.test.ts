@@ -110,12 +110,24 @@ test("BR01 at most 500 nonblank rows are accepted", () => {
   assert.throws(() => parseCoupleCsv(coupleCsv([coupleHeaders, ...data, row(502).values])));
 });
 
+test("each imported guest allows one to ten places independently of the row limit", () => {
+  for (const count of ["1", "10"]) {
+    const [result] = validateCoupleRows([row(2, count)]);
+    assert.deepEqual(result!.errors, []);
+  }
+  for (const count of ["0", "11", "500", "1.5"]) {
+    const [result] = validateCoupleRows([row(2, count)]);
+    assert.ok(result!.errors.some((message) => message.includes("1 đến 10")));
+    assert.equal(importRowStatus(result!, null, {}, new Set()), "ERROR");
+  }
+});
+
 test("BR04 validation rejects every text/count boundary before check", () => {
   for (const [column, value] of [
     [0, "a".repeat(151)],
     [1, "a".repeat(51)],
     [6, "a".repeat(2001)],
-    [2, "501"],
+    [2, "11"],
     [2, "0"],
     [2, "1.5"],
     [5, "bad"],

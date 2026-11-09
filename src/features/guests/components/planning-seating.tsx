@@ -36,6 +36,10 @@ import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
 import { trapDialogFocus } from "@/shared/lib/dialog-focus";
 import {
+  applySeatingGeneration,
+  applySeatingArrangement,
+  type ArrangeSeatingInput,
+  type SeatingGenerationApply,
   getSeatingPlan,
   getSeatingPublication,
   setSeatingPublication,
@@ -48,7 +52,17 @@ import {
 import { sideLabels, type PlanningGuest } from "../api/planning.api";
 import { previewSeatMove } from "../utils/planning-seat-move";
 import { moveSeatingWithRetry } from "../utils/seating-conflict-retry";
-import { PlanningSuggestions } from "./planning-suggestions";
+import { ArrangeSeatingDialog } from "./arrange-seating-dialog";
+import { GenerateSeatingDialog } from "./generate-seating-dialog";
+import { SeatingBoard } from "./seating-board";
+import { wouldSplitParty } from "../utils/seating-layout";
+import {
+  changeGenerationDraft,
+  generationDraftPlan,
+  generationDraftInput,
+} from "../utils/seating-generation-draft";
+import { Modal } from "@/shared/ui/modal";
+import { AddSeatingTableDialog, type TableSlot } from "./add-seating-table-dialog";
 import { SeatingLegend } from "./seating-legend";
 import { SeatingQueue } from "./seating-queue";
 import { SeatingTableDrawer } from "./seating-table-drawer";
@@ -232,7 +246,26 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       setPublishing(false);
     }
   }
+  const [pendingSplit, setPendingSplit] = useState<{
+    ids: string[];
+    target: string | null;
+    seatNumber?: number;
+  } | null>(null);
+  const [tableSlot, setTableSlot] = useState<TableSlot | null>(null);
   const [preview, setPreview] = useState<SeatingPlan | null>(null);
+  const [generationDraft, setGenerationDraft] = useState<{
+    plan: SeatingPlan;
+    input: SeatingGenerationApply;
+  } | null>(null);
+  useEffect(() => {
+    if (!generationDraft) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [generationDraft]);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [message, setMessage] = useState("");
@@ -315,17 +348,34 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     };
   }, [realtime, cache, weddingId]);
 
-  const plan = preview ?? planQuery.data;
+  const plan = generationDraft?.plan ?? preview ?? planQuery.data;
   const groupNames = new Map(
     (plan?.guests ?? []).flatMap((guest) =>
       guest.group ? [[guest.group.id, guest.group.name] as const] : [],
     ),
   );
   async function change(input: SeatingChange, optimistic?: SeatingPlan) {
-    if (!editable || savingRef.current || !planQuery.data) return;
+    if (!editable || savingRef.current || !planQuery.data) return false;
+    if (generationDraft) {
+      try {
+        setGenerationDraft({
+          ...generationDraft,
+          plan: changeGenerationDraft(generationDraft.plan, input),
+        });
+        setFailure(false);
+        setMessage(t("generation.draftChanged"));
+        setSelection([]);
+        if (input.action === "DELETE_TABLE") closeDetails();
+        return true;
+      } catch (error) {
+        setFailure(true);
+        setMessage(error instanceof Error ? error.message : t("generation.applyFailed"));
+        return false;
+      }
+    }
     if (realtime.getStatus() !== "connected") {
       collaborationError();
-      return;
+      return false;
     }
     savingRef.current = true;
     setSaving(true);
@@ -357,6 +407,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         setTableId(null);
         setSeat(null);
       }
+      return true;
     } catch (error) {
       setFailure(true);
       const dragProblem =
@@ -377,6 +428,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   ? t("seating.forbidden")
                   : t("seating.saveFailed"),
       );
+      return false;
     } finally {
       setPreview(null);
       savingRef.current = false;
@@ -384,14 +436,70 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       await cache.invalidateQueries({ queryKey: key });
     }
   }
-  function move(ids: string[], target: string | null, seatNumber?: number) {
+  async function saveGenerationDraft() {
+    if (!generationDraft || savingRef.current) return;
+    const saved = await applyProposal(() =>
+      applySeatingGeneration(
+        api,
+        weddingId,
+        generationDraftInput(generationDraft.plan, generationDraft.input),
+      ),
+    );
+    if (saved) {
+      setGenerationDraft(null);
+      await cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] });
+    }
+  }
+  function applyArrangement(input: ArrangeSeatingInput) {
+    return applyProposal(() => applySeatingArrangement(api, weddingId, input));
+  }
+  async function applyProposal(operation: () => Promise<SeatingPlan>) {
+    if (
+      !editable ||
+      savingRef.current ||
+      !isWeddingWide("SEATING_EDIT") ||
+      !isWeddingWide("SEATING_VIEW")
+    )
+      return false;
+    savingRef.current = true;
+    setSaving(true);
+    setFailure(false);
+    setMessage("");
+    try {
+      const latest = await operation();
+      cache.setQueryData<SeatingPlan>(key, (current) =>
+        current && current.version > latest.version ? current : latest,
+      );
+      setSelection([]);
+      closeDetails();
+      setMessage(t("seating.saved"));
+      return true;
+    } catch (error) {
+      setFailure(true);
+      setMessage(
+        t(
+          error instanceof ApiError && error.status === 409
+            ? "generation.stale"
+            : error instanceof ApiError && error.backendCode === "PLAN_LIMIT_REACHED"
+              ? "generation.quota"
+              : "generation.applyFailed",
+        ),
+      );
+      return false;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+      await cache.invalidateQueries({ queryKey: key });
+    }
+  }
+  function move(ids: string[], target: string | null, seatNumber?: number, splitConfirmed = false) {
     if (!plan || !editable || savingRef.current) return;
     const lock = collaboration.leases.find(
       (lease) =>
         lease.connectionId !== collaboration.connectionId &&
         ids.some((id) => lease.placeIds.includes(id)),
     );
-    if (lock) {
+    if (lock && !generationDraft) {
       collaboration.cancel(false);
       setFailure(true);
       setMessage(t("seating.lockedBy", { name: lock.displayName }));
@@ -406,11 +514,25 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         (a) => a.tableId === target && !ids.includes(a.placeId),
       ).length;
       const shortage = table ? ids.length - (table.capacity - occupied) : 0;
+      const sideConflict =
+        table?.side &&
+        plan.places.some(
+          (place) =>
+            ids.includes(place.id) &&
+            plan.guests.find((guest) => guest.id === place.guestId)?.side !== table.side,
+        );
       setMessage(
         shortage > 0
           ? t("seating.shortage", { table: table?.name, count: shortage })
-          : t("seating.placeUnavailable"),
+          : sideConflict
+            ? t("layout.sideConflict")
+            : t("seating.placeUnavailable"),
       );
+      return;
+    }
+    if (!splitConfirmed && wouldSplitParty(plan, ids, target)) {
+      collaboration.cancel(false);
+      setPendingSplit({ ids, target, seatNumber });
       return;
     }
     void change(
@@ -455,17 +577,48 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   };
   return (
     <SeatingDragPresenceContext.Provider
-      value={collaboration.leases.filter(
-        (lease) => lease.connectionId !== collaboration.connectionId,
-      )}
+      value={
+        generationDraft
+          ? []
+          : collaboration.leases.filter(
+              (lease) => lease.connectionId !== collaboration.connectionId,
+            )
+      }
     >
-      <SeatingRemoteCursors
-        weddingId={weddingId}
-        plan={plan}
-        leases={collaboration.leases.filter(
-          (lease) => lease.connectionId !== collaboration.connectionId,
-        )}
-      />
+      <Modal
+        open={!!pendingSplit}
+        onClose={() => setPendingSplit(null)}
+        title={t("layout.splitTitle")}
+        description={t("layout.splitDescription")}
+      >
+        <div className="flex gap-3">
+          <Button type="button" variant="outline" onClick={() => setPendingSplit(null)}>
+            {t("layout.cancel")}
+          </Button>
+          <Button
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              if (pendingSplit) {
+                const pending = pendingSplit;
+                setPendingSplit(null);
+                move(pending.ids, pending.target, pending.seatNumber, true);
+              }
+            }}
+          >
+            {t("layout.splitConfirm")}
+          </Button>
+        </div>
+      </Modal>
+      {!generationDraft && (
+        <SeatingRemoteCursors
+          weddingId={weddingId}
+          plan={plan}
+          leases={collaboration.leases.filter(
+            (lease) => lease.connectionId !== collaboration.connectionId,
+          )}
+        />
+      )}
       <DndContext
         key={dragEpoch}
         autoScroll={{
@@ -501,14 +654,16 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           )
         }
         onDragStart={({ active, activatorEvent }) => {
-          if (savingRef.current || realtime.getStatus() !== "connected") return;
+          if (savingRef.current || (!generationDraft && realtime.getStatus() !== "connected"))
+            return;
           const ids = (active.data.current?.ids as string[] | undefined) ?? [];
-          collaboration.begin(
-            ids,
-            "clientX" in activatorEvent && "clientY" in activatorEvent
-              ? { x: Number(activatorEvent.clientX), y: Number(activatorEvent.clientY) }
-              : undefined,
-          );
+          if (!generationDraft)
+            collaboration.begin(
+              ids,
+              "clientX" in activatorEvent && "clientY" in activatorEvent
+                ? { x: Number(activatorEvent.clientX), y: Number(activatorEvent.clientY) }
+                : undefined,
+            );
           setDragIds(ids);
           setDragTarget(null);
           setSelection([]);
@@ -516,7 +671,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         onDragOver={({ over }) => {
           const target = (over?.data.current as DropPosition | undefined) ?? null;
           setDragTarget(target);
-          collaboration.hover(target);
+          if (!generationDraft) collaboration.hover(target);
         }}
         onDragCancel={() => {
           setDragIds([]);
@@ -551,7 +706,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={publishing}
+                disabled={publishing || !!generationDraft}
                 onClick={() => void togglePublication()}
               >
                 {publishing
@@ -616,15 +771,101 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               {message}
             </p>
           )}
+          {generationDraft && (
+            <div
+              role="status"
+              className="sticky top-20 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950"
+            >
+              <div>
+                <p className="font-semibold">{t("generation.draftTitle")}</p>
+                <p className="text-sm">{t("generation.draftDescription")}</p>
+                {planQuery.data?.version !== generationDraft.input.expectedVersion && (
+                  <p className="text-sm text-red-800">{t("generation.stale")}</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => {
+                    setGenerationDraft(null);
+                    setSelection([]);
+                    closeDetails();
+                    setTableSlot(null);
+                    setMessage("");
+                    setFailure(false);
+                    collaboration.cancel(false);
+                    abortDrag();
+                  }}
+                >
+                  {t("generation.discardDraft")}
+                </Button>
+                <Button
+                  disabled={
+                    saving || planQuery.data?.version !== generationDraft.input.expectedVersion
+                  }
+                  onClick={() => void saveGenerationDraft()}
+                >
+                  {saving ? t("generation.applying") : t("generation.saveDraft")}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-4">
             <SeatingLegend />
-            <PlanningSuggestions
-              plan={plan}
-              editable={editable}
-              saving={saving}
-              onChange={change}
-              saveError={failure ? message : undefined}
-            />
+            <div className="flex flex-wrap gap-2">
+              {!plan.tables.length &&
+                !generationDraft &&
+                editable &&
+                isWeddingWide("SEATING_EDIT") &&
+                isWeddingWide("SEATING_VIEW") && (
+                  <GenerateSeatingDialog
+                    plan={plan}
+                    disabled={saving}
+                    onPreview={(value, config) => {
+                      if (value.sourceVersion !== plan.version) return;
+                      setGenerationDraft({
+                        plan: generationDraftPlan(plan, value, config),
+                        input: {
+                          ...config,
+                          sourceFingerprint: value.sourceFingerprint,
+                          algorithmVersion: value.algorithmVersion,
+                        },
+                      });
+                      setSelection([]);
+                      closeDetails();
+                      setFailure(false);
+                      setMessage("");
+                    }}
+                    saveError={failure ? message : undefined}
+                  />
+                )}
+              {plan.tables.length > 0 &&
+                !generationDraft &&
+                editable &&
+                isWeddingWide("SEATING_EDIT") &&
+                isWeddingWide("SEATING_VIEW") && (
+                  <ArrangeSeatingDialog
+                    plan={plan}
+                    disabled={saving}
+                    onApply={applyArrangement}
+                    saveError={failure ? message : undefined}
+                  />
+                )}
+              {editable && tableSlot && (
+                <AddSeatingTableDialog
+                  key={
+                    tableSlot ? `${tableSlot.side}:${tableSlot.row}:${tableSlot.column}` : "toolbar"
+                  }
+                  plan={plan}
+                  disabled={saving}
+                  slot={tableSlot}
+                  onCloseSlot={() => setTableSlot(null)}
+                  onChange={change}
+                  error={failure ? message : undefined}
+                />
+              )}
+            </div>
           </div>
           <div className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
             <DropTarget
@@ -637,7 +878,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             >
               <SeatingQueue
                 plan={plan}
-                disabled={!editable || saving || status !== "connected"}
+                disabled={!editable || saving || (!generationDraft && status !== "connected")}
                 selection={selection}
                 allowedGroupIds={allowedGroupIds}
                 onSelect={(ids) => {
@@ -680,13 +921,22 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             <section
               data-seating-pointer-anchor="board"
               className="min-w-0 rounded-xl border bg-[#F8F5EF] p-4"
-              aria-label={t("seating.savedPlan")}
+              aria-label={generationDraft ? t("generation.draftTitle") : t("seating.savedPlan")}
             >
-              {!plan.tables.length && (
-                <p className="p-5 text-center text-sm">{t("seating.addFirstTable")}</p>
-              )}
-              <div className="flex flex-wrap justify-center gap-5">
-                {plan.tables.map((table) => {
+              <SeatingBoard
+                key={generationDraft ? "draft" : "saved"}
+                plan={plan}
+                editable={
+                  editable && isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")
+                }
+                saving={saving}
+                onChange={change}
+                onAddSlot={(slot) => {
+                  setFailure(false);
+                  setMessage("");
+                  setTableSlot(slot);
+                }}
+                renderTable={(table) => {
                   const members = plan.assignments.filter((a) => a.tableId === table.id);
                   const remote = collaboration.leases.filter(
                     (lease) =>
@@ -710,7 +960,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       id={`table:${table.id}`}
                       target={{ tableId: table.id }}
                       disabled={!editable || saving}
-                      className={`relative w-[270px] max-w-full rounded-xl border bg-white/50 p-3 transition-colors ${members.length === table.capacity ? "opacity-60" : ""} ${moving.length ? (shortage ? "border-red-300" : "border-primary/60") : ""}`}
+                      className={`relative h-full w-full max-w-full rounded-xl border bg-white/50 p-3 transition-colors ${members.length === table.capacity ? "opacity-60" : ""} ${moving.length ? (shortage ? "border-red-300" : "border-primary/60") : ""}`}
                       highlighted={dragTarget?.tableId === table.id || remote.length > 0}
                       invalid={
                         dragTarget?.tableId === table.id
@@ -805,7 +1055,12 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                               <DragSource
                                 id={`chair:${table.id}:${n}`}
                                 ids={p ? [p.id] : []}
-                                disabled={!p || !editable || saving || status !== "connected"}
+                                disabled={
+                                  !p ||
+                                  !editable ||
+                                  saving ||
+                                  (!generationDraft && status !== "connected")
+                                }
                                 label={t("seating.seatLabel", {
                                   table: table.name,
                                   seat: n,
@@ -876,8 +1131,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       </div>
                     </DropTarget>
                   );
-                })}
-              </div>
+                }}
+              />
             </section>
             <dialog
               ref={detailsRef}
@@ -890,8 +1145,22 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             >
               {inspectedTable && seat === null && !inspectedPlace ? (
                 <SeatingTableDrawer
+                  draft={!!generationDraft}
                   key={inspectedTable.id + ":" + plan.version}
                   table={inspectedTable}
+                  canLayout={isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")}
+                  saveError={failure ? message : undefined}
+                  onLayoutSave={(side, row, column) =>
+                    void change({
+                      action: "UPDATE_TABLE",
+                      tableId: inspectedTable.id,
+                      name: inspectedTable.name,
+                      capacity: inspectedTable.capacity,
+                      side,
+                      row,
+                      column,
+                    })
+                  }
                   plan={plan}
                   editable={editable}
                   saving={saving}

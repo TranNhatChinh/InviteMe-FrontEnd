@@ -1,5 +1,5 @@
 "use client";
-import { AuthGuard } from "@/features/auth";
+import { AuthGuard, useCurrentUser } from "@/features/auth";
 import { WeddingAccessProvider } from "@/features/weddings";
 import { InvitationWording } from "@/features/guests";
 import {
@@ -93,6 +93,7 @@ function StudioSession({
   const router = useRouter();
   const { api } = useRuntime();
   const { can } = usePermission();
+  const { user } = useCurrentUser();
   const cache = useQueryClient();
   const [version, setVersion] = useState(snapshot.version);
   const [initial, setInitial] = useState(
@@ -134,6 +135,7 @@ function StudioSession({
           }))
         }
         initialDocument={initial}
+        backup={user ? { scope: `wedding:${user.id}:${weddingId}` } : undefined}
         onSave={
           can("INVITATION_SEND")
             ? async (serialized) => {

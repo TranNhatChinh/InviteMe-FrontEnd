@@ -38,7 +38,7 @@ const importGuide = [
   ["Danh xưng", "Không bắt buộc, tối đa 50 ký tự.", "Bác, Cô, Anh, Chị"],
   [
     "Tổng người dự kiến",
-    "Số nguyên từ 1–500, tính cả người nhận và người đi cùng. Để trống dùng 1.",
+    "Số nguyên từ 1–10, tính cả người nhận và người đi cùng. Để trống dùng 1.",
     "Gia đình 4 người nhập 4",
   ],
   ["Phía khách mời", "Nhà gái, Nhà trai hoặc Chung. Để trống là Chưa xác định.", "Nhà gái"],

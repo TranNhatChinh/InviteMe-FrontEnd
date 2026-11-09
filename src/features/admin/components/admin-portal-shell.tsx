@@ -76,7 +76,10 @@ export function AdminPortalShell({
     });
   }, [permissions.data]);
   const firstDestination = navigation.flatMap((group) => group.items)[0]?.href;
-  const requiredPermission = itemPermissions[pathname];
+  const isTemplateStudio = /^\/admin\/templates\/[^/]+\/studio\/?$/.test(pathname);
+  const requiredPermission = isTemplateStudio
+    ? "ADMIN_TEMPLATES_MANAGE"
+    : itemPermissions[pathname];
 
   useEffect(() => {
     if (pathname === "/admin" && firstDestination && firstDestination !== "/admin") {
@@ -114,6 +117,8 @@ export function AdminPortalShell({
         </main>
       </DashboardShell>
     );
+
+  if (isTemplateStudio) return children;
 
   return (
     <DashboardShell

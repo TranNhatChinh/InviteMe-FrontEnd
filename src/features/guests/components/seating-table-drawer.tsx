@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslation } from "react-i18next";
 import { useId, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
@@ -41,6 +42,10 @@ export function SeatingTableDrawer({
   onAssign,
   onSave,
   onDelete,
+  canLayout = false,
+  onLayoutSave,
+  saveError,
+  draft = false,
 }: {
   table: SeatingPlan["tables"][number];
   plan: SeatingPlan;
@@ -53,7 +58,21 @@ export function SeatingTableDrawer({
   onAssign: (seatNumber: number) => void;
   onSave: (name: string, capacity: number) => void;
   onDelete: () => void;
+  canLayout?: boolean;
+  saveError?: string;
+  draft?: boolean;
+  onLayoutSave?: (side: "BRIDE" | "GROOM", row: number, column: number) => void;
 }) {
+  const { t } = useTranslation("guestPlanning", { keyPrefix: "layout" });
+  const { t: draftText } = useTranslation("guestPlanning", { keyPrefix: "generation" });
+  const [side, setSide] = useState(table.side ?? "");
+  const [row, setRow] = useState(table.row ?? 1),
+    [column, setColumn] = useState(table.column ?? 1);
+  const columns = side === "BRIDE" ? (plan.brideTablesPerRow ?? 2) : (plan.groomTablesPerRow ?? 2);
+  const slotOccupied = plan.tables.some(
+    (other) =>
+      other.id !== table.id && other.side === side && other.row === row && other.column === column,
+  );
   const [name, setName] = useState(table.name);
   const [capacity, setCapacity] = useState(String(table.capacity));
   const confirmationRef = useRef<HTMLDialogElement>(null);
@@ -87,6 +106,11 @@ export function SeatingTableDrawer({
       }}
     >
       <header className="shrink-0 border-b border-foreground/10 px-5 pb-4 pt-5">
+        {draft && (
+          <p className="mb-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-900">
+            {draftText("draftDescription")}
+          </p>
+        )}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -139,6 +163,95 @@ export function SeatingTableDrawer({
         </div>
       </header>
 
+      {saveError && (
+        <p role="alert" className="px-5 py-2 text-sm text-destructive">
+          {saveError}
+        </p>
+      )}
+      <div className="shrink-0 space-y-2 border-b px-5 py-3 text-sm">
+        <p>
+          {table.side ? t(table.side) : t("unpositioned")}{" "}
+          {table.row && table.column
+            ? ` · ${t("position", { row: table.row, column: table.column })}`
+            : ""}
+        </p>
+        {canLayout && editable && onLayoutSave && (
+          <details>
+            <summary className="cursor-pointer text-xs underline">{t("assignLayout")}</summary>
+            <fieldset disabled={saving} className="mt-3 space-y-3">
+              <label className="block text-xs">
+                {t("side")}
+                <select
+                  aria-label={t("side")}
+                  className="mt-1 block w-full rounded border bg-background p-2"
+                  value={side}
+                  onChange={(e) => {
+                    setSide(e.target.value);
+                    setColumn(1);
+                  }}
+                >
+                  <option value="">{t("chooseSide")}</option>
+                  <option value="BRIDE">{t("BRIDE")}</option>
+                  <option value="GROOM">{t("GROOM")}</option>
+                </select>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-xs">
+                  {t("row")}
+                  <input
+                    className="mt-1 block w-full rounded border bg-background p-2"
+                    type="number"
+                    aria-label={t("row")}
+                    min={1}
+                    max={100}
+                    value={row || ""}
+                    onChange={(e) => setRow(Number(e.target.value))}
+                  />
+                </label>
+                <label className="text-xs">
+                  {t("column")}
+                  <select
+                    aria-label={t("column")}
+                    className="mt-1 block w-full rounded border bg-background p-2"
+                    value={column}
+                    onChange={(e) => setColumn(Number(e.target.value))}
+                  >
+                    {Array.from({ length: columns }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        {i + 1}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {slotOccupied && (
+                <p role="alert" className="text-xs text-amber-800">
+                  {t("occupiedSlot")}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">{t("sideRule")}</p>
+              <Button
+                type="button"
+                size="sm"
+                disabled={
+                  !side ||
+                  !Number.isInteger(row) ||
+                  row < 1 ||
+                  row > 100 ||
+                  column > columns ||
+                  slotOccupied ||
+                  saving
+                }
+                onClick={() => {
+                  if (side === "BRIDE" || side === "GROOM") onLayoutSave(side, row, column);
+                }}
+              >
+                {t("save")}
+              </Button>
+            </fieldset>
+          </details>
+        )}
+      </div>
       <section
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary"
         aria-label="Danh sách ghế trong bàn"
@@ -320,7 +433,7 @@ export function SeatingTableDrawer({
         <div className="flex gap-2">
           {editable && (
             <Button type="submit" className="min-h-11 flex-1" disabled={saving || !dirty || !valid}>
-              {saving ? "Đang lưu…" : "Lưu thay đổi"}
+              {saving ? "Đang lưu…" : draft ? draftText("applyDraftEdits") : "Lưu thay đổi"}
             </Button>
           )}
           <Button
@@ -339,14 +452,16 @@ export function SeatingTableDrawer({
               variant="ghost"
               size="sm"
               className="h-8 gap-1 px-0 text-[11px] text-destructive hover:bg-transparent hover:text-destructive/80"
-              disabled={saving || occupied > 0}
+              disabled={saving}
               onClick={() => confirmationRef.current?.showModal()}
             >
               <Trash2 aria-hidden="true" />
               Xoá bàn
             </Button>
             {!!occupied && (
-              <span className="text-[10px] text-muted-foreground">Chỉ xoá được bàn trống</span>
+              <span className="text-[10px] text-muted-foreground">
+                Khách sẽ trở về danh sách chờ xếp
+              </span>
             )}
           </div>
         )}
@@ -365,7 +480,8 @@ export function SeatingTableDrawer({
           Xoá {table.name}?
         </h3>
         <p id={`${id}-delete-description`} className="mt-2 text-sm text-muted-foreground">
-          Bàn trống này sẽ bị xoá khỏi sơ đồ. Bạn có chắc muốn tiếp tục?
+          Bàn sẽ bị xoá khỏi sơ đồ. Khách đang ngồi tại bàn sẽ trở về danh sách chờ xếp. Bạn có chắc
+          muốn tiếp tục?
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <Button
@@ -380,7 +496,7 @@ export function SeatingTableDrawer({
             type="button"
             variant="destructive"
             className="min-h-11"
-            disabled={saving || occupied > 0}
+            disabled={saving}
             onClick={() => {
               confirmationRef.current?.close();
               onDelete();
