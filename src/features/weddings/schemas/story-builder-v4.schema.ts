@@ -58,14 +58,14 @@ const eventSchema = z.object({
   id: z.string().min(1).max(100), title: z.string().min(1).max(150),
   // The public API serializes unset event fields as null. Normalize those values
   // so valid V4 documents do not fall through the legacy website schema.
-  description: z.string().max(1000).nullish().transform(value => value ?? undefined),
-  startsAt: z.iso.datetime({ offset: true }).nullish().transform(value => value ?? undefined),
-  endsAt: z.iso.datetime({ offset: true }).nullish().transform(value => value ?? undefined),
+  description: z.string().max(1000).nullable().optional(),
+  startsAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  endsAt: z.iso.datetime({ offset: true }).nullable().optional(),
   sortOrder: z.number().int().min(0).optional(),
   timeZoneId: z.string().max(100).optional(),
-  venueName: z.string().max(150).nullish().transform(value => value ?? undefined),
-  address: z.string().max(300).nullish().transform(value => value ?? undefined),
-  mapUrl: httpsUrlSchema.nullish().transform(value => value ?? undefined),
+  venueName: z.string().max(150).nullable().optional(),
+  address: z.string().max(300).nullable().optional(),
+  mapUrl: httpsUrlSchema.nullable().optional(),
 }).strict();
 const storyItemSchema = z.object({
   id: z.string().min(1).max(100), title: z.string().min(1).max(150), date: z.string().max(50).optional(),
