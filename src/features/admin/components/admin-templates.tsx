@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { ImageIcon, Plus } from "lucide-react";
+import { resolveMediaUrl } from "@/core/config/media-url";
+import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
@@ -12,54 +15,63 @@ import { LoadingState } from "@/shared/feedback/loading-state";
 import { Modal } from "@/shared/ui/modal";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
-import { adminApi, type AdminTemplate } from "../api/admin.api";
+import { adminApi } from "../api/admin.api";
 import { useLocale } from "@/i18n/language-context";
-import { formatDate, formatNumber } from "@/i18n/format";
+import { formatNumber } from "@/i18n/format";
 
-type FormValue = {
-  name: string;
-  slug: string;
-  theme: string;
-  previewUrl: string;
-  configurationJson: string;
-  status: "ACTIVE" | "INACTIVE" | "DRAFT";
-};
-const blank: FormValue = {
-  name: "",
-  slug: "",
-  theme: "",
-  previewUrl: "",
-  configurationJson: "",
-  status: "DRAFT",
-};
-function toForm(template: AdminTemplate): FormValue {
-  return {
-    name: template.name,
-    slug: template.slug,
-    theme: template.theme ?? "",
-    previewUrl: template.previewUrl ?? "",
-    configurationJson: template.configurationJson ?? "",
-    status: template.status,
-  };
-}
+const emptyDesign = JSON.stringify({
+  schemaVersion: 1,
+  nodes: {
+    ROOT: {
+      type: { resolvedName: "StudioFrame" },
+      isCanvas: true,
+      props: { width: 480, height: 1000, background: "#ffffff" },
+      displayName: "StudioFrame",
+      custom: {},
+      hidden: false,
+      nodes: [],
+      linkedNodes: {},
+    },
+  },
+});
 
-export function AdminTemplates() {
+export function AdminTemplates({
+  copyDesign,
+  renderDesignPreview,
+}: {
+  copyDesign: (source: string) => string;
+  renderDesignPreview: (source: string | null) => ReactNode;
+}) {
   const { t: translate } = useTranslation("admin");
   const { language } = useLocale();
   const { api } = useRuntime();
   const client = useQueryClient();
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
+  const [draftFilter, setDraftFilter] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
-  const [editing, setEditing] = useState<AdminTemplate | null>(null);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<FormValue>(blank);
+  const [sourceMode, setSourceMode] = useState<"copy" | "blank" | null>(null);
+  const [sourceId, setSourceId] = useState("");
+  const [sourcePage, setSourcePage] = useState(1);
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
   const templates = useQuery({
-    queryKey: ["admin-templates", page, search, statusFilter],
+    queryKey: ["admin-templates", page, search, statusFilter, draftFilter],
     queryFn: ({ signal }) =>
-      adminApi.templates(api, { page, pageSize: 20, search, status: statusFilter }, signal),
+      adminApi.templates(
+        api,
+        {
+          page,
+          pageSize: 20,
+          search,
+          status: statusFilter,
+          hasUnpublishedChanges: draftFilter ? draftFilter === "changed" : undefined,
+        },
+        signal,
+      ),
   });
   const permissions = useQuery({
     queryKey: ["admin-my-permissions"],
@@ -70,42 +82,75 @@ export function AdminTemplates() {
     setError("");
     await client.invalidateQueries({ queryKey: ["admin-templates"] });
   };
-  const save = useMutation({
-    mutationFn: () => {
-      const value = {
-        ...form,
-        theme: form.theme || null,
-        previewUrl: form.previewUrl || null,
-        configurationJson: form.configurationJson || null,
-      };
-      return editing
-        ? adminApi.updateTemplate(api, editing.id, value)
-        : adminApi.createTemplate(api, value);
-    },
-    onSuccess: async () => {
-      setOpen(false);
-      setEditing(null);
-      await invalidate();
-    },
-    onError: () => setError(translate("saveTemplateFailed")),
+  const sources = useQuery({
+    queryKey: ["admin-templates", "creation-sources", sourcePage],
+    queryFn: ({ signal }) => adminApi.templates(api, { page: sourcePage, pageSize: 20 }, signal),
+    enabled: open && sourceMode === "copy" && canManageTemplates,
   });
-  const setStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "INACTIVE" }) =>
-      status === "ACTIVE"
+  const save = useMutation({
+    mutationFn: async () => {
+      let configurationJson = emptyDesign;
+      if (sourceMode === "copy") {
+        const source = await adminApi.template(api, sourceId);
+        try {
+          if (!source.configurationJson) throw new Error("Missing source design");
+          configurationJson = copyDesign(source.configurationJson);
+        } catch {
+          throw new Error("invalidSourceTemplate");
+        }
+      }
+      const slugBase = name
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .replace(/đ/g, "d")
+        .replace(/[^a-z0-9]+/g, "-")
+        .slice(0, 120)
+        .replace(/^-|-$/g, "");
+      return adminApi.createTemplate(api, {
+        name: name.trim(),
+        slug: `${slugBase || "mau-thiep"}-${crypto.randomUUID().slice(0, 8)}`,
+        configurationJson,
+        status: "DRAFT",
+      });
+    },
+    onSuccess: (created) => {
+      setOpen(false);
+      void invalidate();
+      router.push(`/admin/templates/${encodeURIComponent(created.id)}/studio`);
+    },
+    onError: (failure) =>
+      setError(
+        translate(
+          failure.message === "invalidSourceTemplate"
+            ? "invalidSourceTemplate"
+            : "saveTemplateFailed",
+        ),
+      ),
+  });
+  const changePublication = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "publish" | "hide" | "show" }) =>
+      action === "publish"
         ? adminApi.publishTemplate(api, id)
-        : adminApi.setTemplateStatus(api, id, status),
-    onSuccess: invalidate,
-    onError: () => setError(translate("templateVisibilityFailed")),
+        : adminApi.setTemplateStatus(api, id, action === "show" ? "ACTIVE" : "INACTIVE"),
+    onSuccess: async (_, { id }) => {
+      await Promise.all([
+        invalidate(),
+        client.invalidateQueries({ queryKey: ["admin-template", id] }),
+        client.invalidateQueries({ queryKey: ["public-templates"] }),
+      ]);
+    },
+    onError: (_, { action }) =>
+      setError(
+        translate(action === "publish" ? "templatePublishFailed" : "templateVisibilityFailed"),
+      ),
   });
   function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
-    try {
-      if (form.configurationJson.trim()) JSON.parse(form.configurationJson);
-    } catch {
-      setError(translate("invalidTemplateJson"));
+    if (save.isPending || !name.trim() || !sourceMode || (sourceMode === "copy" && !sourceId))
       return;
-    }
     save.mutate();
   }
   return (
@@ -117,12 +162,16 @@ export function AdminTemplates() {
           canManageTemplates ? (
             <Button
               onClick={() => {
-                setEditing(null);
-                setForm(blank);
+                setName("");
+                setSourceMode(null);
+                setSourcePage(1);
+                setSourceId("");
+                setError("");
                 setOpen(true);
               }}
             >
-              {translate("addTemplate")}
+              <Plus aria-hidden="true" />
+              {translate("createTemplateAction")}
             </Button>
           ) : undefined
         }
@@ -138,9 +187,9 @@ export function AdminTemplates() {
           setSearch(searchDraft.trim());
           setPage(1);
         }}
-        className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-[1fr_200px_auto_auto] sm:items-end"
+        className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] lg:items-end"
       >
-        <label className="grid gap-1 text-sm">
+        <label className="grid gap-1 text-sm sm:col-span-2 lg:col-span-4">
           {translate("templateSearchLabel")}
           <Input
             value={searchDraft}
@@ -150,7 +199,7 @@ export function AdminTemplates() {
           />
         </label>
         <label className="grid gap-1 text-sm">
-          {translate("status")}
+          {translate("templateVisibilityFilter")}
           <select
             className="h-10 rounded-lg border bg-background px-3"
             value={statusFilter}
@@ -160,9 +209,24 @@ export function AdminTemplates() {
             }}
           >
             <option value="">{translate("allStatuses")}</option>
-            <option value="ACTIVE">{translate("activeStatus")}</option>
-            <option value="DRAFT">{translate("draftStatus")}</option>
+            <option value="ACTIVE">{translate("templateVisible")}</option>
+            <option value="DRAFT">{translate("templateNeverPublished")}</option>
             <option value="INACTIVE">{translate("hidden")}</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm">
+          {translate("templateDraftFilter")}
+          <select
+            className="h-10 rounded-lg border bg-background px-3"
+            value={draftFilter}
+            onChange={(event) => {
+              setDraftFilter(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">{translate("allStatuses")}</option>
+            <option value="changed">{translate("templateUnpublishedChanges")}</option>
+            <option value="synced">{translate("templateDraftSynced")}</option>
           </select>
         </label>
         <Button type="submit">{translate("search")}</Button>
@@ -173,6 +237,7 @@ export function AdminTemplates() {
             setSearchDraft("");
             setSearch("");
             setStatusFilter("");
+            setDraftFilter("");
             setPage(1);
           }}
         >
@@ -199,88 +264,104 @@ export function AdminTemplates() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto rounded-2xl border bg-card">
-              <table className="w-full min-w-[780px] text-left text-sm">
-                <thead className="bg-muted/50 text-muted-foreground">
-                  <tr>
-                    {[
-                      translate("template"),
-                      translate("theme"),
-                      translate("status"),
-                      translate("updated"),
-                      translate("actions"),
-                    ].map((x) => (
-                      <th key={x} className="px-4 py-3 font-medium">
-                        {x}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {templates.data.items.map((t) => (
-                    <tr key={t.id}>
-                      <td className="px-4 py-4">
-                        <p className="font-medium">{t.name}</p>
-                        <p className="text-xs text-muted-foreground">{t.slug}</p>
-                      </td>
-                      <td className="px-4 py-4">{t.theme || "—"}</td>
-                      <td className="px-4 py-4">
+            <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
+              {templates.data.items.map((item) => {
+                const previewUrl = resolveMediaUrl(item.previewUrl);
+                const visible = item.status === "ACTIVE";
+                const published = item.publishedVersion > 0;
+                return (
+                  <li key={item.id} className="flex items-start gap-4 p-4 sm:gap-5 sm:p-5">
+                    <div className="aspect-[3/4] w-20 shrink-0 overflow-hidden rounded-xl border bg-muted sm:w-28">
+                      {previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={previewUrl}
+                          alt=""
+                          loading="lazy"
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        (renderDesignPreview(item.configurationJson) ?? (
+                          <div className="grid size-full place-items-center text-muted-foreground">
+                            <ImageIcon aria-hidden="true" className="size-6" />
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="min-w-0 space-y-2">
+                      <div>
+                        <h2 className="break-words font-semibold">{item.name}</h2>
+                        <p className="break-all text-xs text-muted-foreground">{item.slug}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
                         <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${t.status === "ACTIVE" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}
+                          className={`rounded-full px-2.5 py-1 font-medium whitespace-nowrap ${visible ? "bg-emerald-100 text-emerald-800" : "bg-muted text-muted-foreground"}`}
                         >
                           {translate(
-                            t.status === "INACTIVE" ? "hidden" : `${t.status.toLowerCase()}Status`,
-                            { defaultValue: t.status },
+                            visible
+                              ? "templateVisible"
+                              : item.status === "INACTIVE"
+                                ? "hidden"
+                                : "templateNeverPublished",
                           )}
                         </span>
-                      </td>
-                      <td className="px-4 py-4 text-muted-foreground">
-                        {formatDate(t.updatedAt, language, { dateStyle: "medium" })}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex gap-2">
-                          {canManageTemplates && (
-                            <Button size="sm" variant="outline" asChild>
-                              <Link href={`/admin/templates/${encodeURIComponent(t.id)}/studio`}>
-                                Studio
-                              </Link>
-                            </Button>
-                          )}
-                          {canManageTemplates && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditing(t);
-                                setForm(toForm(t));
-                                setOpen(true);
-                              }}
-                            >
+                        {published && item.hasUnpublishedChanges && (
+                          <span className="inline-flex items-center gap-1.5 text-amber-800">
+                            <span
+                              className="size-2 shrink-0 rounded-full bg-amber-500"
+                              aria-hidden="true"
+                            />
+                            {translate("templateUnpublishedChanges")}
+                          </span>
+                        )}
+                      </div>
+                      {published && (
+                        <p className="text-xs text-muted-foreground">
+                          {translate("templatePublishedVersion", {
+                            version: formatNumber(item.publishedVersion, language),
+                          })}
+                        </p>
+                      )}
+                      {canManageTemplates && (
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/admin/templates/${encodeURIComponent(item.id)}/studio`}>
                               {translate("edit")}
+                            </Link>
+                          </Button>
+                          {item.configurationJson && (!published || item.hasUnpublishedChanges) && (
+                            <Button
+                              size="sm"
+                              disabled={changePublication.isPending}
+                              onClick={() =>
+                                changePublication.mutate({ id: item.id, action: "publish" })
+                              }
+                            >
+                              {translate("publish")}
                             </Button>
                           )}
-                          {canManageTemplates && (
+                          {published && (
                             <Button
                               size="sm"
                               variant="outline"
-                              disabled={setStatus.isPending}
+                              disabled={changePublication.isPending}
                               onClick={() =>
-                                setStatus.mutate({
-                                  id: t.id,
-                                  status: t.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+                                changePublication.mutate({
+                                  id: item.id,
+                                  action: visible ? "hide" : "show",
                                 })
                               }
                             >
-                              {t.status === "ACTIVE" ? translate("hide") : translate("publish")}
+                              {translate(visible ? "hide" : "templateShow")}
                             </Button>
                           )}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
                 {translate("templateCount", {
@@ -311,13 +392,84 @@ export function AdminTemplates() {
       <Modal
         open={open}
         onClose={() => {
+          if (save.isPending) return;
           setOpen(false);
           setError("");
         }}
-        title={editing ? translate("editTemplate") : translate("addTemplate")}
-        description={translate("templateMetadataDescription")}
+        title={translate("addTemplate")}
+        description={translate("templateCreationDescription")}
       >
         <form onSubmit={submit} className="grid gap-4">
+          <fieldset disabled={save.isPending} className="grid grid-cols-2 gap-2">
+            <legend className="mb-2 text-sm font-medium">
+              {translate("templateStartingPoint")}
+            </legend>
+            {(["copy", "blank"] as const).map((mode) => (
+              <Button
+                key={mode}
+                type="button"
+                variant={sourceMode === mode ? "default" : "outline"}
+                className="h-auto min-h-11 whitespace-normal py-2"
+                aria-pressed={sourceMode === mode}
+                onClick={() => {
+                  setSourceMode(mode);
+                  setError("");
+                }}
+              >
+                {translate(mode === "copy" ? "templateFromExisting" : "templateFromBlank")}
+              </Button>
+            ))}
+          </fieldset>
+          {sourceMode === "copy" && (
+            <fieldset disabled={save.isPending} className="grid gap-2">
+              <label className="grid gap-1 text-sm">
+                {translate("sourceTemplate")}
+                <select
+                  required
+                  className="h-10 rounded-lg border bg-background px-3"
+                  value={sourceId}
+                  onChange={(event) => setSourceId(event.target.value)}
+                >
+                  <option value="">{translate("selectSourceTemplate")}</option>
+                  {sources.data?.items.map((item) => (
+                    <option key={item.id} value={item.id} disabled={!item.configurationJson}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {sources.isPending && <LoadingState label={translate("loadingTemplates")} />}
+              {sources.isError && (
+                <ErrorState error={sources.error} retry={() => void sources.refetch()} />
+              )}
+              {(sourcePage > 1 || (sources.data?.totalPages ?? 0) > 1) && (
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={sourcePage <= 1}
+                    onClick={() => {
+                      setSourceId("");
+                      setSourcePage((current) => current - 1);
+                    }}
+                  >
+                    {translate("previous", { ns: "common" })}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={sourcePage >= (sources.data?.totalPages ?? 0)}
+                    onClick={() => {
+                      setSourceId("");
+                      setSourcePage((current) => current + 1);
+                    }}
+                  >
+                    {translate("next", { ns: "common" })}
+                  </Button>
+                </div>
+              )}
+            </fieldset>
+          )}
           {error && (
             <p
               role="alert"
@@ -331,71 +483,28 @@ export function AdminTemplates() {
             <Input
               required
               maxLength={150}
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
             />
-          </label>
-          <label className="grid gap-1 text-sm">
-            {translate("slug")}
-            <Input
-              required
-              maxLength={160}
-              pattern="[a-z0-9]+(-[a-z0-9]+)*"
-              value={form.slug}
-              onChange={(e) =>
-                setForm({ ...form, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })
-              }
-              placeholder="elegant-garden"
-            />
-          </label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm">
-              {translate("theme")}
-              <Input
-                maxLength={100}
-                value={form.theme}
-                onChange={(e) => setForm({ ...form, theme: e.target.value })}
-              />
-            </label>
-            <label className="grid gap-1 text-sm">
-              {translate("previewUrl")}
-              <Input
-                maxLength={2048}
-                value={form.previewUrl}
-                onChange={(e) => setForm({ ...form, previewUrl: e.target.value })}
-                placeholder="/images/templates/preview.webp"
-              />
-            </label>
-          </div>
-          <label className="grid gap-1 text-sm">
-            {translate("status")}
-            <select
-              className="h-10 rounded-lg border bg-background px-3"
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as FormValue["status"] })}
-            >
-              <option value="DRAFT">{translate("draftStatus")}</option>
-              <option value="ACTIVE">{translate("activeStatus")}</option>
-              <option value="INACTIVE">{translate("hidden")}</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            {translate("designConfig")}
-            <textarea
-              className="min-h-36 rounded-lg border bg-background p-3 font-mono text-xs"
-              value={form.configurationJson}
-              onChange={(e) => setForm({ ...form, configurationJson: e.target.value })}
-              placeholder="{ }"
-            />
-            <span className="text-xs leading-5 text-muted-foreground">
-              {translate("designConfigHelp")}
-            </span>
           </label>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={save.isPending}
+              onClick={() => setOpen(false)}
+            >
               {translate("cancel")}
             </Button>
-            <Button type="submit" disabled={save.isPending}>
+            <Button
+              type="submit"
+              disabled={
+                save.isPending ||
+                !name.trim() ||
+                !sourceMode ||
+                (sourceMode === "copy" && !sourceId)
+              }
+            >
               {save.isPending ? translate("saving") : translate("saveTemplate")}
             </Button>
           </div>

@@ -173,7 +173,7 @@
     "fields": {
       "recipientName": "Tên người nhận",
       "honorific": "Danh xưng",
-      "expectedPeople": "Tổng người dự kiến (1–500)",
+      "expectedPeople": "Tổng người dự kiến (1–10)",
       "side": "Phía khách mời",
       "group": "Nhóm khách",
       "phone": "SĐT",
@@ -586,6 +586,12 @@
     }
   },
   "generation": {
+    "applyDraftEdits": "Áp dụng vào bản nháp",
+    "draftTitle": "Bản nháp phương án xếp bàn",
+    "draftDescription": "Bàn, chỗ ngồi và các số đếm bên dưới đang là bản nháp. Bạn có thể chỉnh sửa rồi lưu phương án.",
+    "saveDraft": "Lưu phương án",
+    "discardDraft": "Hủy bản nháp",
+    "draftChanged": "Đã chỉnh sửa bản nháp, chưa lưu.",
     "title": "Tự tạo & xếp bàn",
     "description": "Giữ nguyên từng lời mời, chia riêng nhà gái và nhà trai. Chỉ lưu khi bạn áp dụng phương án.",
     "capacity": "Ghế mỗi bàn",

@@ -112,7 +112,7 @@
       "emailInvalid": "Enter a valid email address.",
       "versionInvalid": "The information version is invalid.",
       "expectedPeopleMin": "At least one invitation place is required.",
-      "expectedPeopleMax": "The invitation cannot include more than 500 places.",
+      "expectedPeopleMax": "The invitation cannot include more than 10 places.",
       "groupRequired": "Select a guest group within your assigned scope."
     }
   },

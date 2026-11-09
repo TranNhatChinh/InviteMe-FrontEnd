@@ -45,6 +45,7 @@ export function SeatingTableDrawer({
   canLayout = false,
   onLayoutSave,
   saveError,
+  draft = false,
 }: {
   table: SeatingPlan["tables"][number];
   plan: SeatingPlan;
@@ -59,9 +60,11 @@ export function SeatingTableDrawer({
   onDelete: () => void;
   canLayout?: boolean;
   saveError?: string;
+  draft?: boolean;
   onLayoutSave?: (side: "BRIDE" | "GROOM", row: number, column: number) => void;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "layout" });
+  const { t: draftText } = useTranslation("guestPlanning", { keyPrefix: "generation" });
   const [side, setSide] = useState(table.side ?? "");
   const [row, setRow] = useState(table.row ?? 1),
     [column, setColumn] = useState(table.column ?? 1);
@@ -103,6 +106,11 @@ export function SeatingTableDrawer({
       }}
     >
       <header className="shrink-0 border-b border-foreground/10 px-5 pb-4 pt-5">
+        {draft && (
+          <p className="mb-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-900">
+            {draftText("draftDescription")}
+          </p>
+        )}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -425,7 +433,7 @@ export function SeatingTableDrawer({
         <div className="flex gap-2">
           {editable && (
             <Button type="submit" className="min-h-11 flex-1" disabled={saving || !dirty || !valid}>
-              {saving ? "Đang lưu…" : "Lưu thay đổi"}
+              {saving ? "Đang lưu…" : draft ? draftText("applyDraftEdits") : "Lưu thay đổi"}
             </Button>
           )}
           <Button

@@ -17,6 +17,41 @@
     "jsonOpenFailed": "Couldn't open this document. The JSON structure is invalid or contains an unsupported item.",
     "templateApplied": "Opened {{name}}. Use Undo to go back."
   },
+  "adminLayout": {
+    "saveDraft": "Save draft",
+    "quickView": "Quick view",
+    "quickViewHelp": "Click the thumbnail to jump to that part of the invitation.",
+    "jumpToPage": "Jump to position on invitation",
+    "settings": "Invitation settings",
+    "zoom": "Zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "backup": {
+    "title": "Backups",
+    "description": "Review and restore designs saved in this browser.",
+    "on": "Local autosave: On",
+    "off": "Local autosave: Off",
+    "unavailable": "Local autosave: Error",
+    "autosave": "Autosave",
+    "interval": "Checks for changes every 30 seconds.",
+    "local": "Saved on this device",
+    "count_other": "{{count}} backups",
+    "empty": "No backups yet.",
+    "untitled": "Invitation design",
+    "latest": "Latest",
+    "restore": "Restore",
+    "delete": "Delete",
+    "confirmRestore": "Replace the design on the canvas with this backup? The server draft is updated only when you save.",
+    "confirmDelete": "Delete this backup from the browser?",
+    "where": "Where are backups stored?",
+    "retention": "This browser keeps up to 3 backups per account and design for 7 days. Clearing site data can remove these backups.",
+    "refresh": "Refresh",
+    "close": "Close",
+    "error": "Could not read or write backups in this browser.",
+    "lastSaved": "Last saved: {{time}}",
+    "count_one": "{{count}} backup"
+  },
   "header": {
     "backWedding": "Back to wedding",
     "saving": "Saving…",
@@ -29,6 +64,7 @@
     "title": "Invitation Studio"
   },
   "categories": {
+    "page": "Page",
     "cover": "Invitation cover",
     "text": "Text",
     "image": "Images",
@@ -66,6 +102,10 @@
     "comingSoon": "Coming soon"
   },
   "library": {
+    "frameHeight": "Invitation height",
+    "resizeHeight": "Drag to resize the invitation height",
+    "decreaseHeight": "Decrease invitation height",
+    "increaseHeight": "Increase invitation height",
     "utilitiesHelp": "Choose a widget to add to the design.",
     "textHelp": "Add text, then edit its content in Properties.",
     "addText": "Add text",

@@ -1,19 +1,23 @@
 "use client";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useContext } from "react";
 import type { parseStudioDocument } from "../schemas/document";
-import { imageShapeStyle } from "./items";
+import { imageShapeStyle, itemStyle, studioTextStyle } from "./items";
 import { resolveStudioText } from "./wording-text";
+import { WordingPreviewContext } from "./wording-preview";
 export function TemplateThumbnail({
   document,
   scale = 0.43,
   height = 230,
   fluid = false,
+  full = false,
 }: {
   document: ReturnType<typeof parseStudioDocument>;
   scale?: number;
   height?: number;
   fluid?: boolean;
+  full?: boolean;
 }) {
+  const wording = useContext(WordingPreviewContext);
   const host = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(240);
   useEffect(() => {
@@ -25,9 +29,11 @@ export function TemplateThumbnail({
     observer.observe(host.current);
     return () => observer.disconnect();
   }, [fluid]);
-  const effectiveScale = fluid ? width / 480 : scale;
   const root = document.nodes.ROOT;
   if (!root) return null;
+  const frameWidth = full ? (root.props.width ?? 480) : 480;
+  const frameHeight = full ? (root.props.height ?? 760) : fluid ? 1400 : 700;
+  const effectiveScale = fluid ? width / frameWidth : scale;
   return (
     <div
       ref={host}
@@ -35,7 +41,7 @@ export function TemplateThumbnail({
       aria-hidden="true"
       style={{
         height: fluid ? undefined : height,
-        aspectRatio: fluid ? "9 / 16" : undefined,
+        aspectRatio: full ? frameWidth / frameHeight : fluid ? "9 / 16" : undefined,
         width: fluid ? "100%" : 480 * scale,
         maxWidth: "100%",
         marginInline: "auto",
@@ -49,8 +55,8 @@ export function TemplateThumbnail({
     >
       <div
         style={{
-          width: 480,
-          height: fluid ? 1400 : 700,
+          width: frameWidth,
+          height: frameHeight,
           position: "relative",
           transform: `scale(${effectiveScale})`,
           transformOrigin: "top left",
@@ -61,28 +67,10 @@ export function TemplateThumbnail({
           const node = document.nodes[id];
           if (!node) return null;
           const p = node.props;
-          if ((p.y ?? 0) > (fluid ? 1300 : 650)) return null;
-          const style: CSSProperties = {
-            position: "absolute",
-            left: p.x,
-            top: p.y,
-            width: p.width,
-            height: p.height,
-            transform: `rotate(${p.rotation ?? 0}deg)`,
-            color: p.color,
-            background: p.background,
-            fontSize: p.fontSize,
-            fontFamily: p.fontFamily,
-            textAlign: p.textAlign,
-            fontStyle: p.italic ? "italic" : undefined,
-            whiteSpace: "pre-wrap",
-            opacity: p.opacity,
-            ...imageShapeStyle(p),
-            overflow: "hidden",
-          };
+          if (!full && (p.y ?? 0) > (fluid ? 1300 : 650)) return null;
           return node.type.resolvedName === "StudioText" ? (
-            <div key={id} style={style}>
-              {resolveStudioText(p)}
+            <div key={id} style={{ ...itemStyle(p, false), ...studioTextStyle(p) }}>
+              {resolveStudioText(p, wording)}
             </div>
           ) : node.type.resolvedName === "StudioImage" ? (
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -90,7 +78,14 @@ export function TemplateThumbnail({
               key={id}
               alt=""
               src={p.src}
-              style={{ ...style, objectFit: p.objectFit, margin: 0, border: 0 }}
+              style={{
+                ...itemStyle({ width: 370, height: 420, ...p }, false),
+                ...imageShapeStyle(p),
+                objectFit: p.objectFit ?? "cover",
+                opacity: p.opacity,
+                margin: 0,
+                border: 0,
+              }}
             />
           ) : null;
         })}

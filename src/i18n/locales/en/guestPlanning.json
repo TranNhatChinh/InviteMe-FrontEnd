@@ -448,7 +448,7 @@
     "fields": {
       "recipientName": "Recipient name",
       "honorific": "Title",
-      "expectedPeople": "Expected guests (1–500)",
+      "expectedPeople": "Expected guests (1–10)",
       "side": "Guest side",
       "group": "Guest group",
       "phone": "Phone",
@@ -586,6 +586,12 @@
     }
   },
   "generation": {
+    "applyDraftEdits": "Apply to draft",
+    "draftTitle": "Seating proposal draft",
+    "draftDescription": "Tables, seats and the counts below are a draft. Make changes, then save the proposal.",
+    "saveDraft": "Save proposal",
+    "discardDraft": "Discard draft",
+    "draftChanged": "Draft updated. Changes have not been saved.",
     "title": "Create & seat tables",
     "description": "Keep each invitation together and separate the bride and groom sides. Nothing is saved until you apply.",
     "capacity": "Seats per table",

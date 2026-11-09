@@ -214,6 +214,8 @@ export const adminTemplateSchema = z.object({
   previewUrl: z.string().nullable(),
   configurationJson: z.string().nullable(),
   status: z.enum(["ACTIVE", "INACTIVE", "DRAFT"]),
+  publishedVersion: z.number().int().nonnegative(),
+  hasUnpublishedChanges: z.boolean(),
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
 });
@@ -351,7 +353,7 @@ export const planRevenueSchema = z.object({
 });
 export type PlanRevenue = z.infer<typeof planRevenueSchema>;
 
-function queryString(values: Record<string, string | number | undefined>) {
+function queryString(values: Record<string, string | number | boolean | undefined>) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values))
     if (value !== undefined && value !== "") params.set(key, String(value));
@@ -398,7 +400,13 @@ export const adminApi = {
     }),
   templates: (
     api: ApiClient,
-    input: { page: number; pageSize?: number; search?: string; status?: string },
+    input: {
+      page: number;
+      pageSize?: number;
+      search?: string;
+      status?: string;
+      hasUnpublishedChanges?: boolean;
+    },
     signal?: AbortSignal,
   ) =>
     api.request(`/admin/templates?${queryString(input)}`, { signal, schema: adminTemplatesSchema }),

@@ -11,7 +11,6 @@ import {
   generateSeatingPreview,
   seatingCapacities,
   type SeatingCapacity,
-  type SeatingGenerationApply,
   type SeatingGenerationConfig,
   type SeatingGenerationPreview,
   type SeatingPlan,
@@ -21,12 +20,12 @@ import { generationIssues } from "../utils/seating-layout";
 export function GenerateSeatingDialog({
   plan,
   disabled,
-  onApply,
+  onPreview,
   saveError,
 }: {
   plan: SeatingPlan;
   disabled: boolean;
-  onApply: (input: SeatingGenerationApply) => Promise<boolean>;
+  onPreview: (value: SeatingGenerationPreview, config: SeatingGenerationConfig) => void;
   saveError?: string;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "generation" });
@@ -34,18 +33,10 @@ export function GenerateSeatingDialog({
   const [open, setOpen] = useState(false);
   const [capacity, setCapacity] = useState<SeatingCapacity>(10);
   const [columns, setColumns] = useState(plan.brideTablesPerRow ?? 2);
-  const [busy, setBusy] = useState(false),
-    [applying, setApplying] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{
-    source: string;
-    value: SeatingGenerationPreview;
-    config: SeatingGenerationConfig;
-  } | null>(null);
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
-  const source = JSON.stringify(plan);
-  const proposal = result?.source === source ? result : null;
   const issues = generationIssues(plan, capacity);
   const invalid =
     !plan.places.length ||
@@ -60,11 +51,10 @@ export function GenerateSeatingDialog({
   function reset() {
     request.current?.abort();
     setBusy(false);
-    setResult(null);
     setError("");
   }
   function close() {
-    if (applying) return;
+    if (busy) return;
     reset();
     setOpen(false);
   }
@@ -75,7 +65,10 @@ export function GenerateSeatingDialog({
     setBusy(true);
     try {
       const value = await generateSeatingPreview(api, plan.weddingId, config, controller.signal);
-      if (!controller.signal.aborted) setResult({ source, value, config });
+      if (!controller.signal.aborted) {
+        onPreview(value, config);
+        setOpen(false);
+      }
     } catch (e) {
       if (!controller.signal.aborted)
         setError(
@@ -105,7 +98,7 @@ export function GenerateSeatingDialog({
         {t("suggest")}
       </Button>
       <Modal open={open} onClose={close} title={t("title")} description={t("description")}>
-        <div className="space-y-5" aria-busy={busy || applying}>
+        <div className="space-y-5" aria-busy={busy}>
           {!plan.places.length && (
             <p role="status">
               {t("noPlaces")}{" "}
@@ -114,7 +107,7 @@ export function GenerateSeatingDialog({
               </Link>
             </p>
           )}
-          <fieldset disabled={applying || disabled} className="space-y-4">
+          <fieldset disabled={busy || disabled} className="space-y-4">
             <legend className="mb-2 text-sm font-medium">{t("capacity")}</legend>
             <div className="flex flex-wrap gap-5">
               {seatingCapacities.map((n) => (
@@ -177,7 +170,7 @@ export function GenerateSeatingDialog({
               </ul>
             </div>
           )}
-          {!proposal && (
+          {
             <div className="rounded-xl bg-muted/40 p-4 text-sm">
               <p className="font-medium">{t("estimate")}</p>
               <div className="my-3 grid grid-cols-3 gap-2 text-center">
@@ -194,12 +187,7 @@ export function GenerateSeatingDialog({
               </div>
               <p className="text-xs text-muted-foreground">{t("lowerBound")}</p>
             </div>
-          )}
-          {result && !proposal && (
-            <p role="alert" className="text-sm text-amber-800">
-              {t("stale")}
-            </p>
-          )}
+          }
           {saveError && (
             <p role="alert" className="text-sm text-destructive">
               {saveError}
@@ -213,87 +201,11 @@ export function GenerateSeatingDialog({
           <Button
             type="button"
             variant="outline"
-            disabled={invalid || busy || applying || disabled}
+            disabled={invalid || busy || disabled}
             onClick={() => void preview()}
           >
             {busy ? t("calculating") : t("preview")}
           </Button>
-          {proposal && (
-            <div className="space-y-4">
-              <div role="status" className="rounded-xl border p-4 text-sm">
-                <p className="font-medium">{t("summary", proposal.value.summary)}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t(
-                    proposal.value.optimizationStatus === "PROVEN_OPTIMAL" ? "optimal" : "feasible",
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{t("plannedPlaces")}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("mixedCount", {
-                    count: proposal.value.tables.filter((table) => table.group === null).length,
-                  })}
-                </p>
-              </div>
-              <div className="grid max-h-80 gap-3 overflow-auto sm:grid-cols-2">
-                {proposal.value.tables.map((table) => (
-                  <article
-                    key={table.code}
-                    className={`rounded-xl border p-3 text-sm ${table.side === "BRIDE" ? "bg-rose-50" : "bg-sky-50"}`}
-                  >
-                    <h3 className="font-semibold">
-                      {table.code} · {t(table.side === "BRIDE" ? "bride" : "groom")}
-                    </h3>
-                    <p className="my-1 text-xs">
-                      {t("position", { row: table.row, column: table.column })} ·{" "}
-                      {proposal.value.assignments.filter((a) => a.tableCode === table.code).length}/
-                      {table.capacity}
-                    </p>
-                    {table.group === null && <p className="text-xs text-amber-800">{t("mixed")}</p>}
-                    <ul className="mt-2 space-y-1">
-                      {table.guestIds.map((id) => (
-                        <li key={id}>
-                          {plan.guests.find((g) => g.id === id)?.recipientName}{" "}
-                          <span className="text-muted-foreground">
-                            ({plan.places.filter((p) => p.guestId === id).length})
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                ))}
-              </div>
-              <Button
-                type="button"
-                disabled={disabled || applying || busy}
-                onClick={async () => {
-                  setApplying(true);
-                  setError("");
-                  try {
-                    if (
-                      await onApply({
-                        ...proposal.config,
-                        sourceFingerprint: proposal.value.sourceFingerprint,
-                        algorithmVersion: proposal.value.algorithmVersion,
-                      })
-                    ) {
-                      setOpen(false);
-                      setResult(null);
-                    } else {
-                      setResult(null);
-                      setError(t("applyFailed"));
-                    }
-                  } finally {
-                    setApplying(false);
-                  }
-                }}
-              >
-                {applying ? t("applying") : t("apply")}
-              </Button>
-              <Button type="button" variant="ghost" disabled={applying} onClick={reset}>
-                {t("back")}
-              </Button>
-            </div>
-          )}
         </div>
       </Modal>
     </>

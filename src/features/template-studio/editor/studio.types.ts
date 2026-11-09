@@ -11,6 +11,13 @@ export type TemplateStudioProps = {
   initialWording?: boolean;
   wordingPanel?: StudioWordingPanel;
   backHref?: string;
+  backup?: { scope: string; title?: string };
+  adminLayout?: {
+    backLabel: string;
+    status: string;
+    toolbarAction: ReactNode;
+    settings: ReactNode;
+  };
   initialDocument?: string;
   availableTemplates?: Array<(typeof templateCatalog)[number]>;
   onSave?: (serialized: string) => Promise<void>;

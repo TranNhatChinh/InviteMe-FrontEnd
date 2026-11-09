@@ -220,7 +220,7 @@ export function createPlanningGuestCreateSchema(messages: PlanningGuestValidatio
       .number()
       .int()
       .min(1, messages.expectedPeopleMin)
-      .max(500, messages.expectedPeopleMax),
+      .max(10, messages.expectedPeopleMax),
     side: z.enum(["BRIDE", "GROOM", "MUTUAL", "UNSPECIFIED"]),
     groupId: z.string().nullable(),
     phone: createPhoneSchema(messages),
@@ -240,7 +240,7 @@ const defaultGuestValidationMessages: PlanningGuestValidationMessages = {
   emailInvalid: "Email không hợp lệ.",
   versionInvalid: "Phiên bản thông tin không hợp lệ.",
   expectedPeopleMin: "Cần có ít nhất một chỗ mời.",
-  expectedPeopleMax: "Số chỗ mời không được vượt quá 500.",
+  expectedPeopleMax: "Số chỗ mời không được vượt quá 10.",
 };
 
 export const planningGuestUpdateSchema = createPlanningGuestUpdateSchema(

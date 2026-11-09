@@ -117,7 +117,7 @@ export function PlanningGuestCreateForm({
             <Input
               type="number"
               min={1}
-              max={500}
+              max={10}
               step={1}
               value={Number(field.value ?? 1)}
               onChange={(event) => field.onChange(Number(event.currentTarget.value))}

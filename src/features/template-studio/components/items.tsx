@@ -48,7 +48,7 @@ export type ItemProps = {
   milestones?: { time: string; title: string; description: string }[];
 };
 
-export function itemStyle(props: ItemProps, selected: boolean): CSSProperties {
+export function itemStyle(props: ItemProps, selected: boolean, enabled = false): CSSProperties {
   return {
     position: "absolute",
     left: props.x ?? 40,
@@ -58,7 +58,7 @@ export function itemStyle(props: ItemProps, selected: boolean): CSSProperties {
     transform: `rotate(${props.rotation ?? 0}deg)`,
     outline: selected ? "1px solid #477565" : undefined,
     cursor: "pointer",
-    touchAction: "none",
+    touchAction: enabled ? "none" : "auto",
   };
 }
 
@@ -78,6 +78,28 @@ export function imageShapeStyle(props: ItemProps): CSSProperties {
         : undefined,
     maskSize: "100% 100%",
     maskRepeat: "no-repeat",
+  };
+}
+
+export function studioTextStyle(props: ItemProps): CSSProperties {
+  return {
+    fontSize: props.fontSize ?? 32,
+    color: props.color ?? "#493a34",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    lineHeight: props.lineHeight ?? 1.2,
+    fontFamily: props.fontFamily ?? "Arial",
+    fontWeight: props.bold ? 700 : 400,
+    fontStyle: props.italic ? "italic" : "normal",
+    textDecoration:
+      [props.underline ? "underline" : "", props.strike ? "line-through" : ""]
+        .filter(Boolean)
+        .join(" ") || "none",
+    textTransform: props.uppercase ? "uppercase" : "none",
+    textAlign: props.textAlign ?? "left",
+    background: props.background ?? "transparent",
+    borderRadius: props.borderRadius ?? 0,
+    opacity: props.opacity ?? 1,
   };
 }
 
@@ -115,24 +137,8 @@ export function StudioText(props: ItemProps) {
         }
       }}
       style={{
-        ...itemStyle(props, selected),
-        fontSize: props.fontSize ?? 32,
-        color: props.color ?? "#493a34",
-        whiteSpace: "pre-wrap",
-        overflowWrap: "anywhere",
-        lineHeight: props.lineHeight ?? 1.2,
-        fontFamily: props.fontFamily ?? "Arial",
-        fontWeight: props.bold ? 700 : 400,
-        fontStyle: props.italic ? "italic" : "normal",
-        textDecoration:
-          [props.underline ? "underline" : "", props.strike ? "line-through" : ""]
-            .filter(Boolean)
-            .join(" ") || "none",
-        textTransform: props.uppercase ? "uppercase" : "none",
-        textAlign: props.textAlign ?? "left",
-        background: props.background ?? "transparent",
-        borderRadius: props.borderRadius ?? 0,
-        opacity: props.opacity ?? 1,
+        ...itemStyle(props, selected, enabled),
+        ...studioTextStyle(props),
         cursor: editing && !props.textBinding ? "text" : "pointer",
       }}
     >
@@ -155,6 +161,7 @@ StudioText.craft = {
 };
 
 export function StudioImage(props: ItemProps) {
+  const { enabled } = useEditor((state) => ({ enabled: state.options.enabled }));
   const {
     id,
     connectors: { connect },
@@ -167,7 +174,7 @@ export function StudioImage(props: ItemProps) {
       }}
       data-studio-node={id}
       style={{
-        ...itemStyle(props, selected),
+        ...itemStyle(props, selected, enabled),
         opacity: props.opacity ?? 1,
         ...imageShapeStyle(props),
         overflow: "hidden",

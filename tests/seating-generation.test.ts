@@ -17,6 +17,11 @@ import {
 } from "../src/features/guests/utils/seating-layout";
 import { previewSeatMove } from "../src/features/guests/utils/planning-seat-move";
 import { seatingDropFeedback } from "../src/features/guests/utils/seating-drag-preview";
+import {
+  changeGenerationDraft,
+  generationDraftPlan,
+  generationDraftInput,
+} from "../src/features/guests/utils/seating-generation-draft";
 function plan(): SeatingPlan {
   return {
     weddingId: "w",
@@ -46,6 +51,68 @@ function plan(): SeatingPlan {
     assignments: [],
   };
 }
+test("generated draft edits remain local and serialize the edited tables and seats for one save", () => {
+  const source = plan();
+  const config = {
+    expectedVersion: 0,
+    tableCapacity: 10 as const,
+    tablesPerRow: { bride: 2, groom: 2 },
+  };
+  const proposal = seatingGenerationSchema.parse({
+    sourceVersion: 0,
+    sourceFingerprint: "fingerprint",
+    algorithmVersion: "v1",
+    optimizationStatus: "PROVEN_OPTIMAL",
+    summary: { guests: 1, places: 4, tables: 1, emptySeats: 6 },
+    tables: [
+      { code: "T01", side: "GROOM", row: 1, column: 1, capacity: 10, group: null, guestIds: ["g"] },
+    ],
+    assignments: source.places.map((p, i) => ({
+      placeId: p.id,
+      tableCode: "T01",
+      seatNumber: i + 1,
+    })),
+    warnings: [],
+  });
+  let draft = generationDraftPlan(source, proposal, config);
+  draft = changeGenerationDraft(draft, {
+    action: "UPDATE_TABLE",
+    tableId: "draft:T01",
+    name: "Bạn thân",
+    capacity: 8,
+  });
+  assert.throws(() =>
+    changeGenerationDraft(draft, {
+      action: "UPDATE_TABLE",
+      tableId: "draft:T01",
+      name: "Too small",
+      capacity: 3,
+    }),
+  );
+  draft = changeGenerationDraft(draft, { action: "MOVE_PLACES", placeIds: ["p4"], tableId: null });
+  draft = changeGenerationDraft(draft, {
+    action: "MOVE_TABLE_SLOT",
+    tableId: "draft:T01",
+    targetRow: 2,
+    targetColumn: 2,
+  });
+  const request = generationDraftInput(draft, {
+    ...config,
+    sourceFingerprint: "fingerprint",
+    algorithmVersion: "v1",
+  });
+  assert.equal(request.expectedVersion, 0);
+  assert.equal(request.draft?.tables[0]?.name, "Bạn thân");
+  assert.equal(request.draft?.tables[0]?.row, 2);
+  assert.equal(request.draft?.assignments.length, 3);
+  assert.equal(source.tables.length, 0);
+  assert.equal(source.assignments.length, 0);
+  assert.equal(
+    changeGenerationDraft(draft, { action: "DELETE_TABLE", tableId: "draft:T01" }).assignments
+      .length,
+    0,
+  );
+});
 test("legacy layouts remain unpositioned and mixed-group tables never acquire a group scope", () => {
   const source = plan();
   const parsed = seatingPlanSchema.parse({

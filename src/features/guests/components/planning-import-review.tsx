@@ -527,7 +527,7 @@ export function PlanningImportReview({
           const hasCountIssue =
             row.expected === null ||
             row.expected < 1 ||
-            row.expected > 500 ||
+            row.expected > 10 ||
             status === "ERROR" ||
             status === "DECISION";
 

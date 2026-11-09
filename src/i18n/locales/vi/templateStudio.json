@@ -17,6 +17,40 @@
     "jsonOpenFailed": "Không mở được: JSON sai cấu trúc hoặc có mục chưa hỗ trợ.",
     "templateApplied": "Đã mở mẫu {{name}}. Dùng Hoàn tác để quay lại."
   },
+  "adminLayout": {
+    "saveDraft": "Lưu bản nháp",
+    "quickView": "Xem nhanh",
+    "quickViewHelp": "Bấm vào thiệp thu nhỏ để chuyển đến vị trí tương ứng.",
+    "jumpToPage": "Đến vị trí trên thiệp",
+    "settings": "Cài đặt thiệp",
+    "zoom": "Thu phóng",
+    "zoomIn": "Phóng to",
+    "zoomOut": "Thu nhỏ"
+  },
+  "backup": {
+    "title": "Bản sao lưu",
+    "description": "Xem lại và khôi phục thiết kế đã lưu trong trình duyệt này.",
+    "on": "Lưu tạm: Bật",
+    "off": "Lưu tạm: Tắt",
+    "unavailable": "Lưu tạm: Có lỗi",
+    "autosave": "Tự động lưu",
+    "interval": "Kiểm tra thay đổi mỗi 30 giây.",
+    "local": "Đã lưu trên thiết bị",
+    "count_other": "{{count}} bản",
+    "empty": "Chưa có bản sao lưu.",
+    "untitled": "Thiết kế thiệp",
+    "latest": "Gần nhất",
+    "restore": "Khôi phục",
+    "delete": "Xóa",
+    "confirmRestore": "Thay thiết kế đang mở bằng bản sao này? Bản nháp trên máy chủ chỉ cập nhật khi bạn bấm lưu.",
+    "confirmDelete": "Xóa bản sao này khỏi trình duyệt?",
+    "where": "Bản sao lưu được lưu ở đâu?",
+    "retention": "Trình duyệt này giữ tối đa 3 bản gần nhất cho mỗi tài khoản và thiết kế trong 7 ngày. Xóa dữ liệu trang web có thể làm mất bản sao.",
+    "refresh": "Làm mới",
+    "close": "Đóng",
+    "error": "Không thể đọc hoặc ghi bản sao trong trình duyệt này.",
+    "lastSaved": "Lưu gần nhất: {{time}}"
+  },
   "header": {
     "backWedding": "Về đám cưới",
     "saving": "Đang lưu…",
@@ -29,6 +63,7 @@
     "title": "Studio thiệp mời"
   },
   "categories": {
+    "page": "Trang",
     "cover": "Bìa thiệp",
     "text": "Văn bản",
     "image": "Hình ảnh",
@@ -66,6 +101,10 @@
     "comingSoon": "Sắp có"
   },
   "library": {
+    "frameHeight": "Chiều cao thiệp",
+    "resizeHeight": "Kéo để thay đổi chiều cao thiệp",
+    "decreaseHeight": "Giảm chiều cao thiệp",
+    "increaseHeight": "Tăng chiều cao thiệp",
     "utilitiesHelp": "Chọn tiện ích để thêm vào thiết kế.",
     "textHelp": "Thêm chữ, sau đó chỉnh nội dung trong phần Thuộc tính.",
     "addText": "Thêm văn bản",

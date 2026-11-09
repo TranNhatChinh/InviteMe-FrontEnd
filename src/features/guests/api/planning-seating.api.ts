@@ -154,6 +154,17 @@ export type SeatingGenerationPreview = z.infer<typeof seatingGenerationSchema>;
 export type SeatingGenerationApply = SeatingGenerationConfig & {
   sourceFingerprint: string;
   algorithmVersion: string;
+  draft?: {
+    tables: {
+      code: string;
+      name: string;
+      side: SeatingSide;
+      row: number;
+      column: number;
+      capacity: number;
+    }[];
+    assignments: SeatingGenerationPreview["assignments"];
+  };
 };
 export function generateSeatingPreview(
   api: ApiClient,

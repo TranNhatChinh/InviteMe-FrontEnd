@@ -56,6 +56,11 @@ import { ArrangeSeatingDialog } from "./arrange-seating-dialog";
 import { GenerateSeatingDialog } from "./generate-seating-dialog";
 import { SeatingBoard } from "./seating-board";
 import { wouldSplitParty } from "../utils/seating-layout";
+import {
+  changeGenerationDraft,
+  generationDraftPlan,
+  generationDraftInput,
+} from "../utils/seating-generation-draft";
 import { Modal } from "@/shared/ui/modal";
 import { AddSeatingTableDialog, type TableSlot } from "./add-seating-table-dialog";
 import { SeatingLegend } from "./seating-legend";
@@ -248,6 +253,19 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   } | null>(null);
   const [tableSlot, setTableSlot] = useState<TableSlot | null>(null);
   const [preview, setPreview] = useState<SeatingPlan | null>(null);
+  const [generationDraft, setGenerationDraft] = useState<{
+    plan: SeatingPlan;
+    input: SeatingGenerationApply;
+  } | null>(null);
+  useEffect(() => {
+    if (!generationDraft) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [generationDraft]);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [message, setMessage] = useState("");
@@ -330,7 +348,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     };
   }, [realtime, cache, weddingId]);
 
-  const plan = preview ?? planQuery.data;
+  const plan = generationDraft?.plan ?? preview ?? planQuery.data;
   const groupNames = new Map(
     (plan?.guests ?? []).flatMap((guest) =>
       guest.group ? [[guest.group.id, guest.group.name] as const] : [],
@@ -338,6 +356,23 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   );
   async function change(input: SeatingChange, optimistic?: SeatingPlan) {
     if (!editable || savingRef.current || !planQuery.data) return false;
+    if (generationDraft) {
+      try {
+        setGenerationDraft({
+          ...generationDraft,
+          plan: changeGenerationDraft(generationDraft.plan, input),
+        });
+        setFailure(false);
+        setMessage(t("generation.draftChanged"));
+        setSelection([]);
+        if (input.action === "DELETE_TABLE") closeDetails();
+        return true;
+      } catch (error) {
+        setFailure(true);
+        setMessage(error instanceof Error ? error.message : t("generation.applyFailed"));
+        return false;
+      }
+    }
     if (realtime.getStatus() !== "connected") {
       collaborationError();
       return false;
@@ -401,8 +436,19 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       await cache.invalidateQueries({ queryKey: key });
     }
   }
-  function applyGeneration(input: SeatingGenerationApply) {
-    return applyProposal(() => applySeatingGeneration(api, weddingId, input));
+  async function saveGenerationDraft() {
+    if (!generationDraft || savingRef.current) return;
+    const saved = await applyProposal(() =>
+      applySeatingGeneration(
+        api,
+        weddingId,
+        generationDraftInput(generationDraft.plan, generationDraft.input),
+      ),
+    );
+    if (saved) {
+      setGenerationDraft(null);
+      await cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] });
+    }
   }
   function applyArrangement(input: ArrangeSeatingInput) {
     return applyProposal(() => applySeatingArrangement(api, weddingId, input));
@@ -453,7 +499,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         lease.connectionId !== collaboration.connectionId &&
         ids.some((id) => lease.placeIds.includes(id)),
     );
-    if (lock) {
+    if (lock && !generationDraft) {
       collaboration.cancel(false);
       setFailure(true);
       setMessage(t("seating.lockedBy", { name: lock.displayName }));
@@ -531,9 +577,13 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   };
   return (
     <SeatingDragPresenceContext.Provider
-      value={collaboration.leases.filter(
-        (lease) => lease.connectionId !== collaboration.connectionId,
-      )}
+      value={
+        generationDraft
+          ? []
+          : collaboration.leases.filter(
+              (lease) => lease.connectionId !== collaboration.connectionId,
+            )
+      }
     >
       <Modal
         open={!!pendingSplit}
@@ -560,13 +610,15 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           </Button>
         </div>
       </Modal>
-      <SeatingRemoteCursors
-        weddingId={weddingId}
-        plan={plan}
-        leases={collaboration.leases.filter(
-          (lease) => lease.connectionId !== collaboration.connectionId,
-        )}
-      />
+      {!generationDraft && (
+        <SeatingRemoteCursors
+          weddingId={weddingId}
+          plan={plan}
+          leases={collaboration.leases.filter(
+            (lease) => lease.connectionId !== collaboration.connectionId,
+          )}
+        />
+      )}
       <DndContext
         key={dragEpoch}
         autoScroll={{
@@ -602,14 +654,16 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           )
         }
         onDragStart={({ active, activatorEvent }) => {
-          if (savingRef.current || realtime.getStatus() !== "connected") return;
+          if (savingRef.current || (!generationDraft && realtime.getStatus() !== "connected"))
+            return;
           const ids = (active.data.current?.ids as string[] | undefined) ?? [];
-          collaboration.begin(
-            ids,
-            "clientX" in activatorEvent && "clientY" in activatorEvent
-              ? { x: Number(activatorEvent.clientX), y: Number(activatorEvent.clientY) }
-              : undefined,
-          );
+          if (!generationDraft)
+            collaboration.begin(
+              ids,
+              "clientX" in activatorEvent && "clientY" in activatorEvent
+                ? { x: Number(activatorEvent.clientX), y: Number(activatorEvent.clientY) }
+                : undefined,
+            );
           setDragIds(ids);
           setDragTarget(null);
           setSelection([]);
@@ -617,7 +671,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         onDragOver={({ over }) => {
           const target = (over?.data.current as DropPosition | undefined) ?? null;
           setDragTarget(target);
-          collaboration.hover(target);
+          if (!generationDraft) collaboration.hover(target);
         }}
         onDragCancel={() => {
           setDragIds([]);
@@ -652,7 +706,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={publishing}
+                disabled={publishing || !!generationDraft}
                 onClick={() => void togglePublication()}
               >
                 {publishing
@@ -717,21 +771,77 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               {message}
             </p>
           )}
+          {generationDraft && (
+            <div
+              role="status"
+              className="sticky top-20 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950"
+            >
+              <div>
+                <p className="font-semibold">{t("generation.draftTitle")}</p>
+                <p className="text-sm">{t("generation.draftDescription")}</p>
+                {planQuery.data?.version !== generationDraft.input.expectedVersion && (
+                  <p className="text-sm text-red-800">{t("generation.stale")}</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => {
+                    setGenerationDraft(null);
+                    setSelection([]);
+                    closeDetails();
+                    setTableSlot(null);
+                    setMessage("");
+                    setFailure(false);
+                    collaboration.cancel(false);
+                    abortDrag();
+                  }}
+                >
+                  {t("generation.discardDraft")}
+                </Button>
+                <Button
+                  disabled={
+                    saving || planQuery.data?.version !== generationDraft.input.expectedVersion
+                  }
+                  onClick={() => void saveGenerationDraft()}
+                >
+                  {saving ? t("generation.applying") : t("generation.saveDraft")}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-4">
             <SeatingLegend />
             <div className="flex flex-wrap gap-2">
               {!plan.tables.length &&
+                !generationDraft &&
                 editable &&
                 isWeddingWide("SEATING_EDIT") &&
                 isWeddingWide("SEATING_VIEW") && (
                   <GenerateSeatingDialog
                     plan={plan}
                     disabled={saving}
-                    onApply={applyGeneration}
+                    onPreview={(value, config) => {
+                      if (value.sourceVersion !== plan.version) return;
+                      setGenerationDraft({
+                        plan: generationDraftPlan(plan, value, config),
+                        input: {
+                          ...config,
+                          sourceFingerprint: value.sourceFingerprint,
+                          algorithmVersion: value.algorithmVersion,
+                        },
+                      });
+                      setSelection([]);
+                      closeDetails();
+                      setFailure(false);
+                      setMessage("");
+                    }}
                     saveError={failure ? message : undefined}
                   />
                 )}
               {plan.tables.length > 0 &&
+                !generationDraft &&
                 editable &&
                 isWeddingWide("SEATING_EDIT") &&
                 isWeddingWide("SEATING_VIEW") && (
@@ -768,7 +878,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             >
               <SeatingQueue
                 plan={plan}
-                disabled={!editable || saving || status !== "connected"}
+                disabled={!editable || saving || (!generationDraft && status !== "connected")}
                 selection={selection}
                 allowedGroupIds={allowedGroupIds}
                 onSelect={(ids) => {
@@ -811,9 +921,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             <section
               data-seating-pointer-anchor="board"
               className="min-w-0 rounded-xl border bg-[#F8F5EF] p-4"
-              aria-label={t("seating.savedPlan")}
+              aria-label={generationDraft ? t("generation.draftTitle") : t("seating.savedPlan")}
             >
               <SeatingBoard
+                key={generationDraft ? "draft" : "saved"}
                 plan={plan}
                 editable={
                   editable && isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")
@@ -944,7 +1055,12 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                               <DragSource
                                 id={`chair:${table.id}:${n}`}
                                 ids={p ? [p.id] : []}
-                                disabled={!p || !editable || saving || status !== "connected"}
+                                disabled={
+                                  !p ||
+                                  !editable ||
+                                  saving ||
+                                  (!generationDraft && status !== "connected")
+                                }
                                 label={t("seating.seatLabel", {
                                   table: table.name,
                                   seat: n,
@@ -1029,6 +1145,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             >
               {inspectedTable && seat === null && !inspectedPlace ? (
                 <SeatingTableDrawer
+                  draft={!!generationDraft}
                   key={inspectedTable.id + ":" + plan.version}
                   table={inspectedTable}
                   canLayout={isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")}

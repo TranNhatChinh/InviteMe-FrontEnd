@@ -3,7 +3,17 @@
 import { Editor, Element, Frame, useEditor } from "@craftjs/core";
 import Moveable from "react-moveable";
 import Link from "next/link";
-import { useCallback, useContext, useEffect, useRef, useState, type CSSProperties } from "react";
+import Image from "next/image";
+import { ArrowLeft, FileText, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { flushSync } from "react-dom";
 import {
   AlignLeft,
@@ -59,6 +69,7 @@ import { parseStudioDocument } from "../schemas/document";
 import { resolveInvitationDocument } from "../api/design.api";
 import { PhotoFocusContext, type PhotoFocus } from "../components/photo-focus";
 import styles from "./studio.module.css";
+import { StudioBackups } from "./studio-backups";
 import type { TemplateStudioProps } from "./studio.types";
 import { WordingPreviewContext } from "../components/wording-preview";
 import { defaultWordingText, resolveCoverGreeting } from "../components/wording-text";
@@ -80,6 +91,8 @@ function Workspace({
   initialWording = false,
   wordingPanel,
   backHref,
+  backup,
+  adminLayout,
   initialDocument,
   availableTemplates,
   onSave,
@@ -98,6 +111,7 @@ function Workspace({
     items,
     serialized,
     background,
+    frameHeight,
     revealPreset,
     revealDuration,
   } = useEditor((state, query) => {
@@ -110,6 +124,7 @@ function Workspace({
       serialized: query.serialize(),
       revealPreset: state.nodes.ROOT?.data.props.revealPreset ?? "none",
       revealDuration: state.nodes.ROOT?.data.props.revealDuration ?? 800,
+      frameHeight: state.nodes.ROOT ? Number(state.nodes.ROOT.data.props.height ?? 760) : null,
       background: (state.nodes.ROOT?.data.props.background as string | undefined) ?? "#fffaf1",
     };
   });
@@ -126,7 +141,7 @@ function Workspace({
   const [coverOpen, setCoverOpen] = useState(false);
   const [preview, setPreview] = useState(initialPreview);
   const [category, setCategory] = useState(
-    initialWording ? "presets" : initialTemplate ? "templates" : "utilities",
+    adminLayout ? "page" : initialWording ? "presets" : initialTemplate ? "templates" : "utilities",
   );
   const [wordingPreview, setWordingPreview] = useState<string | null>(null);
   const [uploads, setUploads] = useState<{ src: string; name: string }[]>([]);
@@ -197,10 +212,27 @@ function Workspace({
     }
   }
   const [quickPhotosOpen, setQuickPhotosOpen] = useState(true);
+  const [zoom, setZoom] = useState(100);
+  const quickView = useMemo(() => {
+    if (!adminLayout || category !== "page" || preview) return null;
+    try {
+      return parseStudioDocument(
+        JSON.stringify({ schemaVersion: 1, nodes: JSON.parse(serialized) }),
+      );
+    } catch {
+      return null;
+    }
+  }, [adminLayout, category, preview, serialized]);
   const { focus: photoFocus, select: selectPhoto } = useContext(PhotoFocusContext);
   const propertyPanel = useRef<HTMLElement>(null);
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const stage = useRef<HTMLDivElement>(null);
+  const heightDrag = useRef<{
+    startY: number;
+    initialHeight: number;
+    lastHeight: number;
+    changed: boolean;
+  } | null>(null);
   const workspace = useRef<HTMLElement>(null);
   const [previewWidth, setPreviewWidth] = useState(480);
   useEffect(() => {
@@ -380,6 +412,20 @@ function Workspace({
     synchronizeTarget();
   }, [serialized, synchronizeTarget]);
 
+  useEffect(() => {
+    if (adminLayout) moveable.current?.updateRect();
+  }, [adminLayout, zoom]);
+
+  function setFrameHeight(value: number, mergeHistory = false) {
+    if (frameHeight === null || !Number.isFinite(value)) return;
+    const height = Math.max(20, Math.min(10000, Math.round(value)));
+    if (height === Number(query.getNodes().ROOT?.data.props.height ?? 760)) return;
+    const editor = mergeHistory ? actions.history.merge() : actions;
+    editor.setProp("ROOT", (props: ItemProps) => {
+      props.height = height;
+    });
+  }
+
   function update(values: Partial<ItemProps>) {
     const bounds = {
       x: [-3000, 3000],
@@ -538,11 +584,37 @@ function Workspace({
     }
   }
 
+  const historyButtons = (
+    <>
+      <button
+        className={styles.historyButton}
+        aria-label={t("header.undo")}
+        title={`${t("header.undo")} · Ctrl+Z`}
+        aria-keyshortcuts="Control+Z Meta+Z"
+        disabled={!canUndo}
+        onClick={() => actions.history.undo()}
+      >
+        <Undo2 size={18} aria-hidden="true" />
+      </button>
+      <button
+        className={styles.historyButton}
+        aria-label={t("header.redo")}
+        title={`${t("header.redo")} · Ctrl+Shift+Z / Ctrl+Y`}
+        aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z"
+        disabled={!canRedo}
+        onClick={() => actions.history.redo()}
+      >
+        <Redo2 size={18} aria-hidden="true" />
+      </button>
+    </>
+  );
+
   return (
     <WordingPreviewContext value={wordingPreview}>
       <main
         id="main-content"
         className={styles.studio}
+        data-admin-layout={Boolean(adminLayout)}
         data-preview={preview}
         data-cover-editor={editingCover}
         style={
@@ -552,67 +624,79 @@ function Workspace({
           } as CSSProperties
         }
       >
-        {!preview && (
-          <>
-            <header className={styles.header}>
-              <h1>{t("header.title")}</h1>
-              <p className={styles.status} role="status">
-                {message}
-              </p>
-              <div className={styles.buttons}>
-                {backHref && (
-                  <Link href={backHref} className={styles.backLink}>
-                    {t("header.backWedding")}
-                  </Link>
-                )}
-                {onSave && (
-                  <button
-                    className={styles.saveButton}
-                    disabled={saving}
-                    onClick={() => void saveDesign()}
-                  >
-                    {saving ? t("header.saving") : t("header.saveDraft")}
-                  </button>
-                )}
-                <button
-                  className={styles.historyButton}
-                  aria-label={t("header.undo")}
-                  title={`${t("header.undo")} · Ctrl+Z`}
-                  aria-keyshortcuts="Control+Z Meta+Z"
-                  disabled={!canUndo}
-                  onClick={() => actions.history.undo()}
-                >
-                  <Undo2 size={18} aria-hidden="true" />
-                </button>
-                <button
-                  className={styles.historyButton}
-                  aria-label={t("header.redo")}
-                  title={`${t("header.redo")} · Ctrl+Shift+Z / Ctrl+Y`}
-                  aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z"
-                  disabled={!canRedo}
-                  onClick={() => actions.history.redo()}
-                >
-                  <Redo2 size={18} aria-hidden="true" />
-                </button>
-                <button
-                  onClick={() => {
-                    actions.selectNode();
-                    actions.setOptions((options) => {
-                      options.enabled = preview;
-                    });
-                    if (!preview) replay();
-                    setCoverOpen(false);
-                    stage.current?.parentElement?.scrollTo({ top: 0 });
-                    setPreview(!preview);
-                  }}
-                >
-                  {preview ? t("header.backEditor") : t("header.preview")}
-                </button>
-              </div>
-            </header>
-          </>
-        )}
-        {preview && (
+        <header className={styles.header} hidden={preview}>
+          {adminLayout && backHref ? (
+            <div className={styles.studioIdentity}>
+              <Link
+                href={backHref}
+                aria-label={adminLayout.backLabel}
+                title={adminLayout.backLabel}
+              >
+                <ArrowLeft size={20} />
+              </Link>
+              <Image src="/images/brand/inviteme-mark.png" width={30} height={30} alt="" />
+              <h1>InviteMe Studio</h1>
+              <div className={styles.buttons}>{historyButtons}</div>
+            </div>
+          ) : (
+            <h1>{t("header.title")}</h1>
+          )}
+          <p className={styles.status} role="status">
+            {adminLayout?.status || message}
+          </p>
+          <div className={styles.buttons}>
+            {backHref && !adminLayout && (
+              <Link href={backHref} className={styles.backLink}>
+                {t("header.backWedding")}
+              </Link>
+            )}
+            {backup && onSave && !initialPreview && (
+              <StudioBackups
+                key={backup.scope}
+                scope={backup.scope}
+                title={backup.title}
+                document={
+                  frameHeight === null
+                    ? null
+                    : JSON.stringify({
+                        schemaVersion: 1,
+                        templateId,
+                        nodes: JSON.parse(serialized),
+                      })
+                }
+                onRestore={importJson}
+              />
+            )}
+            {onSave && (
+              <button
+                className={styles.saveButton}
+                disabled={saving}
+                onClick={() => void saveDesign()}
+              >
+                {saving
+                  ? t("header.saving")
+                  : t(adminLayout ? "adminLayout.saveDraft" : "header.saveDraft")}
+              </button>
+            )}
+            {!adminLayout && historyButtons}
+            <button
+              onClick={() => {
+                actions.selectNode();
+                actions.setOptions((options) => {
+                  options.enabled = preview;
+                });
+                if (!preview) replay();
+                setCoverOpen(false);
+                stage.current?.parentElement?.scrollTo({ top: 0 });
+                setPreview(!preview);
+              }}
+            >
+              {preview ? t("header.backEditor") : t("header.preview")}
+            </button>
+            {adminLayout?.toolbarAction}
+          </div>
+        </header>
+        {preview && !initialPreview && (
           <button
             className={styles.demoEdit}
             onClick={() => {
@@ -642,6 +726,7 @@ function Workspace({
                 { id: "templates", icon: LayoutTemplate },
                 { id: "effects", icon: WandSparkles },
                 { id: "layers", icon: Layers },
+                ...(adminLayout ? [{ id: "page", icon: FileText }] : []),
               ].map(({ id, icon: Icon }) => (
                 <button
                   key={id}
@@ -650,7 +735,7 @@ function Workspace({
                     actions.selectNode();
                     setTarget(null);
                     setCategory(id);
-                    workspace.current?.scrollTo({ top: 0 });
+                    if (!adminLayout) workspace.current?.scrollTo({ top: 0 });
                   }}
                 >
                   <Icon size={22} />
@@ -659,6 +744,38 @@ function Workspace({
               ))}
             </nav>
             <div className={styles.libraryContent}>
+              {adminLayout && category === "page" && (
+                <>
+                  <h2>{t("adminLayout.quickView")}</h2>
+                  <p>{t("adminLayout.quickViewHelp")}</p>
+                  {quickView && (
+                    <button
+                      type="button"
+                      className={styles.quickView}
+                      aria-label={t("adminLayout.jumpToPage")}
+                      onClick={(event) => {
+                        const canvas = workspace.current;
+                        const frame = stage.current?.querySelector("[data-studio-frame]");
+                        if (!canvas || !frame) return;
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        const fraction = event.detail
+                          ? (event.clientY - bounds.top) / bounds.height
+                          : 0.5;
+                        canvas.scrollTo({
+                          top:
+                            canvas.scrollTop +
+                            frame.getBoundingClientRect().top -
+                            canvas.getBoundingClientRect().top +
+                            fraction * frame.getBoundingClientRect().height -
+                            canvas.clientHeight / 2,
+                        });
+                      }}
+                    >
+                      <TemplateThumbnail document={quickView} fluid full />
+                    </button>
+                  )}
+                </>
+              )}
               {category === "utilities" && (
                 <>
                   <h2>{t("categories.utilities")}</h2>
@@ -820,12 +937,7 @@ function Workspace({
                       <button
                         disabled={preview}
                         onClick={() => {
-                          if (
-                            canUndo &&
-                            !window.confirm(
-                              t("ui:studio.confirmTemplateSwitch"),
-                            )
-                          ) {
+                          if (canUndo && !window.confirm(t("ui:studio.confirmTemplateSwitch"))) {
                             return;
                           }
                           importJson(
@@ -1113,6 +1225,7 @@ function Workspace({
             <RevealPausedContext.Provider value={showingCover}>
               <div
                 ref={stage}
+                className={styles.stage}
                 style={{
                   display: showingCover ? "none" : undefined,
                   zoom: preview
@@ -1123,12 +1236,99 @@ function Workspace({
                           previewWidth / (query.getNodes().ROOT?.data.props.width ?? 480),
                         ),
                       )
-                    : 1,
+                    : zoom / 100,
                 }}
                 onClick={synchronizeTarget}
                 onPointerUp={synchronizeTarget}
               >
                 <Frame />
+                {!preview && !editingCover && frameHeight !== null && (
+                  <div className={styles.heightControls}>
+                    <button
+                      type="button"
+                      className={styles.heightHandle}
+                      aria-label={t("library.resizeHeight")}
+                      title={t("library.resizeHeight")}
+                      onPointerDown={(event) => {
+                        if (event.button !== 0) return;
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        heightDrag.current = {
+                          startY: event.clientY,
+                          initialHeight: frameHeight,
+                          lastHeight: frameHeight,
+                          changed: false,
+                        };
+                      }}
+                      onPointerMove={(event) => {
+                        const drag = heightDrag.current;
+                        if (!drag || !event.currentTarget.hasPointerCapture(event.pointerId))
+                          return;
+                        const height = Math.max(
+                          20,
+                          Math.min(
+                            10000,
+                            Math.round(
+                              drag.initialHeight + (event.clientY - drag.startY) / (zoom / 100),
+                            ),
+                          ),
+                        );
+                        if (height === drag.lastHeight) return;
+                        setFrameHeight(height, drag.changed);
+                        drag.changed = true;
+                        drag.lastHeight = height;
+                      }}
+                      onLostPointerCapture={() => {
+                        heightDrag.current = null;
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                        event.preventDefault();
+                        setFrameHeight(frameHeight + (event.key === "ArrowDown" ? 100 : -100));
+                      }}
+                    />
+                    <div
+                      className={styles.heightStepper}
+                      role="group"
+                      aria-label={t("library.frameHeight")}
+                    >
+                      <button
+                        type="button"
+                        aria-label={t("library.decreaseHeight")}
+                        disabled={frameHeight <= 20}
+                        onClick={() => setFrameHeight(frameHeight - 100)}
+                      >
+                        −
+                      </button>
+                      <input
+                        key={frameHeight}
+                        type="number"
+                        min={20}
+                        max={10000}
+                        defaultValue={frameHeight}
+                        aria-label={t("library.frameHeight")}
+                        onBlur={(event) => {
+                          setFrameHeight(event.currentTarget.valueAsNumber);
+                          event.currentTarget.value = String(frameHeight);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+                        }}
+                      />
+                      <span>px</span>
+                      <button
+                        type="button"
+                        aria-label={t("library.increaseHeight")}
+                        disabled={frameHeight >= 10000}
+                        onClick={() => setFrameHeight(frameHeight + 100)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </RevealPausedContext.Provider>
             {showingCover && (
@@ -1202,7 +1402,34 @@ function Workspace({
               />
             )}
           </section>
+          {adminLayout && !preview && !editingCover && (
+            <div className={styles.zoomControls} role="group" aria-label={t("adminLayout.zoom")}>
+              <button
+                type="button"
+                aria-label={t("adminLayout.zoomIn")}
+                disabled={zoom >= 150}
+                onClick={() => setZoom((value) => value + 25)}
+              >
+                <ZoomIn size={17} />
+              </button>
+              <span aria-live="polite">{zoom}%</span>
+              <button
+                type="button"
+                aria-label={t("adminLayout.zoomOut")}
+                disabled={zoom <= 50}
+                onClick={() => setZoom((value) => value - 25)}
+              >
+                <ZoomOut size={17} />
+              </button>
+            </div>
+          )}
           <aside ref={propertyPanel} className={styles.panel} hidden={editingCover}>
+            {adminLayout && !selection && (
+              <section className={styles.templateSettings}>
+                <h2>{t("adminLayout.settings")}</h2>
+                {adminLayout.settings}
+              </section>
+            )}
             <h2>{t("properties.title")}</h2>
             {!selection ? (
               <p>{t("properties.selectItem")}</p>
@@ -2058,6 +2285,8 @@ export function TemplateStudio({
   initialWording = false,
   wordingPanel,
   backHref,
+  backup,
+  adminLayout,
   initialDocument,
   availableTemplates,
   onSave,
@@ -2096,6 +2325,8 @@ export function TemplateStudio({
             initialWording={initialWording}
             wordingPanel={wordingPanel}
             backHref={backHref}
+            backup={backup}
+            adminLayout={adminLayout}
             initialDocument={initialDocument}
             availableTemplates={availableTemplates}
             onSave={onSave}

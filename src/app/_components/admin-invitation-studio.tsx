@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,50 +9,60 @@ import {
   resolveInvitationDocument,
   storedInvitationDocument,
   TemplateStudio,
+  TemplateThumbnail,
 } from "@/features/template-studio";
 import { resolveMediaUrl } from "@/core/config/media-url";
+import { Input } from "@/shared/ui/input";
 import { Button } from "@/shared/ui/button";
 import { LoadingState } from "@/shared/feedback/loading-state";
 import { ErrorState } from "@/shared/feedback/error-state";
+import { useCurrentUser } from "@/features/auth";
 import { adminApi } from "@/features/admin";
 
 export function AdminInvitationStudio({ id }: { id: string }) {
   const { api } = useRuntime();
+  const { user } = useCurrentUser();
   const { t } = useTranslation("ui");
+  const { t: adminText } = useTranslation("admin");
   const client = useQueryClient();
-  const [message, setMessage] = useState("");
+  const [publishMessage, setPublishMessage] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [draftName, setDraftName] = useState<string>();
   const template = useQuery({
     queryKey: ["admin-template", id],
     queryFn: ({ signal }) => adminApi.template(api, id, signal),
   });
   async function save(serialized: string) {
+    setPublishMessage("");
     if (!template.data) return;
     const item = template.data;
-    await adminApi.updateTemplate(api, id, {
-      name: item.name,
+    const name = (draftName ?? item.name).trim();
+    if (!name) throw new Error("A template name is required.");
+    const saved = await adminApi.updateTemplate(api, id, {
+      name,
       slug: item.slug,
       theme: item.theme,
       previewUrl: item.previewUrl,
       configurationJson: JSON.stringify(storedInvitationDocument(parseStudioDocument(serialized))),
       status: item.status,
     });
-    setMessage(t("invitationStudio.saved"));
-    await client.invalidateQueries({ queryKey: ["admin-template", id] });
+    client.setQueryData(["admin-template", id], saved);
+    setDraftName((current) => (current === draftName ? undefined : current));
+    await client.invalidateQueries({ queryKey: ["admin-templates"] });
   }
   async function publish() {
     setPublishing(true);
-    setMessage("");
+    setPublishMessage("");
     try {
       await adminApi.publishTemplate(api, id);
-      setMessage(t("invitationStudio.published"));
+      setPublishMessage(t("invitationStudio.published"));
       await Promise.all([
         client.invalidateQueries({ queryKey: ["admin-template", id] }),
         client.invalidateQueries({ queryKey: ["admin-templates"] }),
         client.invalidateQueries({ queryKey: ["public-templates"] }),
       ]);
     } catch {
-      setMessage(t("invitationStudio.publishFailed"));
+      setPublishMessage(t("invitationStudio.publishFailed"));
     } finally {
       setPublishing(false);
     }
@@ -61,50 +70,71 @@ export function AdminInvitationStudio({ id }: { id: string }) {
   if (template.isPending) return <LoadingState />;
   if (template.isError || !template.data)
     return <ErrorState retry={() => void template.refetch()} />;
-  let initialDocument: string | undefined;
+  let document: ReturnType<typeof resolveInvitationDocument> | undefined;
   try {
     if (template.data.configurationJson) {
-      initialDocument = JSON.stringify(
-        resolveInvitationDocument(parseStudioDocument(template.data.configurationJson)),
-      );
+      document = resolveInvitationDocument(parseStudioDocument(template.data.configurationJson));
     }
   } catch {
     // A legacy draft can be replaced with a valid Studio document.
   }
+  const item = template.data;
+  const previewUrl = resolveMediaUrl(item.previewUrl);
+  const name = draftName ?? item.name;
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4">
-        <div>
-          <Link href="/admin/templates" className="text-sm text-primary">
-            ← {t("invitationStudio.back")}
-          </Link>
-          <h1 className="font-display text-2xl">{template.data.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t("invitationStudio.help")}
-          </p>
-        </div>
-        <Button
-          disabled={publishing || !template.data.configurationJson}
-          onClick={() => void publish()}
-        >
-          {publishing ? t("invitationStudio.publishing") : t("invitationStudio.publish")}
-        </Button>
-      </header>
-      {message && (
-        <p role="status" className="rounded-lg border p-3 text-sm">
-          {message}
-        </p>
-      )}
-      <TemplateStudio
-        key={id}
-        initialDocument={initialDocument}
-        backHref="/admin/templates"
-        onSave={save}
-        onUploadImage={async (file) => {
-          const asset = await adminApi.uploadTemplateAsset(api, id, file);
-          return { ...asset, src: resolveMediaUrl(asset.src) ?? asset.src };
-        }}
-      />
-    </div>
+    <TemplateStudio
+      key={id}
+      initialDocument={document && JSON.stringify(document)}
+      backHref="/admin/templates"
+      backup={user ? { scope: `admin:${user.id}:${id}`, title: name } : undefined}
+      adminLayout={{
+        backLabel: t("invitationStudio.back"),
+        status: publishMessage,
+        toolbarAction: (
+          <Button
+            disabled={publishing || !item.configurationJson || name.trim() !== item.name}
+            onClick={() => void publish()}
+          >
+            {publishing ? t("invitationStudio.publishing") : t("invitationStudio.publish")}
+          </Button>
+        ),
+        settings: (
+          <>
+            <div className="overflow-hidden rounded-xl border">
+              {previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={previewUrl} alt="" className="aspect-video w-full object-cover" />
+              ) : document ? (
+                <div className="aspect-video overflow-hidden">
+                  <TemplateThumbnail document={document} fluid full />
+                </div>
+              ) : null}
+              <div className="space-y-2 p-3">
+                <label>
+                  {adminText("templateName")}
+                  <Input
+                    required
+                    maxLength={150}
+                    value={name}
+                    aria-invalid={!name.trim()}
+                    onChange={(event) => setDraftName(event.target.value)}
+                  />
+                </label>
+                <span className="inline-block rounded-full bg-muted px-2.5 py-1 text-xs">
+                  {adminText(
+                    item.status === "INACTIVE" ? "hidden" : `${item.status.toLowerCase()}Status`,
+                  )}
+                </span>
+              </div>
+            </div>
+          </>
+        ),
+      }}
+      onSave={save}
+      onUploadImage={async (file) => {
+        const asset = await adminApi.uploadTemplateAsset(api, id, file);
+        return { ...asset, src: resolveMediaUrl(asset.src) ?? asset.src };
+      }}
+    />
   );
 }

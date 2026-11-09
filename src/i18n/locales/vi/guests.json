@@ -112,7 +112,7 @@
       "emailInvalid": "Email không hợp lệ.",
       "versionInvalid": "Phiên bản thông tin không hợp lệ.",
       "expectedPeopleMin": "Cần có ít nhất một chỗ mời.",
-      "expectedPeopleMax": "Số chỗ mời không được vượt quá 500.",
+      "expectedPeopleMax": "Số chỗ mời không được vượt quá 10.",
       "groupRequired": "Chọn nhóm khách thuộc phạm vi được giao."
     }
   },

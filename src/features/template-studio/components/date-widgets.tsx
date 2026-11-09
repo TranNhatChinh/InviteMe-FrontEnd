@@ -1,6 +1,6 @@
 "use client";
 
-import { useNode } from "@craftjs/core";
+import { useEditor, useNode } from "@craftjs/core";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { itemStyle, type ItemProps } from "./items";
 import { calendarMonth, countdownParts, eventTimestamp } from "./date-utils";
@@ -24,6 +24,7 @@ export function WidgetBox({
   baseHeight,
   ...props
 }: ItemProps & { children: ReactNode; baseHeight: number }) {
+  const { enabled } = useEditor((state) => ({ enabled: state.options.enabled }));
   const {
     id,
     connectors: { connect },
@@ -57,7 +58,7 @@ export function WidgetBox({
         if (element) connect(element);
       }}
       style={{
-        ...itemStyle(props, selected),
+        ...itemStyle(props, selected, enabled),
         fontSize: props.fontSize ?? 16,
         fontFamily: props.fontFamily ?? "Georgia",
         color: props.color ?? "#493a34",
