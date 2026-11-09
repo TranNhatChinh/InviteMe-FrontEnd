@@ -6,9 +6,9 @@ import {
   TemplateStudio,
   getInvitationDesign,
   saveInvitationDesign,
+  publishInvitationDesign,
 } from "@/features/template-studio";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
 import { SessionLoading } from "@/shared/feedback/session-loading";
@@ -90,9 +90,8 @@ function StudioSession({
   snapshot: Awaited<ReturnType<typeof getInvitationDesign>>;
 } & React.ComponentProps<typeof TemplateStudio>) {
   const { t } = useTranslation("screens");
-  const router = useRouter();
   const { api } = useRuntime();
-  const { can } = usePermission();
+  const { can, isOwner } = usePermission();
   const { user } = useCurrentUser();
   const cache = useQueryClient();
   const [version, setVersion] = useState(snapshot.version);
@@ -101,6 +100,29 @@ function StudioSession({
   );
   const [generation, setGeneration] = useState(0);
   const remoteChanged = version !== snapshot.version;
+  const designKey = ["invitation-design", weddingId];
+  function acceptDesign(design: typeof snapshot) {
+    setVersion(design.version);
+    cache.setQueryData(designKey, design);
+  }
+
+  async function saveDraft(serialized: string) {
+    const saved = await saveInvitationDesign(api, weddingId, version, serialized);
+    acceptDesign(saved);
+    return saved;
+  }
+
+  async function publishDesign(serialized: string) {
+    const saved = await saveDraft(serialized);
+    const published = await publishInvitationDesign(
+      api,
+      weddingId,
+      saved.version,
+      saved.wordingVersion,
+    );
+    acceptDesign(published);
+  }
+
   return (
     <>
       {remoteChanged && (
@@ -139,13 +161,11 @@ function StudioSession({
         onSave={
           can("INVITATION_SEND")
             ? async (serialized) => {
-                const saved = await saveInvitationDesign(api, weddingId, version, serialized);
-                setVersion(saved.version);
-                cache.setQueryData(["invitation-design", weddingId], saved);
-                router.push(`/weddings/${encodeURIComponent(weddingId)}/invitations`);
+                await saveDraft(serialized);
               }
             : undefined
         }
+        onPublish={isOwner ? publishDesign : undefined}
       />
     </>
   );

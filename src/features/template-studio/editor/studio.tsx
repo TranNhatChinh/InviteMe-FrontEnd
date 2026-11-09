@@ -96,6 +96,7 @@ function Workspace({
   initialDocument,
   availableTemplates,
   onSave,
+  onPublish,
   onUploadImage,
   loadImages,
 }: TemplateStudioProps) {
@@ -131,7 +132,7 @@ function Workspace({
   const { replay } = useContext(RevealReplayContext);
   const [json, setJson] = useState("");
   const [message, setMessage] = useState(() => t("status.initial"));
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<"draft" | "publish" | null>(null);
   const [templateId, setTemplateId] = useState<string | undefined>(() =>
     initialDocument
       ? parseStudioDocument(initialDocument).templateId
@@ -556,19 +557,20 @@ function Workspace({
     setMessage(t("status.jsonExported"));
     return value;
   }
-  async function saveDesign() {
-    if (!onSave || saving) return;
-    setSaving(true);
+  async function saveDesign(publish = false) {
+    const persist = publish ? onPublish : onSave;
+    if (!persist || saving) return;
+    setSaving(publish ? "publish" : "draft");
     try {
       const doc = parseStudioDocument(
         JSON.stringify({ schemaVersion: 1, templateId, nodes: JSON.parse(query.serialize()) }),
       );
-      await onSave(JSON.stringify(doc));
-      setMessage(t("status.draftSaved"));
+      await persist(JSON.stringify(doc));
+      setMessage(publish ? t("invitations:saved.publishSuccess") : t("status.draftSaved"));
     } catch {
-      setMessage(t("status.saveFailed"));
+      setMessage(publish ? t("invitations:saved.publishFailed") : t("status.saveFailed"));
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   }
   function importJson(value: string) {
@@ -670,10 +672,10 @@ function Workspace({
             {onSave && (
               <button
                 className={styles.saveButton}
-                disabled={saving}
+                disabled={saving !== null}
                 onClick={() => void saveDesign()}
               >
-                {saving
+                {saving === "draft"
                   ? t("header.saving")
                   : t(adminLayout ? "adminLayout.saveDraft" : "header.saveDraft")}
               </button>
@@ -693,6 +695,19 @@ function Workspace({
             >
               {preview ? t("header.backEditor") : t("header.preview")}
             </button>
+            {onPublish && (
+              <button
+                className={styles.saveButton}
+                disabled={saving !== null}
+                onClick={() => void saveDesign(true)}
+              >
+                {t(
+                  saving === "publish"
+                    ? "invitations:saved.publishing"
+                    : "invitations:saved.publish",
+                )}
+              </button>
+            )}
             {adminLayout?.toolbarAction}
           </div>
         </header>
@@ -2290,6 +2305,7 @@ export function TemplateStudio({
   initialDocument,
   availableTemplates,
   onSave,
+  onPublish,
   onUploadImage,
   loadImages,
 }: TemplateStudioProps) {
@@ -2330,6 +2346,7 @@ export function TemplateStudio({
             initialDocument={initialDocument}
             availableTemplates={availableTemplates}
             onSave={onSave}
+            onPublish={onPublish}
             onUploadImage={onUploadImage}
             loadImages={loadImages}
           />

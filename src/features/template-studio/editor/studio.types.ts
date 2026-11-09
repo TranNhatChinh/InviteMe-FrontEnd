@@ -21,6 +21,7 @@ export type TemplateStudioProps = {
   initialDocument?: string;
   availableTemplates?: Array<(typeof templateCatalog)[number]>;
   onSave?: (serialized: string) => Promise<void>;
+  onPublish?: (serialized: string) => Promise<void>;
   onUploadImage?: (file: File) => Promise<{ src: string; name: string }>;
   loadImages?: () => Promise<{ src: string; name: string }[]>;
 };
