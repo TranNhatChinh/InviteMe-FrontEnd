@@ -372,7 +372,7 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
       body = <StoryRsvp label={text(content.submitLabel) || undefined} />;
       break;
     case "wishes":
-      body = <StoryWishes slug={slug} />;
+      body = <StoryWishes slug={slug} displayLimit={typeof content.displayLimit === "number" ? content.displayLimit : 3} allowLikes={content.allowLikes === true} allowComments={content.allowComments === true} />;
       break;
     case "gift": {
       const giftData = record(gift);
@@ -498,6 +498,9 @@ export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = 
     page.sections.some(section => section.type === "hero" && section.visible !== false));
   const guestTools = guestExperience.tools.filter(tool => !(tool === "rsvp" && rsvpAlreadyLinkedFromHero));
   const showGuestTools = !editable && (Boolean(slug) || showGuestExperiencePreview) && guestTools.length > 0;
+  const backToTopPosition = showGuestTools
+    ? "bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-5 sm:bottom-6 sm:right-[11rem]"
+    : "bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-5 sm:bottom-6 sm:right-5";
   const showDecoration = guestExperience.decoration !== "none" && (Boolean(slug) || showGuestExperiencePreview);
   const showLegacyFooterShare = Boolean(slug) && !editable && !document.appearance.guestExperience && !guestTools.includes("share");
   const style = {
@@ -528,6 +531,6 @@ export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = 
       <p className="text-xs tracking-wide opacity-65">Được tạo cùng InviteMe</p>
     </footer>
     {showGuestTools && <GuestUtilityBar tools={guestTools} targets={toolTargets} events={eventList} slug={slug} onNavigatePage={onNavigatePage} />}
-    {showBackToTop && !editable && <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-5 z-20 grid size-11 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)] text-[var(--site-text)] shadow-lg transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)] sm:bottom-6 sm:right-[5.5rem]" aria-label="Lên đầu trang"><ArrowUp className="size-5" /></button>}
+    {showBackToTop && !editable && <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className={`fixed ${backToTopPosition} z-20 grid size-11 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)] text-[var(--site-text)] shadow-lg transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]`} aria-label="Lên đầu trang"><ArrowUp className="size-5" /></button>}
   </div>;
 }
