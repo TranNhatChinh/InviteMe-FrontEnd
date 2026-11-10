@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useId, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useId, useSyncExternalStore, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Globe, GripVertical, Image as ImageIcon, LoaderCircle, Menu, Monitor, MoreHorizontal, Plus, Redo2, RefreshCw, Save, Search, Smartphone, Sparkles, Tablet, Trash2, Undo2, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Globe, GripVertical, History, Image as ImageIcon, LoaderCircle, Menu, Monitor, MoreHorizontal, Plus, Redo2, RefreshCw, Save, Search, Smartphone, Sparkles, Tablet, Trash2, Undo2, Upload, UserRound, UsersRound, X } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
 import { usePermission } from "@/shared/components/permission-guard";
@@ -18,9 +18,13 @@ import { applyStoryBuilderV4Template, createStoryBuilderV4Document, createV4Sect
 import { describeV4Issue, describeV4ValidationIssues, moveV4Page } from "../schemas/story-builder-v4.helpers";
 import { storyBuilderV4DocumentSchema, storyTemplateConfigSchema, type StoryBuilderV4Document, type StoryBuilderV4Section, type StorySectionType, type StoryTemplateSummaryV4 } from "../schemas/story-builder-v4.schema";
 import type { Website } from "../api/website.api";
-import { createWeddingEvent, deleteWeddingEvent, deleteWeddingMedia, getWebsite, listStoryTemplates, listWeddingEvents, listWeddingMedia, mediaUrl, publishWebsite, saveWebsite, updateWeddingEvent, unpublishWebsite, uploadWeddingMedia, type WeddingEvent, type WeddingEventInput } from "../api/website.api";
+import { createWeddingEvent, deleteWeddingEvent, deleteWeddingMedia, getWebsite, getWebsiteVersion, listStoryTemplates, listWeddingEvents, listWeddingMedia, listWebsiteVersions, mediaUrl, publishWebsite, restoreWebsiteVersion, saveWebsite, updateWeddingEvent, unpublishWebsite, uploadWeddingMedia, type WebsiteVersion, type WeddingEvent, type WeddingEventInput } from "../api/website.api";
 import { isoToLocalDateTime, localDateTimeToIso, type WeddingSetup } from "../schemas/wedding.schema";
 import { StoryBuilderV4Renderer } from "./story-builder-v4-renderer";
+import { mergeStoryDocuments, resolveStoryMergeConflict, type StoryMergeConflict } from "../schemas/story-builder-v4-collaboration";
+import { applyStoryHistoryOperation, type StoryHistoryOperation } from "../schemas/story-builder-v4-collaboration";
+import type { BuilderPresence } from "@/core/realtime/signalr-client";
+import { clearWebsiteBuilderRecovery, readWebsiteBuilderRecovery, writeWebsiteBuilderRecovery } from "../schemas/website-builder-recovery";
 
 type BuilderProps = { weddingId: string; site: Website; setup: WeddingSetup };
 type Viewport = "desktop" | "tablet" | "mobile";
@@ -42,6 +46,33 @@ function validateBuilderDocument(document: StoryBuilderV4Document, template?: St
   return issues;
 }
 const sectionNames: Record<SectionType, string> = { hero: "Ảnh bìa", couple: "Cặp đôi", countdown: "Đếm ngược", loveStory: "Chuyện tình", events: "Sự kiện", weddingParty: "Phù dâu & phù rể", gallery: "Album ảnh", rsvp: "Xác nhận tham dự", wishes: "Lời chúc", gift: "Mừng cưới" };
+const presenceFieldNames: Record<string, string> = {
+  title: "Tiêu đề", subtitle: "Lời dẫn", intro: "Giới thiệu", description: "Mô tả", image: "Ảnh",
+  eyebrow: "Dòng nhấn", ctaLabel: "Nhãn nút", submitLabel: "Nhãn nút gửi", displayName: "Tên hiển thị",
+  bio: "Lời giới thiệu", fatherName: "Tên cha", motherName: "Tên mẹ", targetDate: "Ngày giờ mục tiêu",
+  date: "Ngày hoặc dấu mốc", startsAt: "Ngày giờ", venueName: "Địa điểm", address: "Địa chỉ",
+  mapUrl: "Liên kết bản đồ", imageUrl: "Ảnh", photoUrl: "Ảnh chân dung", alt: "Mô tả ảnh",
+  name: "Họ tên", role: "Vai trò", navigationLabel: "Tiêu đề điều hướng", slug: "Đường dẫn",
+  paletteId: "Bảng màu", fontHeading: "Phông tiêu đề", fontBody: "Phông nội dung", tools: "Tiện ích khách mời",
+  decoration: "Hiệu ứng trang trí", intensity: "Mức độ hiệu ứng", animation: "Hiệu ứng chuyển động", background: "Nền phần",
+};
+const presenceFieldLabel = (fieldPath: string | null) => {
+  const parts = fieldPath?.split(".") ?? [];
+  const key = parts.at(-1);
+  if (!key) return null;
+  const label = presenceFieldNames[key] ?? "Nội dung";
+  if (parts.includes("couple")) return `${label} · ${parts.includes("bride") ? "Cô dâu" : "Chú rể"}`;
+  if (parts.includes("loveStory") && parts.includes("items")) return `${label} · Dấu mốc`;
+  if (parts.includes("gallery") && parts.includes("images")) return `${label} · Ảnh album`;
+  if (parts.includes("weddingParty") && (parts.includes("groom") || parts.includes("bride"))) return `${label} · ${parts.includes("bride") ? "Phù dâu" : "Phù rể"}`;
+  if (parts.includes("events")) return `${label} · Sự kiện`;
+  return label;
+};
+const builderFieldPath = (...parts: (string | number)[]) => parts
+  .map(part => String(part).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""))
+  .filter(Boolean).join(".").slice(0, 160);
+const canonicalBuilderFieldPath = (path: string) => path.split(".").filter(part => part && part !== "content")
+  .map((part, index, parts) => part === "event" && parts[index - 1] === "events" ? "events" : part).join(".");
 const sectionDescriptions: Record<SectionType, string> = { hero: "Mở đầu website với tên hai bạn, lời dẫn và ảnh bìa.", couple: "Giới thiệu cô dâu, chú rể và câu chuyện riêng.", countdown: "Đếm số ngày còn lại tới ngày vui.", loveStory: "Kể lại các dấu mốc đáng nhớ của hai bạn.", events: "Quản lý nhiều buổi lễ và chọn buổi hiển thị trên website.", weddingParty: "Giới thiệu những người đồng hành trong ngày cưới.", gallery: "Chia sẻ album ảnh cưới với khách mời.", rsvp: "Đưa khách tới luồng xác nhận tham dự an toàn.", wishes: "Hiển thị lời chúc khách gửi qua thiệp.", gift: "Hiển thị thông tin mừng cưới đã cấu hình." };
 const templateCategoryLabels: Record<string, string> = { garden: "Vườn hoa", editorial: "Tạp chí", traditional: "Truyền thống", minimal: "Tối giản", outdoor: "Ngoài trời", royal: "Dạ tiệc", romantic: "Lãng mạn" };
 const categoryLabel = (value?: string | null) => value ? templateCategoryLabels[value.toLowerCase()] ?? value : "Website cưới";
@@ -58,6 +89,88 @@ const setupBindings: Partial<Record<SectionType, Array<{ target: string; source:
 };
 const id = () => globalThis.crypto?.randomUUID?.() ?? `page-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const clone = (value: StoryBuilderV4Document) => structuredClone(value);
+const sameDocument = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+const conflictLocation = (path: string[], document: StoryBuilderV4Document) => {
+  const pageMarkerIndex = path.findIndex((part, index) => part === "pages" && path[index + 1]?.startsWith("@"));
+  const pageId = pageMarkerIndex >= 0 ? path[pageMarkerIndex + 1]?.slice(1) : undefined;
+  const page = document.pages.find(item => item.id === pageId);
+  const sectionMarkerIndex = path.findIndex((part, index) => part === "sections" && path[index + 1]?.startsWith("@"));
+  const sectionId = sectionMarkerIndex >= 0 ? path[sectionMarkerIndex + 1]?.slice(1) : undefined;
+  const section = page?.sections.find(item => item.id === sectionId);
+  const orderConflict = path.at(-1) === "$order";
+  const markerSearchFrom = sectionMarkerIndex >= 0 ? sectionMarkerIndex + 2 : pageMarkerIndex >= 0 ? pageMarkerIndex + 2 : 0;
+  const markerIndex = path.findIndex((part, index) => index >= markerSearchFrom && part.startsWith("@"));
+  const markerId = markerIndex >= 0 ? path[markerIndex]?.slice(1) : undefined;
+  const arrayPath = markerIndex >= 0 ? path.slice(0, markerIndex) : [];
+  let arrayValue: unknown = document;
+  for (const part of arrayPath) {
+    if (part.startsWith("@")) arrayValue = Array.isArray(arrayValue) ? arrayValue.find(item => record(item).id === part.slice(1)) : undefined;
+    else arrayValue = record(arrayValue)[part];
+  }
+  const arrayItems = Array.isArray(arrayValue) ? arrayValue : [];
+  const itemIndex = arrayItems.findIndex(item => record(item).id === markerId);
+  const item = itemIndex >= 0 ? record(arrayItems[itemIndex]) : {};
+  const itemName = [item.title, item.name, item.displayName, item.date].find(value => typeof value === "string" && value.trim());
+  const itemLabel = markerIndex >= 0
+    ? typeof itemName === "string" ? `“${itemName.slice(0, 54)}”` : `Mục ${itemIndex >= 0 ? itemIndex + 1 : "đã thay đổi"}`
+    : undefined;
+  const tail = sectionMarkerIndex >= 0 ? path.slice(sectionMarkerIndex + 2) : pageMarkerIndex >= 0 ? path.slice(pageMarkerIndex + 2) : path;
+  const fieldKey = orderConflict ? "$order" : [...tail].reverse().find(part => part !== "content" && !part.startsWith("@"));
+  const fieldLabel = fieldKey === "$order" ? "Thứ tự các mục" : fieldKey ? presenceFieldNames[fieldKey] ?? "Nội dung" : "Cấu trúc website";
+  const sectionLabel = section ? sectionNames[section.type] : undefined;
+  const location = [page?.title, sectionLabel, itemLabel, fieldLabel].filter(Boolean).join(" · ");
+  return { pageId, sectionId, label: location || "Nội dung website" };
+};
+const conflictValuePreview = (exists: boolean, value: unknown, path: string[], document: StoryBuilderV4Document) => {
+  if (!exists) return "Trường này đã bị xóa";
+  if (value === null || value === undefined) return "Chưa có nội dung";
+  if (path.at(-1) === "$order" && Array.isArray(value)) {
+    const names = value.map(id => {
+      if (typeof id !== "string") return null;
+      for (const page of document.pages) {
+        if (page.id === id) return page.title;
+        const section = page.sections.find(candidate => candidate.id === id);
+        if (section) return section.title || sectionNames[section.type];
+        for (const candidate of page.sections) {
+          const collections = Object.values(record(candidate.content)).filter(Array.isArray) as unknown[][];
+          for (const collection of collections) {
+            const match = collection.find(entry => record(entry).id === id);
+            if (match) {
+              const value = record(match);
+              return [value.title, value.name, value.displayName, value.date].find(item => typeof item === "string" && item.trim()) as string | undefined ?? "Mục";
+            }
+          }
+        }
+      }
+      return null;
+    }).filter((name): name is string => Boolean(name));
+    return names.length ? names.slice(0, 4).join(" → ") + (names.length > 4 ? ` · +${names.length - 4} mục` : "") : `Thứ tự của ${value.length} mục`;
+  }
+  if (typeof value === "string") {
+    if (!value.trim()) return "Để trống";
+    if (/^https?:\/\//i.test(value)) return "Đã thay đổi liên kết hoặc ảnh";
+    return value.length > 180 ? `${value.slice(0, 177)}…` : value;
+  }
+  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean") return value ? "Đã bật" : "Đã tắt";
+  if (Array.isArray(value)) return `Danh sách gồm ${value.length} mục`;
+  if (typeof value === "object") {
+    const item = record(value);
+    const name = [item.title, item.name, item.displayName].find(candidate => typeof candidate === "string" && candidate.trim());
+    const detailsCount = Object.keys(item).filter(key => key !== "id").length;
+    return typeof name === "string" ? `“${name.slice(0, 80)}” · ${detailsCount} thông tin` : `Nội dung gồm ${detailsCount} trường`;
+  }
+  return "Nội dung đã được cập nhật";
+};
+const displayFieldName = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return null;
+  const field = target.closest<HTMLElement>("input:not([type=hidden]):not([type=file]), textarea, select, [contenteditable='true']");
+  if (!field) return null;
+  if (field.dataset.builderFieldPath) return field.dataset.builderFieldPath;
+  const raw = field.getAttribute("aria-label") || field.getAttribute("name") || field.id || field.closest("label")?.textContent || "field";
+  const normalized = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
+  return normalized || "field";
+};
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const errText = (error: unknown) => {
   if (error instanceof ApiError) {
@@ -367,30 +480,57 @@ function PublishCheckItem({ ok, title, detail }: { ok: boolean; title: string; d
 }
 
 function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTemplate }: { weddingId: string; initialSite: Website; initialDirty: boolean; setup: WeddingSetup; onChooseOtherTemplate: (site: Website, needsSave?: boolean) => void }) {
-  const { api } = useRuntime(); const cache = useQueryClient();
+  const { api, realtime } = useRuntime(); const cache = useQueryClient();
+  const realtimeStatus = useSyncExternalStore(realtime.subscribe, realtime.getStatus, realtime.getServerStatus);
   const { isOwner } = usePermission();
   const initial = isStoryBuilderV4Document(initialSite.document) ? initialSite.document : null;
   const [doc, setDoc] = useState<StoryBuilderV4Document | null>(initial);
   const docRef = useRef<StoryBuilderV4Document | null>(initial);
+  const baseDocumentRef = useRef<StoryBuilderV4Document | null>(initial);
+  const remoteDocumentRef = useRef<StoryBuilderV4Document | null>(null);
   const versionRef = useRef(initialSite.version);
   const [version, setVersion] = useState(initialSite.version);
   const [dirty, setDirty] = useState(initialDirty); const dirtyRef = useRef(initialDirty);
   const [busy, setBusy] = useState(false); const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(initialDirty ? "error" : "saved");
   const [error, setError] = useState(""); const [conflict, setConflict] = useState(false);
+  const [mergeConflicts, setMergeConflicts] = useState<StoryMergeConflict[]>([]);
+  const [displayName, setDisplayName] = useState("");
+  const [suggestedDisplayName, setSuggestedDisplayName] = useState("");
+  const [identityPromptOpen, setIdentityPromptOpen] = useState(false);
+  const [customDisplayName, setCustomDisplayName] = useState("");
+  const [presenceSessionId, setPresenceSessionId] = useState("");
+  const [builderPresence, setBuilderPresence] = useState<BuilderPresence[]>([]);
+  const [builderJoinedKey, setBuilderJoinedKey] = useState("");
+  const [focusedFieldPath, setFocusedFieldPath] = useState<string | null>(null);
+  const [presenceStatus, setPresenceStatus] = useState<"viewing" | "editing" | "idle">("viewing");
+  const focusedFieldRef = useRef<string | null>(null);
+  const presenceStatusRef = useRef(presenceStatus);
+  const lastPresenceActivityRef = useRef(0);
+  const [offline, setOffline] = useState(false);
+  const [recoveryLoadedSessionId, setRecoveryLoadedSessionId] = useState("");
+  const [recoveredRecovery, setRecoveredRecovery] = useState(false);
+  const builderInstanceId = useRef(id());
+  const joinedBuilderKey = useRef("");
+  const displayNameRef = useRef("");
+  const presenceSessionRef = useRef("");
+  const recoveryLoaded = Boolean(presenceSessionId && recoveryLoadedSessionId === presenceSessionId);
   const [selectedPageId, setSelectedPageId] = useState(initial?.pages[0]?.id ?? "");
   const [selectedSectionId, setSelectedSectionId] = useState(initial?.pages[0]?.sections[0]?.id ?? "");
+  const selectedPageIdRef = useRef(selectedPageId);
+  const selectedSectionIdRef = useRef(selectedSectionId);
   const [viewport, setViewport] = useState<Viewport>("desktop"); const [preview, setPreview] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true); const [rightOpen, setRightOpen] = useState(true);
   const [experienceSettingsOpen, setExperienceSettingsOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"structure" | "inspector" | null>(null);
-  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
-  const mobileActionsRef = useRef<HTMLDivElement>(null);
+  const [toolbarActionsOpen, setToolbarActionsOpen] = useState(false);
+  const toolbarActionsRef = useRef<HTMLDivElement>(null);
   const saveInFlight = useRef(false);
   const autoSaveTimer = useRef<number | null>(null);
   const lastPersistBackendCodeRef = useRef<string | undefined>(undefined);
   const persistRef = useRef<(next: StoryBuilderV4Document, showIssues?: boolean) => Promise<Website | null>>(async () => null);
   const [showFieldErrors, setShowFieldErrors] = useState(false);
   const [publishReviewOpen, setPublishReviewOpen] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [shareSettingsOpen, setShareSettingsOpen] = useState(false);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [mediaSearch, setMediaSearch] = useState("");
@@ -402,7 +542,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const [sectionLibraryOpen, setSectionLibraryOpen] = useState(false);
   const [sectionLibraryType, setSectionLibraryType] = useState<SectionType>("hero");
   const [sectionLibraryVariant, setSectionLibraryVariant] = useState("floral");
-  const [undoStack, setUndoStack] = useState<StoryBuilderV4Document[]>([]); const [redoStack, setRedoStack] = useState<StoryBuilderV4Document[]>([]);
+  const [undoStack, setUndoStack] = useState<Array<StoryHistoryOperation<StoryBuilderV4Document>>>([]); const [redoStack, setRedoStack] = useState<Array<StoryHistoryOperation<StoryBuilderV4Document>>>([]);
   const [dragSectionId, setDragSectionId] = useState<string | null>(null);
   const [dropSectionId, setDropSectionId] = useState<string | null>(null);
   const [pageName, setPageName] = useState(""); const [pageSlug, setPageSlug] = useState("");
@@ -411,29 +551,57 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const weddingEventsQuery = useQuery({ queryKey: ["wedding-events", weddingId], queryFn: () => listWeddingEvents(api, weddingId), enabled: hasEventsSection, staleTime: 30_000 });
   const templateQuery = useQuery({ queryKey: ["story-templates"], queryFn: () => listStoryTemplates(api), staleTime: 60_000 });
   const mediaLibrary = useQuery({ queryKey: ["wedding-media", weddingId], queryFn: () => listWeddingMedia(api, weddingId), enabled: mediaPickerOpen });
+  const templateKey = doc?.templateKey;
+  const templateSnapshot = doc?.templateSnapshot;
+  const templateVersion = doc?.templateVersion;
   const currentTemplate = useMemo(() => {
-    const published = templateQuery.data?.find(item => item.key === doc?.templateKey);
+    const published = templateQuery.data?.find(item => item.key === templateKey);
     if (published) return published;
-    if (!doc?.templateSnapshot) return undefined;
-    const snapshot = storyTemplateConfigSchema.safeParse(doc.templateSnapshot);
-    if (!snapshot.success || snapshot.data.key !== doc.templateKey) return undefined;
+    if (!templateSnapshot) return undefined;
+    const snapshot = storyTemplateConfigSchema.safeParse(templateSnapshot);
+    if (!snapshot.success || snapshot.data.key !== templateKey) return undefined;
     return {
-      key: doc.templateKey,
+      key: templateKey,
       name: snapshot.data.name,
-      version: doc.templateVersion ?? 1,
+      version: templateVersion ?? 1,
       config: snapshot.data,
     } satisfies StoryTemplateSummaryV4;
-  }, [templateQuery.data, doc?.templateKey, doc?.templateSnapshot, doc?.templateVersion]);
+  }, [templateQuery.data, templateKey, templateSnapshot, templateVersion]);
   const templateNotInNewSelections = Boolean(
     doc && templateQuery.isSuccess && !templateQuery.data.some(item => item.key === doc.templateKey),
   );
   const sectionLibraryConfig = currentTemplate?.config.sections.find(item => item.type === sectionLibraryType);
   const sectionLibraryDefaults = sectionLibraryConfig?.defaultContent;
+
+  useEffect(() => {
+    displayNameRef.current = displayName;
+    presenceSessionRef.current = presenceSessionId;
+  }, [displayName, presenceSessionId]);
+  useEffect(() => {
+    selectedPageIdRef.current = selectedPageId;
+    selectedSectionIdRef.current = selectedSectionId;
+  }, [selectedPageId, selectedSectionId]);
+  useEffect(() => { presenceStatusRef.current = presenceStatus; }, [presenceStatus]);
   const currentTier = currentTemplate?.config.accessTier ?? record(doc?.templateSnapshot).accessTier;
   const currentPage = doc?.pages.find(page => page.id === selectedPageId) ?? doc?.pages.find(page => page.isHome);
   const currentSection = currentPage?.sections.find(section => section.id === selectedSectionId);
   const currentSectionId = currentSection?.id;
-  const remoteVersion = initialSite.version;
+  const builderPresenceDetails = builderPresence.map(presence => {
+    const page = doc?.pages.find(item => item.id === presence.pageId);
+    const section = page?.sections.find(item => item.id === presence.sectionId);
+    return {
+      presence,
+      pageTitle: page?.navigationLabel || page?.title || "Đang mở website",
+      sectionTitle: section ? sectionNames[section.type] : null,
+      fieldTitle: presence.status === "editing" ? presenceFieldLabel(presence.fieldPath) : null,
+      statusTitle: presence.status === "editing" ? "Đang chỉnh sửa" : presence.status === "idle" ? "Tạm rời" : "Đang xem",
+    };
+  });
+  const presenceBySection = new Map<string, BuilderPresence[]>();
+  for (const presence of builderPresence) {
+    if (presence.pageId !== currentPage?.id || !presence.sectionId) continue;
+    presenceBySection.set(presence.sectionId, [...(presenceBySection.get(presence.sectionId) ?? []), presence]);
+  }
   const sitePlan = useWeddingPlan(weddingId, true);
   const premiumLocked = currentTier === "PREMIUM" && Boolean(sitePlan.data && !sitePlan.data.legacy && !sitePlan.data.limits.premiumTemplates);
   const premiumUnknown = currentTier === "PREMIUM" && (sitePlan.isPending || sitePlan.isError || !sitePlan.data);
@@ -487,20 +655,280 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     setSelectedSectionId(page.sections[0]?.id ?? "");
     setRightOpen(true);
   };
+  const goToPresence = (presence: BuilderPresence) => {
+    const page = doc?.pages.find(item => item.id === presence.pageId);
+    if (!page) return;
+    const section = page.sections.find(item => item.id === presence.sectionId);
+    setPreview(false);
+    setExperienceSettingsOpen(false);
+    setSelectedPageId(page.id);
+    setSelectedSectionId(section?.id ?? page.sections[0]?.id ?? "");
+    setRightOpen(true);
+    if (window.matchMedia("(max-width: 767px)").matches) setMobilePanel("inspector");
+    if (presence.status !== "editing" || !presence.fieldPath) return;
+    const requestedPath = canonicalBuilderFieldPath(presence.fieldPath);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const matches = Array.from(document.querySelectorAll<HTMLElement>("[data-builder-field-path]"))
+        .filter(target => target.getClientRects().length > 0 && canonicalBuilderFieldPath(target.dataset.builderFieldPath ?? "") === requestedPath);
+      const target = matches.find(element => element.matches("input:not([type=hidden]), textarea, select")) ?? matches[0];
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      target.classList.add("outline", "outline-2", "outline-primary", "outline-offset-4", "bg-primary/10");
+      window.setTimeout(() => target.classList.remove("outline", "outline-2", "outline-primary", "outline-offset-4", "bg-primary/10"), 2400);
+    }));
+  };
+
+  function reconcileRemoteSite(remote: Website) {
+    if (!isStoryBuilderV4Document(remote.document)) {
+      setConflict(true); setSaveState("error"); setError("Bản mới nhất không còn là website V4. Tải lại để tránh ghi đè."); return;
+    }
+    if (remote.version <= versionRef.current) return;
+    const remoteDocument = remote.document;
+    const base = baseDocumentRef.current ?? remoteDocument;
+    const local = docRef.current ?? base;
+    const merged = mergeStoryDocuments(base, local, remoteDocument);
+    baseDocumentRef.current = remoteDocument;
+    remoteDocumentRef.current = remoteDocument;
+    versionRef.current = remote.version;
+    setVersion(remote.version);
+    setStatus(remote.status);
+    docRef.current = merged.document;
+    setDoc(merged.document);
+    setMergeConflicts(merged.conflicts);
+    const needsSave = !sameDocument(merged.document, remoteDocument);
+    dirtyRef.current = needsSave;
+    setDirty(needsSave);
+    setConflict(merged.conflicts.length > 0);
+    setSaveState(merged.conflicts.length > 0 ? "error" : needsSave ? "saving" : "saved");
+    setError(merged.conflicts.length ? "Hai phiên đã sửa cùng một nội dung. Chọn bản cần giữ cho từng mục." : "");
+    cache.setQueryData(["website", weddingId], remote);
+  }
 
   useEffect(() => {
-    if (remoteVersion > versionRef.current && !dirtyRef.current) {
-      setConflict(true);
-      setSaveState("error");
+    if (initialSite.version > versionRef.current) reconcileRemoteSite(initialSite);
+    // The website query is the authoritative notification channel; each version is reconciled once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSite.version, initialSite.document]);
+
+  useEffect(() => {
+    const sessionKey = `inviteme:builder:${weddingId}:session`;
+    const labelKey = `inviteme:builder:${weddingId}:label`;
+    let candidate = sessionStorage.getItem(sessionKey) || id();
+    const storedLabel = sessionStorage.getItem(labelKey);
+    const suggestion = localStorage.getItem(labelKey) || "";
+
+    let channel: BroadcastChannel | undefined;
+    if (typeof BroadcastChannel !== "undefined") {
+      channel = new BroadcastChannel(`inviteme:builder-tabs:${weddingId}`);
+      channel.onmessage = (event: MessageEvent<unknown>) => {
+        const data = event.data as { type?: string; sessionId?: string; instanceId?: string } | null;
+        if (data?.type !== "hello" || data.sessionId !== candidate || !data.instanceId || data.instanceId === builderInstanceId.current) return;
+        // sessionStorage can be cloned when a browser duplicates a tab; deterministically keep one ID.
+        if (builderInstanceId.current.localeCompare(data.instanceId) > 0) {
+          candidate = id();
+          sessionStorage.setItem(sessionKey, candidate);
+          sessionStorage.removeItem(labelKey);
+          setPresenceSessionId(candidate);
+          setDisplayName(""); setCustomDisplayName(localStorage.getItem(labelKey) || "");
+          setIdentityPromptOpen(true);
+        }
+      };
+      channel.postMessage({ type: "hello", sessionId: candidate, instanceId: builderInstanceId.current });
     }
-  }, [remoteVersion]);
+    const settle = window.setTimeout(() => {
+      sessionStorage.setItem(sessionKey, candidate);
+      if (storedLabel) { setDisplayName(storedLabel); setCustomDisplayName(storedLabel); }
+      else { setSuggestedDisplayName(suggestion); setCustomDisplayName(suggestion); setIdentityPromptOpen(true); }
+      setPresenceSessionId(candidate);
+    }, 250);
+    return () => { window.clearTimeout(settle); channel?.close(); };
+  }, [weddingId]);
+
+  useEffect(() => {
+    if (!presenceSessionId) return;
+    let cancelled = false;
+    void readWebsiteBuilderRecovery(weddingId, presenceSessionId).then(recovery => {
+      if (cancelled || !recovery || !isStoryBuilderV4Document(initialSite.document)) return;
+      const local = storyBuilderV4DocumentSchema.safeParse(recovery.document);
+      const savedBase = storyBuilderV4DocumentSchema.safeParse(recovery.baseDocument);
+      if (!local.success || !savedBase.success) return;
+      const remote = initialSite.document;
+      const merged = mergeStoryDocuments(savedBase.data, local.data, remote);
+      baseDocumentRef.current = remote; remoteDocumentRef.current = remote;
+      versionRef.current = initialSite.version; setVersion(initialSite.version); setStatus(initialSite.status);
+      docRef.current = merged.document; setDoc(merged.document); setMergeConflicts(merged.conflicts);
+      const needsSave = !sameDocument(merged.document, remote);
+      dirtyRef.current = needsSave; setDirty(needsSave); setConflict(merged.conflicts.length > 0);
+      setSaveState(merged.conflicts.length ? "error" : needsSave ? "saving" : "saved");
+      setError(merged.conflicts.length ? "Đã khôi phục thay đổi trên thiết bị. Chọn nội dung cần giữ để tiếp tục." : "");
+      setRecoveredRecovery(needsSave || merged.conflicts.length > 0);
+    }).catch(() => undefined).finally(() => { if (!cancelled) setRecoveryLoadedSessionId(presenceSessionId); });
+    return () => { cancelled = true; };
+  }, [presenceSessionId, weddingId, initialSite.version, initialSite.document, initialSite.status]);
+
+  useEffect(() => {
+    if (!recoveryLoaded || !presenceSessionId) return;
+    if (!dirty || !doc) {
+      if (!dirty) void clearWebsiteBuilderRecovery(weddingId, presenceSessionId).catch(() => undefined);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void writeWebsiteBuilderRecovery({ weddingId, sessionId: presenceSessionId, version: versionRef.current,
+        baseDocument: baseDocumentRef.current ?? doc, document: doc, savedAt: Date.now() }).catch(() => undefined);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [recoveryLoaded, presenceSessionId, weddingId, dirty, doc]);
+
+  useEffect(() => {
+    const refresh = () => setOffline(!navigator.onLine);
+    refresh();
+    window.addEventListener("online", refresh); window.addEventListener("offline", refresh);
+    return () => { window.removeEventListener("online", refresh); window.removeEventListener("offline", refresh); };
+  }, []);
+
+  useEffect(() => {
+    lastPresenceActivityRef.current = Date.now();
+    const idleAfterMs = 60_000;
+    const markActivity = () => {
+      lastPresenceActivityRef.current = Date.now();
+      setPresenceStatus(document.visibilityState === "hidden" ? "idle" : focusedFieldRef.current ? "editing" : "viewing");
+    };
+    const updateVisibility = () => {
+      if (document.visibilityState === "hidden") setPresenceStatus("idle");
+      else if (Date.now() - lastPresenceActivityRef.current < idleAfterMs)
+        setPresenceStatus(focusedFieldRef.current ? "editing" : "viewing");
+    };
+    const updateIdle = () => {
+      const idle = document.visibilityState === "hidden" || Date.now() - lastPresenceActivityRef.current >= idleAfterMs;
+      const nextStatus = idle ? "idle" : focusedFieldRef.current ? "editing" : "viewing";
+      setPresenceStatus(current => current === nextStatus ? current : nextStatus);
+    };
+    window.addEventListener("pointerdown", markActivity, { passive: true });
+    window.addEventListener("keydown", markActivity);
+    window.addEventListener("input", markActivity, true);
+    window.addEventListener("scroll", markActivity, { passive: true, capture: true });
+    document.addEventListener("visibilitychange", updateVisibility);
+    const timer = window.setInterval(updateIdle, 10_000);
+    return () => {
+      window.removeEventListener("pointerdown", markActivity);
+      window.removeEventListener("keydown", markActivity);
+      window.removeEventListener("input", markActivity, true);
+      window.removeEventListener("scroll", markActivity, true);
+      document.removeEventListener("visibilitychange", updateVisibility);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const subscriptions = [
+      realtime.onBuilderPresenceSnapshot(snapshot => setBuilderPresence(snapshot.filter(item => item.sessionId !== presenceSessionRef.current))),
+      realtime.onBuilderPresenceChanged(presence => setBuilderPresence(items => [
+        ...items.filter(item => item.sessionId !== presence.sessionId && item.sessionId !== presenceSessionRef.current), presence,
+      ])),
+      realtime.onBuilderPresenceLeft(sessionId => setBuilderPresence(items => items.filter(item => item.sessionId !== sessionId))),
+    ];
+    return () => subscriptions.forEach(unsubscribe => unsubscribe());
+  }, [realtime]);
+
+  const sessionPresenceKey = presenceSessionId && displayName ? `${presenceSessionId}:${displayName}` : "";
+  useEffect(() => {
+    if (!sessionPresenceKey || realtimeStatus !== "connected") { joinedBuilderKey.current = ""; return; }
+    const current = docRef.current;
+    const pageId = current?.pages.find(page => page.id === selectedPageIdRef.current)?.id ?? current?.pages[0]?.id ?? null;
+    const sectionId = current?.pages.find(page => page.id === pageId)?.sections.find(section => section.id === selectedSectionIdRef.current)?.id ?? null;
+    let cancelled = false;
+    void realtime.invokeBuilder<BuilderPresence[]>("JoinBuilder", weddingId, presenceSessionId, displayName, pageId, sectionId)
+      .then(async snapshot => {
+        if (cancelled) return;
+        joinedBuilderKey.current = sessionPresenceKey;
+        setBuilderJoinedKey(sessionPresenceKey);
+        setBuilderPresence(snapshot.filter(item => item.sessionId !== presenceSessionId));
+        const latest = docRef.current;
+        const latestPageId = latest?.pages.find(page => page.id === selectedPageIdRef.current)?.id ?? latest?.pages[0]?.id ?? null;
+        const latestSectionId = latest?.pages.find(page => page.id === latestPageId)?.sections.find(section => section.id === selectedSectionIdRef.current)?.id ?? null;
+        await realtime.invokeBuilder("UpdateBuilderPresence", weddingId, presenceSessionId, displayName,
+          latestPageId, latestSectionId, focusedFieldRef.current, presenceStatusRef.current).catch(() => undefined);
+      })
+      .catch(() => { if (!cancelled) { joinedBuilderKey.current = ""; setBuilderJoinedKey(""); } });
+    return () => { cancelled = true; };
+  }, [sessionPresenceKey, realtimeStatus, realtime, weddingId, presenceSessionId, displayName]);
+
+  const activePageForPresence = doc?.pages.find(page => page.id === selectedPageId)?.id ?? doc?.pages[0]?.id ?? null;
+  useEffect(() => {
+    if (!sessionPresenceKey || builderJoinedKey !== sessionPresenceKey || realtimeStatus !== "connected") return;
+    const timer = window.setTimeout(() => {
+      void realtime.invokeBuilder("UpdateBuilderPresence", weddingId, presenceSessionId, displayName,
+        activePageForPresence, currentSectionId ?? null, focusedFieldPath, presenceStatus).catch(() => undefined);
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [sessionPresenceKey, builderJoinedKey, realtimeStatus, realtime, weddingId, presenceSessionId, displayName, activePageForPresence, currentSectionId, focusedFieldPath, presenceStatus]);
+
+  useEffect(() => {
+    if (!sessionPresenceKey || builderJoinedKey !== sessionPresenceKey || realtimeStatus !== "connected") return;
+    const timer = window.setInterval(() => {
+      void realtime.invokeBuilder<BuilderPresence[]>("HeartbeatBuilder", weddingId, presenceSessionId)
+        .then(snapshot => setBuilderPresence(snapshot.filter(item => item.sessionId !== presenceSessionId)))
+        .catch(() => {
+          joinedBuilderKey.current = "";
+          setBuilderJoinedKey("");
+          void realtime.invokeBuilder<BuilderPresence[]>("JoinBuilder", weddingId, presenceSessionId, displayName,
+            selectedPageIdRef.current || null, selectedSectionIdRef.current || null)
+            .then(async snapshot => {
+              joinedBuilderKey.current = sessionPresenceKey;
+              setBuilderJoinedKey(sessionPresenceKey);
+              setBuilderPresence(snapshot.filter(item => item.sessionId !== presenceSessionId));
+              const latest = docRef.current;
+              const pageId = latest?.pages.find(page => page.id === selectedPageIdRef.current)?.id ?? latest?.pages[0]?.id ?? null;
+              const sectionId = latest?.pages.find(page => page.id === pageId)?.sections.find(section => section.id === selectedSectionIdRef.current)?.id ?? null;
+              await realtime.invokeBuilder("UpdateBuilderPresence", weddingId, presenceSessionId, displayName,
+                pageId, sectionId, focusedFieldRef.current, presenceStatusRef.current).catch(() => undefined);
+            })
+            .catch(() => undefined);
+        });
+    }, 20_000);
+    return () => window.clearInterval(timer);
+  }, [sessionPresenceKey, builderJoinedKey, realtimeStatus, realtime, weddingId, presenceSessionId, displayName]);
+
+  useEffect(() => () => {
+    if (realtime.getStatus() === "connected" && presenceSessionRef.current)
+      void realtime.invokeBuilder("LeaveBuilder", weddingId, presenceSessionRef.current).catch(() => undefined);
+  }, [realtime, weddingId]);
+
+  function chooseDisplayName(value: string) {
+    const normalized = value.trim().slice(0, 40);
+    if (!normalized) return;
+    const labelKey = `inviteme:builder:${weddingId}:label`;
+    sessionStorage.setItem(labelKey, normalized);
+    localStorage.setItem(labelKey, normalized);
+    setDisplayName(normalized); setCustomDisplayName(normalized); setIdentityPromptOpen(false);
+  }
+
+  async function clearLocalRecovery() {
+    if (!presenceSessionId) return;
+    await clearWebsiteBuilderRecovery(weddingId, presenceSessionId).catch(() => undefined);
+    setRecoveredRecovery(false);
+  }
+
+  function resolveMerge(conflictIndex: number, side: "local" | "remote") {
+    const issue = mergeConflicts[conflictIndex];
+    const current = docRef.current;
+    const remote = remoteDocumentRef.current;
+    if (!issue || !current || !remote) return;
+    const resolved = resolveStoryMergeConflict(current, issue, side);
+    const remaining = mergeConflicts.filter((_, index) => index !== conflictIndex);
+    docRef.current = resolved; setDoc(resolved); setMergeConflicts(remaining);
+    const needsSave = !sameDocument(resolved, remote);
+    dirtyRef.current = needsSave; setDirty(needsSave); setConflict(remaining.length > 0);
+    setSaveState(remaining.length > 0 ? "error" : needsSave ? "saving" : "saved");
+    setError(remaining.length ? "Còn nội dung cần chọn phiên bản sẽ giữ." : "");
+  }
   useEffect(() => {
     if (preview || !currentSectionId) return;
     const frame = window.requestAnimationFrame(() => document.getElementById(currentSectionId)?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" }));
     return () => window.cancelAnimationFrame(frame);
   }, [currentSectionId, preview]);
   useEffect(() => {
-    if (!dirty || !doc || conflict || !isOwner) return;
+    if (!recoveryLoaded || !dirty || !doc || conflict || !isOwner || offline) return;
     if (autoSaveTimer.current !== null) window.clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = window.setTimeout(() => {
       autoSaveTimer.current = null;
@@ -510,7 +938,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
       if (autoSaveTimer.current !== null) window.clearTimeout(autoSaveTimer.current);
       autoSaveTimer.current = null;
     };
-  }, [doc, dirty, conflict, isOwner, premiumLocked, premiumUnknown]);
+  }, [doc, dirty, conflict, isOwner, premiumLocked, premiumUnknown, recoveryLoaded, offline]);
   useEffect(() => {
     if (!dirty) return;
     const preventClose = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -518,15 +946,15 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     return () => window.removeEventListener("beforeunload", preventClose);
   }, [dirty]);
   useEffect(() => {
-    if (!mobileActionsOpen) return;
+    if (!toolbarActionsOpen) return;
     const closeOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !mobileActionsRef.current?.contains(event.target)) setMobileActionsOpen(false);
+      if (event.target instanceof Node && !toolbarActionsRef.current?.contains(event.target)) setToolbarActionsOpen(false);
     };
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setMobileActionsOpen(false); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setToolbarActionsOpen(false); };
     document.addEventListener("pointerdown", closeOutside);
     document.addEventListener("keydown", closeOnEscape);
     return () => { document.removeEventListener("pointerdown", closeOutside); document.removeEventListener("keydown", closeOnEscape); };
-  }, [mobileActionsOpen]);
+  }, [toolbarActionsOpen]);
   useEffect(() => {
     if (!mobilePanel) return;
     const previousOverflow = document.body.style.overflow;
@@ -537,7 +965,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   }, [mobilePanel]);
 
   async function persist(next: StoryBuilderV4Document, showIssues = false): Promise<Website | null> {
-    if (saveInFlight.current || conflict || !isOwner || premiumLocked || premiumUnknown) return null;
+    if (saveInFlight.current || conflict || !isOwner || premiumLocked || premiumUnknown || offline || !recoveryLoaded) return null;
     lastPersistBackendCodeRef.current = undefined;
     const validationIssues = validateBuilderDocument(next, currentTemplate);
     if (validationIssues.length > 0) {
@@ -550,24 +978,75 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     saveInFlight.current = true;
     setBusy(true); setError(""); setSaveState("saving");
     let saved = false;
+    let blockedByConflict = false;
+    let candidate = next;
     try {
-      const result = await saveWebsite(api, weddingId, versionRef.current, next);
+      let result: Website | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          result = await saveWebsite(api, weddingId, versionRef.current, candidate);
+          break;
+        } catch (cause) {
+          if (!(cause instanceof ApiError) || cause.status !== 409) throw cause;
+          const latest = await getWebsite(api, weddingId);
+          if (!isStoryBuilderV4Document(latest.document)) throw cause;
+          const baseline = baseDocumentRef.current ?? candidate;
+          const local = docRef.current ?? candidate;
+          const merged = mergeStoryDocuments(baseline, local, latest.document);
+          baseDocumentRef.current = latest.document; remoteDocumentRef.current = latest.document;
+          versionRef.current = latest.version; setVersion(latest.version); setStatus(latest.status);
+          cache.setQueryData(["website", weddingId], latest);
+          docRef.current = merged.document; setDoc(merged.document); setMergeConflicts(merged.conflicts);
+          const needsSave = !sameDocument(merged.document, latest.document);
+          dirtyRef.current = needsSave; setDirty(needsSave);
+          if (merged.conflicts.length) {
+            blockedByConflict = true;
+            setConflict(true); setSaveState("error"); setError("Hai phiên đã sửa cùng một nội dung. Chọn bản cần giữ cho từng mục.");
+            return null;
+          }
+          if (!needsSave) {
+            setConflict(false); setSaveState("saved"); setError("");
+            return latest;
+          }
+          candidate = merged.document;
+          if (attempt === 2) {
+            setSaveState("error"); setError("Website tiếp tục thay đổi khi đang lưu. Nội dung của bạn vẫn được giữ; nhấn Lưu để thử lại.");
+            return null;
+          }
+          await new Promise(resolve => window.setTimeout(resolve, 150 * (attempt + 1)));
+        }
+      }
+      if (!result) return null;
       lastPersistBackendCodeRef.current = undefined;
       saved = true;
-      versionRef.current = result.version; setVersion(result.version);
+      const savedDocument = isStoryBuilderV4Document(result.document) ? result.document : candidate;
+      baseDocumentRef.current = savedDocument; remoteDocumentRef.current = savedDocument;
+      versionRef.current = result.version; setVersion(result.version); setStatus(result.status);
       cache.setQueryData(["website", weddingId], result);
-      if (JSON.stringify(docRef.current) === JSON.stringify(next)) { dirtyRef.current = false; setDirty(false); setSaveState("saved"); }
-      else setSaveState("saving");
+      const liveDocument = docRef.current ?? candidate;
+      const rebased = sameDocument(liveDocument, candidate)
+        ? { document: savedDocument, conflicts: [] as StoryMergeConflict[] }
+        : mergeStoryDocuments(candidate, liveDocument, savedDocument);
+      docRef.current = rebased.document; setDoc(rebased.document); setMergeConflicts(rebased.conflicts);
+      const needsSave = !sameDocument(rebased.document, savedDocument);
+      dirtyRef.current = needsSave; setDirty(needsSave); setConflict(rebased.conflicts.length > 0);
+      setSaveState(rebased.conflicts.length ? "error" : needsSave ? "saving" : "saved");
+      blockedByConflict = rebased.conflicts.length > 0;
+      setError(rebased.conflicts.length ? "Một thay đổi khác vừa được lưu cùng trường bạn đang sửa. Chọn nội dung cần giữ." : "");
+      if (!needsSave && presenceSessionId) {
+        setRecoveredRecovery(false);
+        void clearWebsiteBuilderRecovery(weddingId, presenceSessionId).catch(() => undefined);
+      }
       return result;
     } catch (cause) {
       lastPersistBackendCodeRef.current = cause instanceof ApiError ? cause.backendCode : undefined;
       const message = errText(cause); setError(message); setSaveState("error");
-      if (/conflict|version|409/i.test(message)) setConflict(true);
+      if (cause instanceof ApiError && cause.status === 409) setError("Website vẫn được cập nhật ở phiên khác. Thay đổi chưa bị xóa; tải mới nhất rồi thử lại.");
       return null;
     } finally {
       saveInFlight.current = false;
       setBusy(false);
-      if (saved && dirtyRef.current && docRef.current && JSON.stringify(docRef.current) !== JSON.stringify(next)) {
+      if (saved && dirtyRef.current && docRef.current && !blockedByConflict) {
         window.setTimeout(() => { const latest = docRef.current; if (latest) void persistRef.current(latest); }, 0);
       }
     }
@@ -576,7 +1055,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
 
   const update = useCallback((next: StoryBuilderV4Document, withHistory = true) => {
     const previous = docRef.current;
-    if (withHistory && previous) { setUndoStack(stack => [...stack.slice(-39), clone(previous)]); setRedoStack([]); }
+    if (withHistory && previous) { setUndoStack(stack => [...stack.slice(-39), { before: clone(previous), after: clone(next) }]); setRedoStack([]); }
     docRef.current = next; dirtyRef.current = true; setDoc(next); setDirty(true); setError("");
   }, []);
   function mutate(mutator: (copy: StoryBuilderV4Document) => void) { if (!doc) return; const next = clone(doc); mutator(next); update(next); }
@@ -720,10 +1199,12 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   }
   const history = useCallback((direction: "undo" | "redo") => {
     const from = direction === "undo" ? undoStack : redoStack; const to = direction === "undo" ? redoStack : undoStack;
-    const previous = from.at(-1); if (!previous || !doc) return;
-    if (direction === "undo") { setUndoStack(from.slice(0, -1)); setRedoStack([...to, clone(doc)]); }
-    else { setRedoStack(from.slice(0, -1)); setUndoStack([...to, clone(doc)]); }
-    docRef.current = clone(previous); dirtyRef.current = true; setDoc(clone(previous)); setDirty(true);
+    const operation = from.at(-1); if (!operation || !doc) return;
+    const applied = applyStoryHistoryOperation(doc, operation, direction);
+    if (direction === "undo") { setUndoStack(from.slice(0, -1)); setRedoStack([...to, operation]); }
+    else { setRedoStack(from.slice(0, -1)); setUndoStack([...to, operation]); }
+    docRef.current = applied.document; dirtyRef.current = true; setDoc(applied.document); setDirty(true);
+    setError(applied.skippedChanges ? "Một số nội dung đã được phiên kia cập nhật nên không bị hoàn tác để tránh ghi đè." : "");
   }, [doc, undoStack, redoStack]);
   useEffect(() => {
     const handleHistoryShortcut = (event: KeyboardEvent) => {
@@ -809,10 +1290,22 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   async function reloadLatest() {
     const latest = await getWebsite(api, weddingId);
     if (!isStoryBuilderV4Document(latest.document)) { setError("Bản mới nhất không còn là website V4."); return; }
-    docRef.current = latest.document; setDoc(latest.document); setVersion(latest.version); versionRef.current = latest.version; setStatus(latest.status); setConflict(false); setDirty(false); dirtyRef.current = false; setSaveState("saved"); setUndoStack([]); setRedoStack([]);
+    docRef.current = latest.document; baseDocumentRef.current = latest.document; remoteDocumentRef.current = latest.document; setDoc(latest.document); setVersion(latest.version); versionRef.current = latest.version; setStatus(latest.status); setConflict(false); setMergeConflicts([]); setDirty(false); dirtyRef.current = false; setSaveState("saved"); setUndoStack([]); setRedoStack([]);
     setSelectedPageId(latest.document.pages[0]?.id ?? ""); setSelectedSectionId(latest.document.pages[0]?.sections[0]?.id ?? ""); cache.setQueryData(["website", weddingId], latest);
   }
+  function applyRestoredWebsite(result: Website) {
+    if (!isStoryBuilderV4Document(result.document)) { setError("Phiên bản đã khôi phục không còn đúng định dạng Website Builder V4."); return; }
+    docRef.current = result.document; baseDocumentRef.current = result.document; remoteDocumentRef.current = result.document;
+    versionRef.current = result.version;
+    setDoc(result.document); setVersion(result.version); setStatus(result.status); setConflict(false); setMergeConflicts([]);
+    dirtyRef.current = false; setDirty(false); setSaveState("saved"); setError(""); setShowFieldErrors(false);
+    setUndoStack([]); setRedoStack([]); setRecoveredRecovery(false);
+    setSelectedPageId(result.document.pages[0]?.id ?? ""); setSelectedSectionId(result.document.pages[0]?.sections[0]?.id ?? "");
+    void clearLocalRecovery();
+    cache.setQueryData(["website", weddingId], result);
+  }
 
+  if (!recoveryLoaded) return <div className="fixed inset-0 z-40 grid place-items-center bg-background p-6 text-center"><div><LoaderCircle className="mx-auto size-6 animate-spin text-primary" /><p className="mt-3 text-sm text-muted-foreground">Đang kiểm tra bản chỉnh sửa còn lưu trên thiết bị…</p></div></div>;
   if (!doc) return <p className="p-6 text-sm text-muted-foreground">Website chưa có bản nháp V4. Quay lại thư viện mẫu để bắt đầu.</p>;
   if (!isOwner) return <div className="mx-auto max-w-3xl p-8"><FeatureLimitNotice title="Chỉ chủ tiệc mới có thể chỉnh sửa website" description="Bạn vẫn có thể xem website đã xuất bản. Hãy nhờ chủ tiệc mở trình dựng website." status="unavailable" variant="full" /></div>;
   const viewportWidth = viewport === "desktop" ? 1120 : viewport === "tablet" ? 768 : 390;
@@ -830,7 +1323,13 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
       ...(event.address ? { address: event.address } : {}), ...(event.mapUrl ? { mapUrl: event.mapUrl } : {}), sortOrder: event.sortOrder,
     }));
   }
-  const publishCanProceed = Boolean(doc && publishIssues.length === 0 && !busy && isOwner && !conflict && !premiumLocked && !premiumUnknown);
+  const publishCanProceed = Boolean(doc && publishIssues.length === 0 && !busy && !offline && recoveryLoaded && isOwner && !conflict && !premiumLocked && !premiumUnknown);
+  const saveBlockedReason = !dirty ? "Không có thay đổi mới cần lưu." : !isOwner ? "Chỉ chủ tiệc mới có thể lưu website." : offline ? "Đang ngoại tuyến; thay đổi được giữ trên thiết bị và sẽ tự lưu khi có mạng." : conflict ? "Hãy xử lý nội dung đang xung đột trước khi lưu." : premiumLocked ? "Gói hiện tại chưa hỗ trợ mẫu website này." : premiumUnknown ? "Chưa xác minh được quyền dùng mẫu Premium." : !recoveryLoaded ? "Đang khôi phục bản chỉnh sửa trên thiết bị." : busy ? "Đang có thao tác khác; hãy đợi hoàn tất." : saveState === "saving" ? "Đang lưu website." : "";
+  const saveActionDisabled = Boolean(saveBlockedReason);
+  const publishBlockedReason = busy ? "Đang xử lý website." : offline ? "Đang ngoại tuyến; hãy kết nối lại trước khi xuất bản." : conflict ? "Hãy xử lý nội dung đang xung đột trước khi xuất bản." : premiumLocked ? "Gói hiện tại chưa hỗ trợ mẫu website này." : premiumUnknown ? "Chưa xác minh được quyền dùng mẫu Premium." : !recoveryLoaded ? "Đang khôi phục bản chỉnh sửa trên thiết bị." : "";
+  const publishActionDisabled = Boolean(publishBlockedReason);
+  const saveActionLabel = saveState === "saving" ? "Đang lưu" : dirty ? "Lưu ngay" : "Đã lưu";
+  const saveStatusLabel = offline ? "Ngoại tuyến · thay đổi đang giữ trên thiết bị" : conflict ? "Có xung đột · cần chọn nội dung sẽ giữ" : saveState === "saving" ? "Đang lưu website…" : dirty && saveState === "error" ? "Chưa lưu được · có thể thử lưu lại" : dirty ? "Có thay đổi chưa lưu" : "Đã lưu";
   const paletteValue = doc.appearance.paletteId ?? currentTemplate?.config.palettes[0]?.id ?? "";
   const currentGuestExperience: GuestExperienceSettings = {
     tools: doc.appearance.guestExperience?.tools ?? [],
@@ -885,41 +1384,95 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     if (window.matchMedia("(max-width: 767px)").matches) setMobilePanel("inspector");
   }
 
-  return <div className="fixed inset-0 z-40 flex flex-col bg-[#faf8f7] text-foreground">
-    <header className="z-20 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-3 sm:px-5">
-      <div className="flex min-w-0 items-center gap-2 sm:gap-3"><Link href={`/weddings/${encodeURIComponent(weddingId)}`} className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted" aria-label="Thoát trình dựng"><ArrowLeft className="size-4" /></Link><div className="min-w-0"><div className="flex items-center gap-2"><h1 className="truncate text-sm font-semibold sm:text-base">{setup.name}</h1><span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${status === "PUBLISHED" ? "bg-emerald-50 text-emerald-800" : "bg-muted text-muted-foreground"}`}>{status === "PUBLISHED" ? "Đã xuất bản" : "Bản nháp"}</span></div><p aria-live="polite" className="text-xs text-muted-foreground">{saveState === "saving" ? "Đang lưu…" : saveState === "saved" && !dirty ? "Đã lưu" : "Có thay đổi chưa lưu"}</p></div></div>
-      <div className="hidden items-center gap-1 sm:flex sm:gap-2">
-        <button type="button" className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-35" aria-label="Hoàn tác" disabled={!undoStack.length || busy} onClick={() => history("undo")}><Undo2 className="size-4" /></button>
-        <button type="button" className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-35" aria-label="Làm lại" disabled={!redoStack.length || busy} onClick={() => history("redo")}><Redo2 className="size-4" /></button>
-        <span className="mx-1 hidden h-6 border-l border-border sm:block" />
-        <Button variant="outline" className={preview ? "border-primary text-primary-hover" : ""} size="sm" onClick={() => setPreview(!preview)}><Eye className="mr-1.5 size-4" />{preview ? "Chỉnh sửa" : "Xem trước"}</Button>
-        <Button variant="outline" size="sm" className={experienceSettingsOpen ? "border-primary text-primary-hover" : ""} onClick={() => setExperienceSettingsOpen(open => !open)}><Sparkles className="mr-1.5 size-4" />Trải nghiệm khách</Button>
-        <Button size="sm" variant="outline" disabled={busy || conflict || saveState === "saving"} onClick={() => void chooseOtherTemplate()}>Đổi mẫu</Button>
-        {status === "PUBLISHED" && setup.slug && <Button asChild size="sm" variant="outline" className="hidden sm:inline-flex"><Link href={`/wedding/${encodeURIComponent(setup.slug)}`} target="_blank" rel="noreferrer"><Globe className="mr-1.5 size-4" />Website</Link></Button>}
-        <Button size="sm" variant="outline" onClick={() => setShareSettingsOpen(true)}><Globe className="mr-1.5 size-4" />Chia sẻ & SEO</Button>
-        {status === "PUBLISHED" && <Button size="sm" variant="outline" disabled={busy} onClick={() => void unpublish()}>Gỡ</Button>}
-        {dirty && <Button size="sm" variant="outline" disabled={busy || conflict} onClick={() => docRef.current && void persist(docRef.current, true)}><Save className="mr-1.5 size-4" />Lưu</Button>}
-        <Button size="sm" disabled={busy} onClick={() => setPublishReviewOpen(true)}>{busy ? <LoaderCircle className="mr-1.5 size-4 animate-spin" /> : <Check className="mr-1.5 size-4" />}{status === "PUBLISHED" ? "Xuất bản lại" : "Xuất bản"}</Button>
+  return <div className="fixed inset-0 z-40 flex flex-col bg-[#faf8f7] text-foreground"
+    onFocusCapture={event => {
+      const field = displayFieldName(event.target);
+      focusedFieldRef.current = field;
+      if (field) lastPresenceActivityRef.current = Date.now();
+      setFocusedFieldPath(field);
+      setPresenceStatus(document.visibilityState === "hidden" ? "idle" : field ? "editing" : "viewing");
+    }}
+    onBlurCapture={event => {
+      const next = event.relatedTarget;
+      if (!(next instanceof HTMLElement) || !displayFieldName(next)) {
+        focusedFieldRef.current = null;
+        setFocusedFieldPath(null);
+        setPresenceStatus(document.visibilityState === "hidden" ? "idle" : "viewing");
+      }
+    }}>
+    <header className="z-20 flex h-14 min-h-14 shrink-0 flex-nowrap items-center gap-2 border-b border-border bg-background px-3 sm:gap-3 sm:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3"><Link href={`/weddings/${encodeURIComponent(weddingId)}`} className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="Thoát trình dựng"><ArrowLeft className="size-4" /></Link><div className="min-w-0"><div className="flex items-center gap-2"><h1 className="truncate text-sm font-semibold sm:text-base">{setup.name}</h1><span title={status === "PUBLISHED" ? "Đã xuất bản" : "Bản nháp"} aria-label={status === "PUBLISHED" ? "Đã xuất bản" : "Bản nháp"} className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] max-[420px]:size-2 max-[420px]:rounded-full max-[420px]:p-0 ${status === "PUBLISHED" ? "bg-emerald-50 text-emerald-800" : "bg-muted text-muted-foreground"}`}><span className="max-[420px]:hidden">{status === "PUBLISHED" ? "Đã xuất bản" : "Bản nháp"}</span><span aria-hidden="true" className="hidden size-1.5 rounded-full bg-current max-[420px]:inline" /></span></div><p aria-live="polite" className="truncate text-xs text-muted-foreground">{saveStatusLabel}</p></div>
       </div>
-      <div className="relative flex items-center gap-1 sm:hidden" ref={mobileActionsRef}>
-        <Button aria-label={preview ? "Chỉnh sửa" : "Xem trước"} title={preview ? "Chỉnh sửa" : "Xem trước"} variant="outline" size="icon" onClick={() => setPreview(!preview)}>{preview ? <X className="size-4" /> : <Eye className="size-4" />}</Button>
-        <Button aria-label="Mở thao tác khác" aria-expanded={mobileActionsOpen} aria-haspopup="true" variant="outline" size="icon" onClick={() => setMobileActionsOpen(open => !open)}><MoreHorizontal className="size-4" /></Button>
-        {mobileActionsOpen && <div role="group" aria-label="Thao tác website" className="absolute right-0 top-full z-50 mt-2 min-w-52 rounded-xl border border-border bg-background p-2 shadow-xl">
-          <div className="flex gap-1 border-b border-border pb-2">
-            <button type="button" className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-sm hover:bg-muted disabled:opacity-40" disabled={!undoStack.length || busy} onClick={() => { history("undo"); setMobileActionsOpen(false); }}><Undo2 className="size-4" />Hoàn tác</button>
-            <button type="button" className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-sm hover:bg-muted disabled:opacity-40" disabled={!redoStack.length || busy} onClick={() => { history("redo"); setMobileActionsOpen(false); }}><Redo2 className="size-4" />Làm lại</button>
+      <div role="group" aria-label="Thao tác website thường dùng" className="relative flex shrink-0 items-center gap-1 sm:gap-1.5" ref={toolbarActionsRef}>
+        <button type="button" aria-label="Hoàn tác" title="Hoàn tác · Ctrl/⌘+Z" disabled={!undoStack.length || busy} className="hidden size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-35 min-[640px]:inline-flex" onClick={() => history("undo")}><Undo2 className="size-4" /></button>
+        <button type="button" aria-label="Làm lại" title="Làm lại · Ctrl/⌘+Shift+Z" disabled={!redoStack.length || busy} className="hidden size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-35 min-[640px]:inline-flex" onClick={() => history("redo")}><Redo2 className="size-4" /></button>
+        <span aria-hidden="true" className="mx-0.5 hidden h-6 border-l border-border min-[640px]:block" />
+        <button type="button" aria-label={preview ? "Chỉnh sửa website" : "Xem trước website"} title={preview ? "Chỉnh sửa" : "Xem trước"} aria-pressed={preview} className={`inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-lg border bg-background text-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary min-[1100px]:w-auto min-[1100px]:px-3 ${preview ? "border-primary text-primary-hover" : "border-border"}`} onClick={() => setPreview(value => !value)}>
+          {preview ? <X className="size-4" /> : <Eye className="size-4" />}<span className="hidden min-[1100px]:inline">{preview ? "Chỉnh sửa" : "Xem trước"}</span>
+        </button>
+        <button type="button" aria-label="Trải nghiệm khách mời" title="Trải nghiệm khách" aria-pressed={experienceSettingsOpen} className={`inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-lg border bg-background text-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary min-[1100px]:w-auto min-[1100px]:px-3 ${experienceSettingsOpen ? "border-primary text-primary-hover" : "border-border"}`} onClick={() => experienceSettingsOpen ? setExperienceSettingsOpen(false) : openGuestExperienceSettings()}>
+          <Sparkles className="size-4" /><span className="hidden min-[1100px]:inline">Trải nghiệm khách</span>
+        </button>
+        <button type="button" aria-label={saveActionDisabled ? saveBlockedReason : "Lưu ngay; tự động lưu vẫn bật."} title={saveActionDisabled ? saveBlockedReason : "Lưu ngay · tự động lưu vẫn bật"} disabled={saveActionDisabled} className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-background text-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-45 min-[1100px]:min-w-[104px] min-[1100px]:px-3" onClick={() => { const latest = docRef.current; if (latest) void persist(latest, true); }}>
+          {saveState === "saving" ? <LoaderCircle className="size-4 animate-spin" /> : saveState === "saved" && !dirty ? <Check className="size-4" /> : <Save className="size-4" />}<span className="hidden min-[1100px]:inline">{saveActionLabel}</span>
+        </button>
+        <button type="button" aria-label={publishActionDisabled ? publishBlockedReason : status === "PUBLISHED" ? "Kiểm tra và xuất bản lại website" : "Kiểm tra và xuất bản website"} title={publishActionDisabled ? publishBlockedReason : status === "PUBLISHED" ? "Kiểm tra và xuất bản lại" : "Kiểm tra và xuất bản"} disabled={publishActionDisabled} className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-0 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-[1100px]:w-auto min-[1100px]:min-w-[132px] min-[1100px]:px-3" onClick={() => setPublishReviewOpen(true)}>
+          {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}<span className="hidden min-[1100px]:inline">{status === "PUBLISHED" ? "Xuất bản lại" : "Xuất bản"}</span>
+        </button>
+        <button type="button" aria-label="Thêm thao tác" title="Thêm thao tác" aria-expanded={toolbarActionsOpen} aria-haspopup="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" onClick={() => setToolbarActionsOpen(open => !open)}><MoreHorizontal className="size-4" /></button>
+        {toolbarActionsOpen && <div role="group" aria-label="Các thao tác khác" className="absolute right-0 top-full z-50 mt-2 min-w-56 rounded-xl border border-border bg-background p-2 shadow-xl">
+          <div className="flex gap-1 border-b border-border pb-2 min-[640px]:hidden">
+            <button type="button" title="Ctrl/⌘+Z" className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40" disabled={!undoStack.length || busy} onClick={() => { history("undo"); setToolbarActionsOpen(false); }}><Undo2 className="size-4" />Hoàn tác</button>
+            <button type="button" title="Ctrl/⌘+Shift+Z" className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40" disabled={!redoStack.length || busy} onClick={() => { history("redo"); setToolbarActionsOpen(false); }}><Redo2 className="size-4" />Làm lại</button>
           </div>
-          <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm text-primary hover:bg-primary/5 disabled:opacity-40" disabled={busy || conflict || saveState === "saving"} onClick={() => { setMobileActionsOpen(false); void chooseOtherTemplate(); }}><Eye className="size-4" />Chọn mẫu website khác</button>
-          <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted" onClick={() => { setMobileActionsOpen(false); setShareSettingsOpen(true); }}><Globe className="size-4" />Chia sẻ & SEO</button>
-          {status === "PUBLISHED" && setup.slug && <Link className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted" href={`/wedding/${encodeURIComponent(setup.slug)}`} target="_blank" rel="noreferrer" onClick={() => setMobileActionsOpen(false)}><Globe className="size-4" />Mở website</Link>}
-          {dirty && <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted disabled:opacity-40" disabled={busy || conflict} onClick={() => { const latest = docRef.current; setMobileActionsOpen(false); if (latest) void persist(latest, true); }}><Save className="size-4" />Lưu thay đổi</button>}
-          {status === "PUBLISHED" && <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted disabled:opacity-40" disabled={busy} onClick={() => { setMobileActionsOpen(false); void unpublish(); }}>Gỡ xuất bản</button>}
+          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground min-[640px]:hidden">Chỉnh sửa</p>
+          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Mẫu & website</p>
+          <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm text-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40" disabled={busy || conflict || saveState === "saving"} onClick={() => { setToolbarActionsOpen(false); void chooseOtherTemplate(); }}><Eye className="size-4" />Chọn mẫu website khác</button>
+          <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" onClick={() => { setToolbarActionsOpen(false); setVersionHistoryOpen(true); }}><History className="size-4" />Lịch sử phiên bản</button>
+          {status === "PUBLISHED" && setup.slug && <Link className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" href={`/wedding/${encodeURIComponent(setup.slug)}`} target="_blank" rel="noreferrer" onClick={() => setToolbarActionsOpen(false)}><Globe className="size-4" />Mở website</Link>}
+          <div className="my-1 border-t border-border" />
+          <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Chia sẻ</p>
+          <button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" onClick={() => { setToolbarActionsOpen(false); setShareSettingsOpen(true); }}><Globe className="size-4" />Chia sẻ & SEO</button>
+          {status === "PUBLISHED" && <><div className="my-1 border-t border-border" /><p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quản lý xuất bản</p><button type="button" className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40" disabled={busy} onClick={() => { setToolbarActionsOpen(false); void unpublish(); }}>Gỡ xuất bản</button></>}
         </div>}
-        <Button size="sm" className="px-2.5" aria-label={status === "PUBLISHED" ? "Xuất bản lại website" : "Xuất bản website"} title={status === "PUBLISHED" ? "Xuất bản lại website" : "Xuất bản website"} disabled={busy} onClick={() => setPublishReviewOpen(true)}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}<span className="ml-1 hidden min-[430px]:inline">{status === "PUBLISHED" ? "Xuất bản lại" : "Xuất bản"}</span></Button>
       </div>
     </header>
-    {conflict && <div role="alert" className="z-10 flex flex-wrap items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950"><span>Website đã được cập nhật ở phiên khác. Tải bản mới nhất để tiếp tục chỉnh sửa.</span><Button size="sm" variant="outline" onClick={() => void reloadLatest()}><RefreshCw className="mr-1.5 size-3.5" />Tải bản mới nhất</Button></div>}
+    {conflict && <section role="alert" aria-label="Giải quyết nội dung chỉnh sửa trùng nhau" className="z-10 border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-semibold">Có thay đổi trùng nhau</p><p className="mt-0.5">Chọn nội dung cần giữ. Các phần hai bạn sửa riêng đã được ghép tự động.</p></div>{mergeConflicts.length === 0 && <Button size="sm" variant="outline" onClick={() => void reloadLatest()}><RefreshCw className="mr-1.5 size-3.5" />Tải bản mới nhất</Button>}</div>
+      {mergeConflicts.length > 0 && <ul className="mt-3 grid gap-2 lg:grid-cols-2">{mergeConflicts.map((issue, index) => {
+        const location = doc ? conflictLocation(issue.path, doc) : { pageId: undefined, sectionId: undefined, label: "Nội dung website" };
+        const remoteEditor = builderPresence.find(presence => presence.status === "editing" &&
+          (!location.pageId || presence.pageId === location.pageId) && (!location.sectionId || presence.sectionId === location.sectionId));
+        return <li key={`${issue.path.join("/")}-${index}`} className="rounded-lg border border-amber-300/80 bg-white/75 p-3"><p className="font-medium" title={location.label}>{location.label}</p><div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <div className="min-w-0 rounded-md bg-primary/[0.06] p-2"><p className="text-[11px] font-semibold uppercase tracking-wide">Bản hiện tại trên thiết bị này · {displayName || "Phiên này"}</p><p className="mt-1 break-words text-xs">{doc ? conflictValuePreview(issue.localExists, issue.localValue, issue.path, doc) : "Nội dung đã được cập nhật"}</p><Button size="sm" variant="outline" className="mt-2 w-full" onClick={() => resolveMerge(index, "local")}>Giữ bản hiện tại</Button></div>
+          <div className="min-w-0 rounded-md bg-muted/70 p-2"><p className="text-[11px] font-semibold uppercase tracking-wide">Bản đã lưu mới nhất</p>{remoteEditor && <p className="mt-1 text-[11px] text-muted-foreground">{remoteEditor.displayName} đang chỉnh phần này</p>}<p className="mt-1 break-words text-xs">{doc ? conflictValuePreview(issue.remoteExists, issue.remoteValue, issue.path, doc) : "Nội dung đã lưu"}</p><Button size="sm" variant="outline" className="mt-2 w-full" onClick={() => resolveMerge(index, "remote")}>Dùng bản đã lưu</Button></div>
+        </div></li>;
+      })}</ul>}
+    </section>}
+    {recoveredRecovery && <div role="status" className="z-10 flex flex-wrap items-center justify-between gap-2 border-b border-primary/20 bg-primary/[0.05] px-4 py-2 text-sm"><span>Đã khôi phục thay đổi chưa đồng bộ từ thiết bị này. Bản nháp sẽ được lưu khi kết nối ổn định.</span><Button size="sm" variant="outline" onClick={() => void clearLocalRecovery()}>Xóa bản khôi phục trên thiết bị</Button></div>}
+    {offline && <div role="status" className="z-10 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950">Đang ngoại tuyến. Nội dung bạn sửa vẫn nằm trong trình duyệt; InviteMe sẽ lưu khi mạng hoạt động trở lại.</div>}
     {error && <div role="alert" className="z-10 flex items-center justify-between gap-3 border-b border-destructive/20 bg-destructive/5 px-4 py-2 text-sm text-destructive"><span>{error}</span><button aria-label="Đóng thông báo" onClick={() => setError("")}><X className="size-4" /></button></div>}
+    <section aria-label="Người đang cùng chỉnh sửa website" aria-live="polite" className="z-10 border-b border-primary/20 bg-primary/[0.055] px-3 py-2 sm:px-5 md:py-2.5">
+      <div className="mx-auto flex max-w-6xl flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-x-3 md:gap-y-2">
+        <div className="flex min-w-0 items-center justify-between gap-2 md:contents">
+          <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-primary-hover"><UsersRound className="size-4 shrink-0" /><span className="truncate">{builderPresenceDetails.length > 0 ? <><span className="md:hidden">Cùng chỉnh sửa</span><span className="hidden md:inline">Đang cùng chỉnh sửa</span></> : "Chưa có phiên khác"}</span>{builderPresenceDetails.length > 0 && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5">{builderPresenceDetails.length}</span>}</div>
+          <button type="button" onClick={() => { setSuggestedDisplayName(localStorage.getItem(`inviteme:builder:${weddingId}:label`) || displayName); setCustomDisplayName(displayName); setIdentityPromptOpen(true); }} className="inline-flex min-h-8 max-w-[150px] shrink-0 items-center gap-1.5 rounded-full border border-primary/20 bg-background/80 px-2.5 text-xs text-foreground hover:bg-primary/10 sm:max-w-[190px]" aria-label="Đổi tên hiển thị trong danh sách người đang chỉnh sửa"><UserRound className="size-3.5 shrink-0 text-primary" /><span className="truncate">{displayName || "Đặt tên"}</span></button>
+        </div>
+        <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-1 md:flex-wrap md:overflow-visible md:pb-0 md:snap-none">
+          {builderPresenceDetails.length === 0 && <span className="max-w-full py-1 text-xs leading-5 text-muted-foreground"><span className="md:hidden">Mở website ở tab khác bằng cùng tài khoản để thấy nhau.</span><span className="hidden md:inline">Mở website này trong tab khác bằng cùng tài khoản và chọn tên hiển thị để thấy hoạt động của nhau.</span></span>}
+          {builderPresenceDetails.map(({ presence, pageTitle, sectionTitle, fieldTitle, statusTitle }) => {
+            const canNavigate = Boolean(doc?.pages.some(page => page.id === presence.pageId));
+            const location = [pageTitle, sectionTitle, fieldTitle].filter(Boolean).join(" · ");
+            const destination = [pageTitle, sectionTitle, fieldTitle].filter(Boolean).join(", ");
+            return <button key={presence.sessionId} type="button" disabled={!canNavigate} onClick={() => goToPresence(presence)} aria-label={canNavigate ? `Đi tới vị trí ${destination} của ${presence.displayName}` : `Vị trí của ${presence.displayName} không còn tồn tại`} title={canNavigate ? `${presence.displayName} · ${statusTitle} · ${location || "Website"}` : "Trang đã thay đổi hoặc không còn tồn tại"} className="group flex min-h-12 w-[min(78vw,290px)] shrink-0 snap-start items-center gap-2 rounded-xl border border-primary/15 bg-background/90 px-2.5 py-2 text-left shadow-sm transition hover:border-primary/35 hover:bg-primary/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-55 md:min-h-11 md:w-auto md:max-w-[310px] md:flex-1 md:rounded-lg md:py-1.5">
+              <span aria-hidden="true" className={`grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold ${presence.status === "editing" ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>{presence.displayName.slice(0, 1).toLocaleUpperCase("vi-VN")}</span>
+              <span className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-xs font-semibold text-foreground">{presence.displayName}</span><span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${presence.status === "editing" ? "bg-primary/10 text-primary-hover" : "bg-muted text-muted-foreground"}`}>{statusTitle}</span></span><span className="mt-0.5 block truncate text-[11px] leading-4 text-muted-foreground">{location || "Đang ở website"}</span></span>
+              <ChevronRight className="size-4 shrink-0 text-primary/70 transition group-hover:translate-x-0.5 group-hover:text-primary" />
+            </button>;
+          })}
+        </div>
+      </div>
+    </section>
     {templateNotInNewSelections && <div role="status" className="z-10 flex flex-wrap items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span>Mẫu hiện tại đã được lưu trữ hoặc gỡ khỏi thư viện chọn mới. Website đang công khai vẫn được giữ nguyên; nếu không thể lưu hoặc xuất bản bản nháp, hãy chọn mẫu thay thế.</span><Button size="sm" variant="outline" disabled={busy || conflict || saveState === "saving"} onClick={() => void chooseOtherTemplate()}><Eye className="mr-1.5 size-4" />Chọn mẫu khác</Button></div>}
     {showQuickStart && !preview && <section aria-label="Hướng dẫn nhanh" className="z-10 border-b border-primary/15 bg-primary/[0.045] px-3 py-2.5 sm:px-5">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-2">
@@ -950,16 +1503,20 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
             <div className="flex gap-2"><input className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm" value={pageSlug} onChange={event => setPageSlug(event.target.value)} placeholder="duong-dan" aria-label="Đường dẫn trang mới" /><button className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40" disabled={!pageName.trim() || !pageSlug.trim()} onClick={addPage} aria-label="Thêm trang"><Plus className="size-4" /></button></div>
           </div>}
           <div className="mb-2 mt-4 flex items-center justify-between"><span className="text-xs font-medium text-muted-foreground">CÁC PHẦN</span><Button type="button" size="sm" variant="outline" className="h-8 px-2 text-xs" disabled={!currentPage || currentPage.sections.length >= 24 || doc.pages.reduce((total, page) => total + page.sections.length, 0) >= 80} onClick={openSectionLibrary}><Plus className="mr-1 size-3.5" />Thêm phần</Button></div>
-          {currentPage?.sections.map((section, index) => <div key={section.id}
+          {currentPage?.sections.map((section, index) => {
+            const sectionPeers = presenceBySection.get(section.id) ?? [];
+            return <div key={section.id}
             onDragOver={event => { event.preventDefault(); setDropSectionId(section.id); }}
             onDrop={event => { event.preventDefault(); if (dragSectionId) reorderSection(dragSectionId, section.id); setDragSectionId(null); setDropSectionId(null); }}
-            className={`group mb-1 flex items-center gap-0.5 rounded-lg border ${section.id === currentSection?.id ? "border-primary/40 bg-primary/5" : "border-transparent hover:border-border hover:bg-muted/50"} ${dropSectionId === section.id && dragSectionId !== section.id ? "border-b-2 border-b-primary" : ""} ${dragSectionId === section.id ? "opacity-45" : ""}`}>
+            className={`group mb-1 flex items-center gap-0.5 rounded-lg border ${section.id === currentSection?.id ? "border-primary/40 bg-primary/5" : sectionPeers.length ? "border-primary/25 bg-primary/[0.035]" : "border-transparent hover:border-border hover:bg-muted/50"} ${dropSectionId === section.id && dragSectionId !== section.id ? "border-b-2 border-b-primary" : ""} ${dragSectionId === section.id ? "opacity-45" : ""}`}>
             <button type="button" draggable={section.type !== "hero"} className={`grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-background ${section.type === "hero" ? "cursor-not-allowed" : "cursor-grab active:cursor-grabbing"}`} aria-label={`Kéo để sắp xếp ${sectionNames[section.type]}`} title={section.type === "hero" ? "Ảnh bìa luôn ở đầu trang" : "Kéo để sắp xếp"} onDragStart={event => { if (section.type === "hero") { event.preventDefault(); return; } setDragSectionId(section.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", section.id); }} onDragEnd={() => { setDragSectionId(null); setDropSectionId(null); }}><GripVertical className="size-4" /></button>
             <button type="button" className="min-h-10 min-w-0 flex-1 truncate px-2 text-left text-sm" onClick={() => selectSection(section.id)} aria-current={section.id === currentSection?.id ? "true" : undefined}><span className="mr-2 text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>{sectionNames[section.type]}</button>
+            {sectionPeers.length > 0 && <span className={`grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-semibold ${sectionPeers.some(peer => peer.status === "editing") ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`} title={sectionPeers.map(peer => `${peer.displayName} · ${peer.status === "editing" ? "đang chỉnh sửa" : peer.status === "idle" ? "tạm rời" : "đang xem"}${peer.status === "editing" && peer.fieldPath ? ` · ${presenceFieldLabel(peer.fieldPath)}` : ""}`).join("; ")} aria-label={`${sectionPeers.map(peer => peer.displayName).join(", ")} đang ở phần ${sectionNames[section.type]}`}>{sectionPeers.length > 1 ? sectionPeers.length : sectionPeers[0]?.displayName.slice(0, 1).toLocaleUpperCase("vi-VN")}</span>}
             <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-background" title={section.visible === false ? "Phần đang ẩn" : "Phần đang hiển thị"} onClick={() => replaceSection(section.id, { visible: section.visible === false })} aria-label={section.visible === false ? `Hiện ${sectionNames[section.type]}` : `Ẩn ${sectionNames[section.type]}`}>{section.visible === false ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}</button>
             <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 pointer-events-none hover:bg-background group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto disabled:opacity-30" aria-label={`Đưa ${sectionNames[section.type]} lên`} disabled={index === 0 || section.type === "hero" || currentPage?.sections[index - 1]?.type === "hero"} onClick={() => { const target = currentPage?.sections[index - 1]; if (target) reorderSection(section.id, target.id); }}><ChevronUp className="size-3.5" /></button>
             <button type="button" className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 pointer-events-none hover:bg-background group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto disabled:opacity-30" aria-label={`Đưa ${sectionNames[section.type]} xuống`} disabled={index === (currentPage?.sections.length ?? 0) - 1 || section.type === "hero"} onClick={() => { const target = currentPage?.sections[index + 1]; if (target) reorderSection(section.id, target.id); }}><ChevronDown className="size-3.5" /></button>
-          </div>)}
+          </div>;
+          })}
           <label className="mt-5 grid gap-1 text-xs text-muted-foreground">Kiểu điều hướng
             <select className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground" value={doc.navigationMode} onChange={event => mutate(copy => { copy.navigationMode = event.target.value as StoryBuilderV4Document["navigationMode"]; })}>
               {doc.pages.length === 1 && <option value="one-page">Một trang</option>}{doc.pages.length >= 2 && <option value="multi-page">Nhiều trang</option>}<option value="hybrid">Kết hợp</option>
@@ -1025,6 +1582,24 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
       <label className="mt-4 grid gap-1 text-xs text-muted-foreground">Kiểu điều hướng<select className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={doc.navigationMode} onChange={event => mutate(copy => { copy.navigationMode = event.target.value as StoryBuilderV4Document["navigationMode"]; })}>{doc.pages.length === 1 && <option value="one-page">Một trang</option>}{doc.pages.length >= 2 && <option value="multi-page">Nhiều trang</option>}<option value="hybrid">Kết hợp</option></select></label>
       </div> : <div className="min-h-0 flex-1 overflow-y-auto">{inspectorPanel}</div>}
     </section></div>}
+    <WebsiteVersionHistoryDialog
+      open={versionHistoryOpen}
+      onClose={() => setVersionHistoryOpen(false)}
+      weddingId={weddingId}
+      currentVersion={version}
+      restoreBlocked={dirty || conflict || offline || busy || recoveredRecovery || saveState === "saving"}
+      restoreBlockedReason={conflict ? "Hãy xử lý nội dung xung đột trước khi khôi phục." : dirty || recoveredRecovery || saveState === "saving" ? "Hãy lưu xong các thay đổi hiện tại trước khi khôi phục phiên bản." : offline ? "Cần có kết nối mạng để khôi phục phiên bản." : busy ? "Đang có thao tác khác; hãy đợi hoàn tất." : ""}
+      onRestored={applyRestoredWebsite}
+    />
+    <Modal open={identityPromptOpen} onClose={() => {}} title="Ai đang chỉnh website?" description="Tên hiển thị giúp cô dâu và chú rể nhận ra phiên đang xem hoặc sửa nội dung. Tên này chỉ dùng trong trình dựng.">
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-2">{["Cô dâu", "Chú rể", "Người chỉnh sửa"].map(label => <Button key={label} type="button" variant={suggestedDisplayName === label ? "default" : "outline"} className="min-h-11 px-2 text-xs sm:text-sm" onClick={() => chooseDisplayName(label)}><UserRound className="mr-1.5 size-4" />{label}</Button>)}</div>
+        <label className="grid gap-1.5 text-sm">Tên khác<input autoFocus className="h-11 rounded-lg border border-input bg-background px-3" value={customDisplayName} maxLength={40} placeholder="Ví dụ: Minh" onChange={event => setCustomDisplayName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") chooseDisplayName(customDisplayName); }} /></label>
+        <Button type="button" className="w-full" disabled={!customDisplayName.trim()} onClick={() => chooseDisplayName(customDisplayName)}>Tiếp tục với tên này</Button>
+        <p className="text-xs leading-5 text-muted-foreground">Nội dung khôi phục chỉ lưu trên thiết bị này tối đa 24 giờ; không chứa thông tin đăng nhập.</p>
+        {recoveredRecovery && <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => void clearLocalRecovery()}>Xóa bản khôi phục khỏi thiết bị này</Button>}
+      </div>
+    </Modal>
     <Modal open={sectionLibraryOpen} onClose={() => setSectionLibraryOpen(false)} title="Thêm phần vào website" description="Chọn nội dung, xem thử bố cục rồi thêm ngay sau phần đang chọn.">
       <div className="grid gap-5 lg:grid-cols-[minmax(220px,0.85fr)_minmax(0,1.15fr)]">
         <div>
@@ -1141,6 +1716,88 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     {premiumUnknown && <div className="border-t border-border p-3"><FeatureLimitNotice title="Chưa xác minh được quyền dùng mẫu Premium" description="Thử lại kiểm tra gói trước khi lưu hoặc xuất bản. Website đang công khai vẫn được giữ nguyên." status="unavailable" variant="compact" retryLabel="Thử lại" onRetry={() => void sitePlan.refetch()} /></div>}
     {sitePlan.isError && !premiumUnknown && <p className="border-t border-border px-3 py-1 text-xs text-muted-foreground">Không thể kiểm tra quyền lợi gói. Website đã xuất bản vẫn giữ nguyên.</p>}
   </div>;
+}
+
+function WebsiteVersionHistoryDialog({ open, onClose, weddingId, currentVersion, restoreBlocked, restoreBlockedReason, onRestored }: {
+  open: boolean;
+  onClose: () => void;
+  weddingId: string;
+  currentVersion: number;
+  restoreBlocked: boolean;
+  restoreBlockedReason: string;
+  onRestored: (website: Website) => void;
+}) {
+  const { api } = useRuntime();
+  const cache = useQueryClient();
+  const [selectedId, setSelectedId] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState("");
+  const versionsQuery = useQuery({
+    queryKey: ["website", weddingId, "versions"],
+    queryFn: () => listWebsiteVersions(api, weddingId),
+    enabled: open,
+    staleTime: 0,
+  });
+  const versions = versionsQuery.data;
+  const selected = versions?.find(version => version.id === selectedId) ?? versions?.[0];
+  const detailQuery = useQuery({
+    queryKey: ["website", weddingId, "versions", selected?.id],
+    queryFn: () => selected ? getWebsiteVersion(api, weddingId, selected.id) : Promise.reject(new Error("Chưa chọn phiên bản website.")),
+    enabled: open && Boolean(selected?.id),
+  });
+  const detail = detailQuery.data;
+  const canRestore = Boolean(detail && isStoryBuilderV4Document(detail.document) && !restoreBlocked && !restoring);
+  const kindLabels: Record<WebsiteVersion["kind"], string> = {
+    BASELINE: "Bản nền",
+    AUTO_SAVE: "Bản tự lưu",
+    PUBLISHED: "Lúc xuất bản",
+    RESTORED: "Bản đã khôi phục",
+  };
+  async function restore() {
+    if (!selected?.id || !canRestore) return;
+    setRestoring(true); setRestoreError("");
+    try {
+      const result = await restoreWebsiteVersion(api, weddingId, selected.id, currentVersion);
+      await cache.invalidateQueries({ queryKey: ["website", weddingId, "versions"] });
+      onRestored(result);
+      onClose();
+    } catch (cause) {
+      setConfirming(false);
+      setRestoreError(errText(cause));
+      await cache.invalidateQueries({ queryKey: ["website", weddingId, "versions"] });
+    } finally { setRestoring(false); }
+  }
+  return <Modal open={open} onClose={() => { if (!restoring) { setConfirming(false); setRestoreError(""); onClose(); } }} title="Lịch sử phiên bản" description="Xem các mốc đã lưu và khôi phục bản nháp khi cần. Mỗi đám cưới giữ tối đa 20 phiên bản; khôi phục không tự xuất bản website." size="wide">
+    <div className="grid min-h-[min(68dvh,680px)] gap-3 lg:grid-cols-[minmax(250px,0.34fr)_minmax(0,1fr)]">
+      <section aria-label="Danh sách phiên bản" className="min-h-0 overflow-hidden rounded-xl border border-border bg-background">
+        <div className="border-b border-border px-4 py-3"><h3 className="text-sm font-semibold">Các lần lưu gần đây</h3><p className="mt-1 text-xs text-muted-foreground">Tối đa 20 mốc cho đám cưới này</p></div>
+        <div className="max-h-[30dvh] divide-y divide-border overflow-y-auto lg:max-h-[60dvh]">
+          {versionsQuery.isPending && <p className="p-4 text-sm text-muted-foreground">Đang tải lịch sử…</p>}
+          {versionsQuery.isError && <div className="p-4"><p role="alert" className="text-sm text-destructive">{errText(versionsQuery.error)}</p><Button type="button" size="sm" variant="outline" className="mt-3" onClick={() => void versionsQuery.refetch()}>Thử tải lại</Button></div>}
+          {versionsQuery.isSuccess && versions?.length === 0 && <p className="p-4 text-sm leading-6 text-muted-foreground">Chưa có phiên bản nào. Website sẽ tạo mốc đầu tiên khi bạn lưu thay đổi hoặc xuất bản.</p>}
+          {versions?.map((item, index) => <button key={item.id} type="button" aria-current={item.id === selected?.id ? "true" : undefined} onClick={() => { setSelectedId(item.id); setConfirming(false); setRestoreError(""); }} className={`block min-h-[76px] w-full px-4 py-3 text-left transition hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${item.id === selected?.id ? "bg-primary/[0.07]" : ""}`}>
+            <span className="flex items-center justify-between gap-2"><span className="text-sm font-medium">{kindLabels[item.kind]}</span>{index === 0 && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary-hover">Mới nhất</span>}</span>
+            <span className="mt-1 block text-xs text-muted-foreground">Phiên bản {item.version} · {new Date(item.createdAt).toLocaleString("vi-VN")}</span>
+          </button>)}
+        </div>
+      </section>
+      <section aria-label="Xem trước phiên bản" className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-muted/30">
+        {!selected && <div className="grid flex-1 place-items-center p-6 text-center text-sm text-muted-foreground">Chọn một phiên bản để xem trước.</div>}
+        {selected && <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-4 py-3"><div><p className="text-sm font-semibold">{kindLabels[selected.kind]} · phiên bản {selected.version}</p><p className="mt-1 text-xs text-muted-foreground">{new Date(selected.createdAt).toLocaleString("vi-VN")}</p></div><History className="size-4 text-primary" aria-hidden="true" /></div>}
+        {detailQuery.isPending && selected && <div className="grid min-h-[260px] flex-1 place-items-center text-sm text-muted-foreground">Đang tải bản xem trước…</div>}
+        {detailQuery.isError && selected && <div className="grid min-h-[260px] flex-1 place-items-center p-5 text-center"><div><p role="alert" className="text-sm text-destructive">{errText(detailQuery.error)}</p><Button type="button" size="sm" variant="outline" className="mt-3" onClick={() => void detailQuery.refetch()}>Thử lại</Button></div></div>}
+        {detail && isStoryBuilderV4Document(detail.document) && <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-4"><div className="mx-auto min-h-full max-w-[900px] overflow-hidden rounded-xl border border-border bg-background shadow-sm"><div className="pointer-events-none"><StoryBuilderV4Renderer document={detail.document} /></div></div></div>}
+        {detail && !isStoryBuilderV4Document(detail.document) && <div className="grid min-h-[260px] flex-1 place-items-center p-6 text-center"><div><History className="mx-auto size-7 text-muted-foreground" /><p className="mt-3 text-sm font-medium">Bản lưu cũ không có xem trước V4</p><p className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">Phiên bản này dùng cấu trúc website cũ. Có thể xem thông tin mốc lưu, nhưng không thể khôi phục từ trình dựng V4.</p></div></div>}
+        <div className="shrink-0 space-y-3 border-t border-border bg-background p-3 sm:px-4">
+          {restoreBlocked && selected && <p className="text-xs leading-5 text-amber-800">{restoreBlockedReason}</p>}
+          {restoreError && <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/[0.04] p-2.5 text-xs text-destructive">{restoreError}</p>}
+          {confirming && <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Bản này sẽ thay thế bản nháp hiện tại. Bản website đang công khai được giữ nguyên; bạn có thể kiểm tra rồi xuất bản lại sau.</div>}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between"><p className="text-[11px] leading-4 text-muted-foreground">Khôi phục sẽ ghi nhận một phiên bản mới để bạn có thể quay lại.</p><div className="flex gap-2 sm:justify-end">{confirming && <Button type="button" variant="outline" disabled={restoring} onClick={() => setConfirming(false)}>Hủy</Button>}<Button type="button" disabled={!canRestore} title={restoreBlocked ? restoreBlockedReason : undefined} onClick={() => confirming ? void restore() : setConfirming(true)}>{restoring ? <LoaderCircle className="mr-2 size-4 animate-spin" /> : <History className="mr-2 size-4" />}{restoring ? "Đang khôi phục…" : confirming ? "Xác nhận khôi phục" : "Khôi phục bản nháp"}</Button></div></div>
+        </div>
+      </section>
+    </div>
+  </Modal>;
 }
 
 function GuestExperienceInspector({ document, settings, onChange }: {
@@ -1269,7 +1926,7 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
   };
   const sectionPath = ["pages", pageIndex, "sections", sectionIndex] as const;
   const contentError = (key: string, ...nested: (string | number)[]) => errorAt([...sectionPath, "content", key, ...nested]);
-  const field = (label: string, key: string, placeholder = "", multiline = false) => <Field label={label} value={String(content[key] ?? "")} placeholder={placeholder} multiline={multiline} error={contentError(key)} onChange={value => onContent(key, value)} />;
+  const field = (label: string, key: string, placeholder = "", multiline = false) => <Field label={label} presencePath={builderFieldPath(section.id, section.type, "content", key)} value={String(content[key] ?? "")} placeholder={placeholder} multiline={multiline} error={contentError(key)} onChange={value => onContent(key, value)} />;
   const inputClass = "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const availableBindings = setupBindings[section.type] ?? [];
   const bindings = section.bindings ?? [];
@@ -1300,9 +1957,9 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
       {page && tab === "content" && <details className="border-b border-border pb-4" open={issues.some(issue => issue.path[0] === "pages" && issue.path[1] === pageIndex && issue.path[2] !== "sections")}>
         <summary className="min-h-10 cursor-pointer py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cài đặt trang · {page.title}</summary>
         <div className="mt-3 space-y-3">
-          <Field label="Tên trang" value={page.title} error={errorAt(["pages", pageIndex, "title"])} onChange={value => pageChange({ title: value, navigationLabel: page.navigationLabel || value })} />
-          <Field label="Nhãn điều hướng" value={page.navigationLabel ?? page.title} error={errorAt(["pages", pageIndex, "navigationLabel"])} onChange={value => pageChange({ navigationLabel: value })} />
-          {page.isHome ? <p className="text-xs text-muted-foreground">Trang chủ dùng đường dẫn gốc của website.</p> : <Field label="Đường dẫn" value={page.slug} placeholder="our-story" error={errorAt(["pages", pageIndex, "slug"])} onChange={value => pageChange({ slug: value.toLocaleLowerCase() })} />}
+          <Field label="Tên trang" presencePath={builderFieldPath(page.id, "page", "title")} value={page.title} error={errorAt(["pages", pageIndex, "title"])} onChange={value => pageChange({ title: value, navigationLabel: page.navigationLabel || value })} />
+          <Field label="Nhãn điều hướng" presencePath={builderFieldPath(page.id, "page", "navigationLabel")} value={page.navigationLabel ?? page.title} error={errorAt(["pages", pageIndex, "navigationLabel"])} onChange={value => pageChange({ navigationLabel: value })} />
+          {page.isHome ? <p className="text-xs text-muted-foreground">Trang chủ dùng đường dẫn gốc của website.</p> : <Field label="Đường dẫn" presencePath={builderFieldPath(page.id, "page", "slug")} value={page.slug} placeholder="our-story" error={errorAt(["pages", pageIndex, "slug"])} onChange={value => pageChange({ slug: value.toLocaleLowerCase() })} />}
           <label className="flex min-h-10 items-center justify-between text-sm">Hiển thị trang<input type="checkbox" checked={page.visible !== false} onChange={event => pageChange({ visible: event.target.checked })} /></label>
           {errorAt(["pages", pageIndex, "visible"]) && <p className="text-xs text-destructive">{errorAt(["pages", pageIndex, "visible"])}</p>}
           {errorAt(["pages", pageIndex, "sections"]) && <p className="text-xs text-destructive">{errorAt(["pages", pageIndex, "sections"])}</p>}
@@ -1312,16 +1969,16 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
       {tab === "content" ? <>
         <Field label="Tiêu đề điều hướng" value={section.navigationLabel ?? ""} error={errorAt([...sectionPath, "navigationLabel"])} onChange={value => onSection({ navigationLabel: value })} placeholder={sectionName} />
         {section.type === "hero" && <>{field("Tiêu đề lớn", "title", "Tên hai bạn hoặc tên đám cưới")}{field("Lời dẫn", "subtitle", "Lời mời ngắn")}{field("Nhãn nút chính", "ctaLabel", "Ví dụ: Xem lịch trình")}{field("Dòng nhấn", "eyebrow", "")}
-          <ImageField label="Ảnh bìa" value={String(content.imageUrl ?? "")} placeholder="Dán liên kết ảnh hoặc tải từ thiết bị" error={contentError("imageUrl")} onChange={value => onContent("imageUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} />
+          <ImageField label="Ảnh bìa" presencePath={builderFieldPath(section.id, "hero", "content", "imageUrl")} value={String(content.imageUrl ?? "")} placeholder="Dán liên kết ảnh hoặc tải từ thiết bị" error={contentError("imageUrl")} onChange={value => onContent("imageUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} />
         </>}
-        {section.type === "couple" && <>{field("Giới thiệu", "intro", "", true)}{(["groom", "bride"] as const).map((personKey, index) => { const person = record(content[personKey]); return <fieldset key={personKey} className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold text-muted-foreground">{index === 0 ? "Chú rể" : "Cô dâu"}</legend><Field label="Tên hiển thị" value={String(person.displayName ?? person.fullName ?? "")} error={contentError(personKey, "displayName")} onChange={value => onNested(personKey, "displayName", value)} /><Field label="Giới thiệu" value={String(person.bio ?? "")} multiline error={contentError(personKey, "bio")} onChange={value => onNested(personKey, "bio", value)} /><Field label="Tên cha" value={String(person.fatherName ?? "")} error={contentError(personKey, "fatherName")} onChange={value => onNested(personKey, "fatherName", value)} /><Field label="Tên mẹ" value={String(person.motherName ?? "")} error={contentError(personKey, "motherName")} onChange={value => onNested(personKey, "motherName", value)} /><ImageField label="Ảnh chân dung" value={String(person.photoUrl ?? "")} error={contentError(personKey, "photoUrl")} onChange={value => onNested(personKey, "photoUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} /></fieldset>; })}</>}
-        {section.type === "countdown" && <>{field("Tiêu đề", "title")}<DateTimeField label="Ngày giờ mục tiêu" value={String(content.targetDate ?? "")} timeZone={setup.timeZoneId} error={contentError("targetDate")} onChange={value => onContent("targetDate", value)} /></>}
-        {section.type === "loveStory" && <>{field("Giới thiệu", "intro", "", true)}<div className="space-y-3">{list("items").map((item, index) => <fieldset key={String(item.id)} className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between"><span className="text-sm font-semibold">Dấu mốc {index + 1} / {list("items").length}</span><button type="button" className="min-h-10 rounded-lg px-2 text-sm text-destructive hover:bg-destructive/5" onClick={() => onContent("items", list("items").filter((_, i) => i !== index))}>Xóa</button></div><Field label="Tiêu đề" value={String(item.title ?? "")} error={contentError("items", index, "title")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, title: value } : entry))} /><Field label="Ngày hoặc dấu mốc" value={String(item.date ?? "")} error={contentError("items", index, "date")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, date: value } : entry))} /><Field label="Mô tả" value={String(item.body ?? "")} multiline error={contentError("items", index, "body")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, body: value } : entry))} /><ImageField label="Ảnh dấu mốc" value={String(item.imageUrl ?? "")} error={contentError("items", index, "imageUrl")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, imageUrl: value } : entry))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("items", moveItem(list("items"), index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === list("items").length - 1} onClick={() => onContent("items", moveItem(list("items"), index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></fieldset>)}<Button type="button" size="sm" variant="outline" disabled={list("items").length >= 20} onClick={() => onContent("items", [...list("items"), { id: id(), title: "", date: "", body: "" }])}><Plus className="mr-1 size-3.5" />{list("items").length >= 20 ? "Đã đạt tối đa 20 dấu mốc" : "Thêm dấu mốc"}</Button></div></>}
-        {section.type === "gallery" && <>{field("Giới thiệu album", "intro", "", true)}<div className="space-y-3">{list("images").map((image, index) => <fieldset key={String(image.id)} className="rounded-xl border border-border p-3"><div className="mb-3 flex items-center justify-between"><span className="text-sm font-semibold">Ảnh {index + 1} / {list("images").length}</span><button type="button" className="grid size-9 place-items-center rounded-lg text-destructive hover:bg-destructive/5" aria-label={`Xóa ảnh ${index + 1}`} onClick={() => onContent("images", list("images").filter((_, i) => i !== index))}><Trash2 className="size-4" /></button></div><ImageField label="Ảnh album" value={String(image.imageUrl ?? "")} error={contentError("images", index, "imageUrl")} onChange={value => onContent("images", list("images").map((entry, i) => i === index ? { ...entry, imageUrl: value } : entry))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><Field label="Mô tả ảnh (văn bản thay thế)" value={String(image.alt ?? "")} placeholder="Mô tả ngắn nội dung ảnh" error={contentError("images", index, "alt")} onChange={value => onContent("images", list("images").map((entry, i) => i === index ? { ...entry, alt: value } : entry))} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("images", moveItem(list("images"), index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === list("images").length - 1} onClick={() => onContent("images", moveItem(list("images"), index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></fieldset>)}{list("images").length < 30 && <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted ${batchUploading ? "pointer-events-none opacity-60" : ""}`}><Upload className="size-4" />{batchUploading ? "Đang tải album…" : "Chọn ảnh cho album"}<input type="file" multiple disabled={batchUploading} accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void uploadGalleryBatch(files); }} /></label>}{list("images").length >= 30 && <p className="text-xs text-muted-foreground">Album đã đạt giới hạn 30 ảnh.</p>}{batchStatus && <p aria-live="polite" role="status" className="text-xs text-muted-foreground">{batchStatus}</p>}</div></>}
-        {section.type === "events" && <><Field label="Giới thiệu" value={String(content.intro ?? "")} multiline error={contentError("intro")} onChange={value => onContent("intro", value)} /><WeddingEventPicker weddingId={weddingId} setup={setup} selectedIds={selectedEventIds} onChange={onEventIds} /><details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Dữ liệu sự kiện cũ của website</summary><p className="mt-2 text-xs leading-5 text-muted-foreground">Các sự kiện đã lưu trực tiếp trong bản V4 cũ vẫn được giữ nguyên. Hãy dùng danh sách phía trên cho sự kiện mới.</p>{list("events").map(event => <p key={String(event.id)} className="mt-2 text-sm">{String(event.title ?? "Sự kiện")}</p>)}</details></>}
-        {section.type === "weddingParty" && <>{field("Giới thiệu", "intro", "", true)}{(["groom", "bride"] as const).map((side, sideIndex) => { const members = list(side); return <fieldset key={side} className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold text-muted-foreground">{sideIndex === 0 ? "Phù rể" : "Phù dâu"}</legend>{members.map((member, index) => <div key={String(member.id)} className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between"><span className="text-sm font-medium">Thành viên {index + 1}</span><button type="button" className="min-h-10 px-2 text-sm text-destructive" onClick={() => onContent(side, members.filter((_, i) => i !== index))}>Xóa</button></div><Field label="Họ tên" value={String(member.name ?? "")} error={contentError(side, index, "name")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, name: value } : item))} /><Field label="Vai trò" value={String(member.role ?? "")} placeholder={side === "groom" ? "Bạn thân chú rể" : "Bạn thân cô dâu"} error={contentError(side, index, "role")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, role: value } : item))} /><Field label="Lời giới thiệu" value={String(member.bio ?? "")} multiline error={contentError(side, index, "bio")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, bio: value } : item))} /><ImageField label="Ảnh thành viên" value={String(member.photoUrl ?? "")} error={contentError(side, index, "photoUrl")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, photoUrl: value } : item))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent(side, moveItem(members, index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === members.length - 1} onClick={() => onContent(side, moveItem(members, index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></div>)}<Button type="button" size="sm" variant="outline" disabled={members.length >= 12} onClick={() => onContent(side, [...members, { id: id(), name: "", role: "" }])}><Plus className="mr-1 size-3.5" />Thêm {sideIndex === 0 ? "phù rể" : "phù dâu"}</Button></fieldset>; })}</>}
+        {section.type === "couple" && <>{field("Giới thiệu", "intro", "", true)}{(["groom", "bride"] as const).map((personKey, index) => { const person = record(content[personKey]); const personPath = (key: string) => builderFieldPath(section.id, "couple", personKey, key); return <fieldset key={personKey} className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold text-muted-foreground">{index === 0 ? "Chú rể" : "Cô dâu"}</legend><Field label="Tên hiển thị" presencePath={personPath("displayName")} value={String(person.displayName ?? person.fullName ?? "")} error={contentError(personKey, "displayName")} onChange={value => onNested(personKey, "displayName", value)} /><Field label="Giới thiệu" presencePath={personPath("bio")} value={String(person.bio ?? "")} multiline error={contentError(personKey, "bio")} onChange={value => onNested(personKey, "bio", value)} /><Field label="Tên cha" presencePath={personPath("fatherName")} value={String(person.fatherName ?? "")} error={contentError(personKey, "fatherName")} onChange={value => onNested(personKey, "fatherName", value)} /><Field label="Tên mẹ" presencePath={personPath("motherName")} value={String(person.motherName ?? "")} error={contentError(personKey, "motherName")} onChange={value => onNested(personKey, "motherName", value)} /><ImageField label="Ảnh chân dung" presencePath={personPath("photoUrl")} value={String(person.photoUrl ?? "")} error={contentError(personKey, "photoUrl")} onChange={value => onNested(personKey, "photoUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} /></fieldset>; })}</>}
+        {section.type === "countdown" && <>{field("Tiêu đề", "title")}<DateTimeField label="Ngày giờ mục tiêu" presencePath={builderFieldPath(section.id, "countdown", "content", "targetDate")} value={String(content.targetDate ?? "")} timeZone={setup.timeZoneId} error={contentError("targetDate")} onChange={value => onContent("targetDate", value)} /></>}
+        {section.type === "loveStory" && <>{field("Giới thiệu", "intro", "", true)}<div className="space-y-3">{list("items").map((item, index) => <fieldset key={String(item.id)} className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between"><span className="text-sm font-semibold">Dấu mốc {index + 1} / {list("items").length}</span><button type="button" className="min-h-10 rounded-lg px-2 text-sm text-destructive hover:bg-destructive/5" onClick={() => onContent("items", list("items").filter((_, i) => i !== index))}>Xóa</button></div><Field label="Tiêu đề" presencePath={builderFieldPath(section.id, "loveStory", "items", String(item.id), "title")} value={String(item.title ?? "")} error={contentError("items", index, "title")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, title: value } : entry))} /><Field label="Ngày hoặc dấu mốc" presencePath={builderFieldPath(section.id, "loveStory", "items", String(item.id), "date")} value={String(item.date ?? "")} error={contentError("items", index, "date")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, date: value } : entry))} /><Field label="Mô tả" presencePath={builderFieldPath(section.id, "loveStory", "items", String(item.id), "body")} value={String(item.body ?? "")} multiline error={contentError("items", index, "body")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, body: value } : entry))} /><ImageField label="Ảnh dấu mốc" presencePath={builderFieldPath(section.id, "loveStory", "items", String(item.id), "imageUrl")} value={String(item.imageUrl ?? "")} error={contentError("items", index, "imageUrl")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, imageUrl: value } : entry))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("items", moveItem(list("items"), index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === list("items").length - 1} onClick={() => onContent("items", moveItem(list("items"), index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></fieldset>)}<Button type="button" size="sm" variant="outline" disabled={list("items").length >= 20} onClick={() => onContent("items", [...list("items"), { id: id(), title: "", date: "", body: "" }])}><Plus className="mr-1 size-3.5" />{list("items").length >= 20 ? "Đã đạt tối đa 20 dấu mốc" : "Thêm dấu mốc"}</Button></div></>}
+        {section.type === "gallery" && <>{field("Giới thiệu album", "intro", "", true)}<div className="space-y-3">{list("images").map((image, index) => <fieldset key={String(image.id)} className="rounded-xl border border-border p-3"><div className="mb-3 flex items-center justify-between"><span className="text-sm font-semibold">Ảnh {index + 1} / {list("images").length}</span><button type="button" className="grid size-9 place-items-center rounded-lg text-destructive hover:bg-destructive/5" aria-label={`Xóa ảnh ${index + 1}`} onClick={() => onContent("images", list("images").filter((_, i) => i !== index))}><Trash2 className="size-4" /></button></div><ImageField label="Ảnh album" presencePath={builderFieldPath(section.id, "gallery", "images", String(image.id), "imageUrl")} value={String(image.imageUrl ?? "")} error={contentError("images", index, "imageUrl")} onChange={value => onContent("images", list("images").map((entry, i) => i === index ? { ...entry, imageUrl: value } : entry))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><Field label="Mô tả ảnh (văn bản thay thế)" presencePath={builderFieldPath(section.id, "gallery", "images", String(image.id), "alt")} value={String(image.alt ?? "")} placeholder="Mô tả ngắn nội dung ảnh" error={contentError("images", index, "alt")} onChange={value => onContent("images", list("images").map((entry, i) => i === index ? { ...entry, alt: value } : entry))} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("images", moveItem(list("images"), index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === list("images").length - 1} onClick={() => onContent("images", moveItem(list("images"), index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></fieldset>)}{list("images").length < 30 && <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted ${batchUploading ? "pointer-events-none opacity-60" : ""}`}><Upload className="size-4" />{batchUploading ? "Đang tải album…" : "Chọn ảnh cho album"}<input type="file" multiple disabled={batchUploading} accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void uploadGalleryBatch(files); }} /></label>}{list("images").length >= 30 && <p className="text-xs text-muted-foreground">Album đã đạt giới hạn 30 ảnh.</p>}{batchStatus && <p aria-live="polite" role="status" className="text-xs text-muted-foreground">{batchStatus}</p>}</div></>}
+        {section.type === "events" && <><Field label="Giới thiệu" presencePath={builderFieldPath(section.id, "events", "content", "intro")} value={String(content.intro ?? "")} multiline error={contentError("intro")} onChange={value => onContent("intro", value)} /><WeddingEventPicker weddingId={weddingId} setup={setup} selectedIds={selectedEventIds} onChange={onEventIds} presencePrefix={builderFieldPath(section.id, "events", "event")} /><details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Dữ liệu sự kiện cũ của website</summary><p className="mt-2 text-xs leading-5 text-muted-foreground">Các sự kiện đã lưu trực tiếp trong bản V4 cũ vẫn được giữ nguyên. Hãy dùng danh sách phía trên cho sự kiện mới.</p>{list("events").map(event => <p key={String(event.id)} className="mt-2 text-sm">{String(event.title ?? "Sự kiện")}</p>)}</details></>}
+        {section.type === "weddingParty" && <>{field("Giới thiệu", "intro", "", true)}{(["groom", "bride"] as const).map((side, sideIndex) => { const members = list(side); return <fieldset key={side} className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold text-muted-foreground">{sideIndex === 0 ? "Phù rể" : "Phù dâu"}</legend>{members.map((member, index) => <div key={String(member.id)} className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between"><span className="text-sm font-medium">Thành viên {index + 1}</span><button type="button" className="min-h-10 px-2 text-sm text-destructive" onClick={() => onContent(side, members.filter((_, i) => i !== index))}>Xóa</button></div><Field label="Họ tên" presencePath={builderFieldPath(section.id, "weddingParty", side, String(member.id), "name")} value={String(member.name ?? "")} error={contentError(side, index, "name")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, name: value } : item))} /><Field label="Vai trò" presencePath={builderFieldPath(section.id, "weddingParty", side, String(member.id), "role")} value={String(member.role ?? "")} placeholder={side === "groom" ? "Bạn thân chú rể" : "Bạn thân cô dâu"} error={contentError(side, index, "role")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, role: value } : item))} /><Field label="Lời giới thiệu" presencePath={builderFieldPath(section.id, "weddingParty", side, String(member.id), "bio")} value={String(member.bio ?? "")} multiline error={contentError(side, index, "bio")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, bio: value } : item))} /><ImageField label="Ảnh thành viên" presencePath={builderFieldPath(section.id, "weddingParty", side, String(member.id), "photoUrl")} value={String(member.photoUrl ?? "")} error={contentError(side, index, "photoUrl")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, photoUrl: value } : item))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent(side, moveItem(members, index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === members.length - 1} onClick={() => onContent(side, moveItem(members, index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></div>)}<Button type="button" size="sm" variant="outline" disabled={members.length >= 12} onClick={() => onContent(side, [...members, { id: id(), name: "", role: "" }])}><Plus className="mr-1 size-3.5" />Thêm {sideIndex === 0 ? "phù rể" : "phù dâu"}</Button></fieldset>; })}</>}
         {section.type === "rsvp" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}{field("Nhãn nút", "submitLabel")}</>}
-        {section.type === "wishes" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}</>}
+        {section.type === "wishes" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}<label className="grid gap-1.5 text-sm"><span className="font-medium">Số lời chúc hiện ban đầu</span><select className={inputClass} value={typeof content.displayLimit === "number" ? String(content.displayLimit) : "3"} onChange={event => onContent("displayLimit", Number(event.target.value))}><option value="3">3 lời chúc · gọn</option><option value="6">6 lời chúc</option><option value="9">9 lời chúc</option><option value="12">12 lời chúc</option><option value="0">Tất cả lời chúc</option></select><span className="text-xs text-muted-foreground">Khách có thể mở xem thêm bất cứ lúc nào.</span></label><fieldset className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tương tác của khách</legend><label className="flex min-h-11 items-center justify-between gap-3 text-sm"><span><span className="block font-medium text-foreground">Cho phép thả tim</span><span className="block text-xs text-muted-foreground">Khách có thể bày tỏ yêu thích với từng lời chúc.</span></span><input type="checkbox" checked={content.allowLikes === true} onChange={event => onContent("allowLikes", event.target.checked)} /></label><label className="flex min-h-11 items-center justify-between gap-3 text-sm"><span><span className="block font-medium text-foreground">Cho phép bình luận</span><span className="block text-xs text-muted-foreground">Bình luận sẽ hiển thị công khai ngay sau khi gửi.</span></span><input type="checkbox" checked={content.allowComments === true} onChange={event => onContent("allowComments", event.target.checked)} /></label></fieldset></>}
         {section.type === "gift" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}<label className="flex min-h-10 items-center justify-between border-t border-border pt-3 text-sm">Hiển thị thông tin mừng cưới<input type="checkbox" checked={gift?.enabled ?? false} onChange={event => onGift({ enabled: event.target.checked })} /></label>{gift?.enabled && (["groomBank", "groomHolder", "groomAccount", "brideBank", "brideHolder", "brideAccount"] as const).map(key => <Field key={key} label={{ groomBank: "Ngân hàng chú rể", groomHolder: "Chủ tài khoản chú rể", groomAccount: "Số tài khoản chú rể", brideBank: "Ngân hàng cô dâu", brideHolder: "Chủ tài khoản cô dâu", brideAccount: "Số tài khoản cô dâu" }[key]} value={gift[key] ?? ""} error={errorAt(["content", "gift", key])} onChange={value => onGift({ [key]: value })} />)}</>}
         {availableBindings.length > 0 && <fieldset className="space-y-3 border-t border-border pt-4">
           <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dữ liệu Wedding Setup</legend>
@@ -1377,7 +2034,7 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
 const variantOptions: Record<SectionType, string[]> = { hero: ["floral", "dark", "split", "editorial", "ceremonial"], couple: ["alternating", "two-columns", "editorial"], countdown: ["classic", "banner", "inline"], loveStory: ["timeline", "editorial"], events: ["cards", "minimal"], weddingParty: ["classic", "editorial"], gallery: ["grid", "masonry"], rsvp: ["default"], wishes: ["default"], gift: ["default", "minimal"] };
 const variantNames: Record<string, string> = { floral: "Hoa nhẹ nhàng", dark: "Nền trầm", split: "Chia đôi", editorial: "Biên tập", ceremonial: "Trang trọng", alternating: "Xen kẽ", "two-columns": "Hai cột", classic: "Cổ điển", banner: "Dải ngang", inline: "Ngang gọn", timeline: "Dòng thời gian", cards: "Thẻ sự kiện", minimal: "Tối giản", grid: "Lưới", masonry: "So le", default: "Mặc định" };
 
-function WeddingEventPicker({ weddingId, setup, selectedIds, onChange }: { weddingId: string; setup: WeddingSetup; selectedIds: string[]; onChange: (ids: string[]) => void }) {
+function WeddingEventPicker({ weddingId, setup, selectedIds, onChange, presencePrefix }: { weddingId: string; setup: WeddingSetup; selectedIds: string[]; onChange: (ids: string[]) => void; presencePrefix?: string }) {
   const { api } = useRuntime(); const cache = useQueryClient(); const checkboxPrefix = useId();
   const events = useQuery({ queryKey: ["wedding-events", weddingId], queryFn: () => listWeddingEvents(api, weddingId), staleTime: 30_000 });
   const [editingId, setEditingId] = useState<string | null>(null); const [formOpen, setFormOpen] = useState(false);
@@ -1419,7 +2076,7 @@ function WeddingEventPicker({ weddingId, setup, selectedIds, onChange }: { weddi
       <div className="min-w-0 flex-1"><label htmlFor={checkboxId} className="block cursor-pointer text-sm font-medium">{item.title}{item.id === "main" ? " · Wedding Setup" : ""}</label><span className="mt-1 block text-xs leading-5 text-muted-foreground">{[item.startsAt ? new Date(item.startsAt).toLocaleString("vi-VN") : "", item.venueName, item.address].filter(Boolean).join(" · ") || "Chưa có ngày hoặc địa điểm"}</span></div>
       {item.id !== "main" && <span className="flex shrink-0 gap-2"><button type="button" className="text-xs text-primary underline" onClick={() => beginEdit(item)}>Sửa</button><button type="button" className="text-xs text-destructive underline" onClick={() => void removeEvent(item)}>Xóa</button></span>}
     </div>; })}</div>
-    {!formOpen ? <Button type="button" size="sm" variant="outline" onClick={() => { resetForm(); setFormOpen(true); }}><Plus className="mr-1.5 size-3.5" />Thêm sự kiện</Button> : <fieldset className="space-y-3 border-t border-border pt-3"><legend className="px-1 text-xs font-semibold">{editingId ? "Chỉnh sửa sự kiện" : "Sự kiện mới"}</legend><Field label="Tên sự kiện" value={title} onChange={setTitle} placeholder="Lễ gia tiên, tiệc cưới…" /><Field label="Mô tả" value={description} multiline onChange={setDescription} /><DateTimeField label="Ngày giờ" value={startsAt} timeZone={setup.timeZoneId} onChange={value => setStartsAt(value ?? "")} /><Field label="Địa điểm" value={venueName} onChange={setVenueName} /><Field label="Địa chỉ" value={address} onChange={setAddress} /><Field label="Link bản đồ HTTPS" value={mapUrl} onChange={setMapUrl} /><div className="flex gap-2"><Button type="button" size="sm" disabled={busy || !title.trim()} onClick={() => void saveEvent()}>{busy ? "Đang lưu…" : "Lưu sự kiện"}</Button><Button type="button" size="sm" variant="outline" disabled={busy} onClick={resetForm}>Hủy</Button></div></fieldset>}
+    {!formOpen ? <Button type="button" size="sm" variant="outline" onClick={() => { resetForm(); setFormOpen(true); }}><Plus className="mr-1.5 size-3.5" />Thêm sự kiện</Button> : <fieldset className="space-y-3 border-t border-border pt-3"><legend className="px-1 text-xs font-semibold">{editingId ? "Chỉnh sửa sự kiện" : "Sự kiện mới"}</legend><Field label="Tên sự kiện" presencePath={builderFieldPath(presencePrefix ?? "event", editingId ?? "new", "title")} value={title} onChange={setTitle} placeholder="Lễ gia tiên, tiệc cưới…" /><Field label="Mô tả" presencePath={builderFieldPath(presencePrefix ?? "event", editingId ?? "new", "description")} value={description} multiline onChange={setDescription} /><DateTimeField label="Ngày giờ" presencePath={builderFieldPath(presencePrefix ?? "event", editingId ?? "new", "startsAt")} value={startsAt} timeZone={setup.timeZoneId} onChange={value => setStartsAt(value ?? "")} /><Field label="Địa điểm" presencePath={builderFieldPath(presencePrefix ?? "event", editingId ?? "new", "venueName")} value={venueName} onChange={setVenueName} /><Field label="Địa chỉ" presencePath={builderFieldPath(presencePrefix ?? "event", editingId ?? "new", "address")} value={address} onChange={setAddress} /><Field label="Link bản đồ HTTPS" presencePath={builderFieldPath(presencePrefix ?? "event", editingId ?? "new", "mapUrl")} value={mapUrl} onChange={setMapUrl} /><div className="flex gap-2"><Button type="button" size="sm" disabled={busy || !title.trim()} onClick={() => void saveEvent()}>{busy ? "Đang lưu…" : "Lưu sự kiện"}</Button><Button type="button" size="sm" variant="outline" disabled={busy} onClick={resetForm}>Hủy</Button></div></fieldset>}
     {message && <p role="alert" className="text-xs text-destructive">{message}</p>}
   </div>;
 }
@@ -1435,13 +2092,14 @@ function setupBindingValue(target: string, setup: WeddingSetup) {
   }
 }
 
-function Field({ label, value, placeholder, multiline, maxLength, error, onChange }: { label: string; value: string; placeholder?: string; multiline?: boolean; maxLength?: number; error?: string; onChange: (value: string) => void }) {
+function Field({ label, value, placeholder, multiline, maxLength, error, presencePath, onChange }: { label: string; value: string; placeholder?: string; multiline?: boolean; maxLength?: number; error?: string; presencePath?: string; onChange: (value: string) => void }) {
   const errorId = useId();
   const className = `w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${error ? "border-destructive focus-visible:ring-destructive" : "border-input"}`;
-  return <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">{label}{multiline ? <textarea maxLength={maxLength} className={`${className} min-h-20 resize-y`} value={value} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={event => onChange(event.target.value)} /> : <input maxLength={maxLength} className={`${className} h-10`} value={value} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={event => onChange(event.target.value)} />}{error && <span id={errorId} role="alert" className="font-normal text-destructive">{error}</span>}</label>;
+  const normalizedPath = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">{label}{multiline ? <textarea data-builder-field-path={presencePath ?? `field.${normalizedPath}`} maxLength={maxLength} className={`${className} min-h-20 resize-y`} value={value} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={event => onChange(event.target.value)} /> : <input data-builder-field-path={presencePath ?? `field.${normalizedPath}`} maxLength={maxLength} className={`${className} h-10`} value={value} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={event => onChange(event.target.value)} />}{error && <span id={errorId} role="alert" className="font-normal text-destructive">{error}</span>}</label>;
 }
 
-function DateTimeField({ label, value, timeZone, error, onChange }: { label: string; value: string; timeZone?: string; error?: string; onChange: (value: string | undefined) => void }) {
+function DateTimeField({ label, value, timeZone, error, presencePath, onChange }: { label: string; value: string; timeZone?: string; error?: string; presencePath?: string; onChange: (value: string | undefined) => void }) {
   const [draft, setDraft] = useState(() => ({ sourceValue: value, sourceTimeZone: timeZone, localValue: isoToLocalDateTime(value, timeZone), conversionError: "" }));
   const errorId = useId();
   if (draft.sourceValue !== value || draft.sourceTimeZone !== timeZone) {
@@ -1449,7 +2107,7 @@ function DateTimeField({ label, value, timeZone, error, onChange }: { label: str
   }
   const displayedError = error ?? draft.conversionError;
   return <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">{label}
-    <input type="datetime-local" value={draft.localValue} aria-invalid={Boolean(displayedError)} aria-describedby={displayedError ? errorId : undefined} className={`h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${displayedError ? "border-destructive focus-visible:ring-destructive" : "border-input"}`} onChange={event => {
+    <input data-builder-field-path={presencePath ?? `field.${label}`} type="datetime-local" value={draft.localValue} aria-invalid={Boolean(displayedError)} aria-describedby={displayedError ? errorId : undefined} className={`h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${displayedError ? "border-destructive focus-visible:ring-destructive" : "border-input"}`} onChange={event => {
       const next = event.target.value;
       if (!next) { setDraft(current => ({ ...current, localValue: "", conversionError: "" })); onChange(undefined); return; }
       try { onChange(localDateTimeToIso(next, timeZone)); setDraft(current => ({ ...current, localValue: next, conversionError: "" })); }
@@ -1460,7 +2118,7 @@ function DateTimeField({ label, value, timeZone, error, onChange }: { label: str
   </label>;
 }
 
-function ImageField({ label, value, placeholder, error, onChange, onUpload, onChooseMedia }: { label: string; value: string; placeholder?: string; error?: string; onChange: (value: string) => void; onUpload: (file: File) => Promise<string | null>; onChooseMedia: (onChoose: (url: string) => void) => void }) {
+function ImageField({ label, value, placeholder, error, presencePath, onChange, onUpload, onChooseMedia }: { label: string; value: string; placeholder?: string; error?: string; presencePath?: string; onChange: (value: string) => void; onUpload: (file: File) => Promise<string | null>; onChooseMedia: (onChoose: (url: string) => void) => void }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [previewFailedFor, setPreviewFailedFor] = useState("");
@@ -1516,7 +2174,7 @@ function ImageField({ label, value, placeholder, error, onChange, onUpload, onCh
     <p className="text-xs leading-5 text-muted-foreground">Gỡ ảnh chỉ bỏ ảnh khỏi mục này; tệp vẫn được giữ trong thư viện ảnh.</p>
     <details className="group rounded-lg border border-border/70 px-3 py-2">
       <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground marker:hidden">Nhập liên kết ảnh thủ công <ChevronDown className="ml-1 inline size-3.5 transition group-open:rotate-180" /></summary>
-      <div className="mt-3"><Field label="Liên kết ảnh" value={value} placeholder={placeholder ?? "Dán liên kết ảnh"} onChange={onChange} /></div>
+      <div className="mt-3"><Field label="Liên kết ảnh" presencePath={presencePath} value={value} placeholder={placeholder ?? "Dán liên kết ảnh"} onChange={onChange} /></div>
     </details>
     {uploadError && <p role="alert" className="text-xs text-destructive">{uploadError}</p>}
   </div>;

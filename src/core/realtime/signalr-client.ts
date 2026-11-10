@@ -4,6 +4,7 @@ import {
   LogLevel,
   type HubConnection,
 } from "@microsoft/signalr";
+import { z } from "zod";
 import {
   REALTIME_EVENTS,
   weddingEventSchema,
@@ -22,6 +23,13 @@ import {
 export type RealtimeStatus =
   "disabled" | "disconnected" | "connecting" | "connected" | "reconnecting";
 
+export const builderPresenceSchema = z.object({
+  sessionId: z.string().uuid(), displayName: z.string().max(40), pageId: z.string().nullable(),
+  sectionId: z.string().nullable(), fieldPath: z.string().nullable(),
+  status: z.enum(["viewing", "editing", "idle"]), updatedAt: z.string(),
+}).strict();
+export type BuilderPresence = z.infer<typeof builderPresenceSchema>;
+
 export class RealtimeClient {
   private connection: HubConnection | undefined;
   private activeWedding: string | null = null;
@@ -35,6 +43,9 @@ export class RealtimeClient {
   private handlers = new Map<RealtimeEvent, Set<(event: WeddingEvent) => void>>();
   private dragListeners = new Set<(snapshot: SeatingDragSnapshot) => void>();
   private pointerListeners = new Set<(pointer: SeatingDragPointer) => void>();
+  private builderSnapshotListeners = new Set<(snapshot: BuilderPresence[]) => void>();
+  private builderChangedListeners = new Set<(presence: BuilderPresence) => void>();
+  private builderLeftListeners = new Set<(sessionId: string) => void>();
   private latestPointers = new Map<string, SeatingDragPointer>();
   getSeatingPointer(connectionId: string, dragId: string) {
     const pointer = this.latestPointers.get(connectionId);
@@ -80,6 +91,32 @@ export class RealtimeClient {
     const result = await connection.invoke<T>(method, weddingId, ...args);
     if (this.connection !== connection || this.generation !== generation)
       throw new Error("SEATING_REALTIME_DISCONNECTED");
+    return result;
+  }
+  onBuilderPresenceSnapshot(listener: (snapshot: BuilderPresence[]) => void) {
+    this.builderSnapshotListeners.add(listener);
+    return () => this.builderSnapshotListeners.delete(listener);
+  }
+  onBuilderPresenceChanged(listener: (presence: BuilderPresence) => void) {
+    this.builderChangedListeners.add(listener);
+    return () => this.builderChangedListeners.delete(listener);
+  }
+  onBuilderPresenceLeft(listener: (sessionId: string) => void) {
+    this.builderLeftListeners.add(listener);
+    return () => this.builderLeftListeners.delete(listener);
+  }
+  async invokeBuilder<T>(
+    method: "JoinBuilder" | "UpdateBuilderPresence" | "HeartbeatBuilder" | "LeaveBuilder",
+    weddingId: string,
+    ...args: unknown[]
+  ): Promise<T> {
+    const connection = this.connection;
+    const generation = this.generation;
+    if (!connection || this.status !== "connected" || weddingId !== this.activeWedding)
+      throw new Error("BUILDER_REALTIME_DISCONNECTED");
+    const result = await connection.invoke<T>(method, weddingId, ...args);
+    if (this.connection !== connection || this.generation !== generation)
+      throw new Error("BUILDER_REALTIME_DISCONNECTED");
     return result;
   }
   constructor(
@@ -159,6 +196,18 @@ export class RealtimeClient {
           this.latestPointers.delete(oldest);
         this.pointerListeners.forEach((listener) => listener(parsed.data));
       }
+    });
+    connection.on("builderPresenceSnapshot", (payload: unknown) => {
+      const parsed = z.array(builderPresenceSchema).safeParse(payload);
+      if (isCurrent() && parsed.success) this.builderSnapshotListeners.forEach((listener) => listener(parsed.data));
+    });
+    connection.on("builderPresenceChanged", (payload: unknown) => {
+      const parsed = builderPresenceSchema.safeParse(payload);
+      if (isCurrent() && parsed.success) this.builderChangedListeners.forEach((listener) => listener(parsed.data));
+    });
+    connection.on("builderPresenceLeft", (payload: unknown) => {
+      if (isCurrent() && typeof payload === "string" && z.string().uuid().safeParse(payload).success)
+        this.builderLeftListeners.forEach((listener) => listener(payload));
     });
     for (const event of Object.values(REALTIME_EVENTS)) {
       connection.on(event, (payload: unknown) => {

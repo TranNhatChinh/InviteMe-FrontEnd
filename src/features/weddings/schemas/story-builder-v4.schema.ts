@@ -140,6 +140,7 @@ const weddingPartyContent = z.object({ title: z.string().max(150).optional(), in
 const galleryContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), images: z.array(imageItemSchema).max(30).optional() }).strict();
 const rsvpContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), submitLabel: z.string().max(60).optional() }).strict();
 const simpleContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional() }).strict();
+const wishesContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), displayLimit: z.union([z.literal(0), z.literal(3), z.literal(6), z.literal(9), z.literal(12)]).optional(), allowLikes: z.boolean().optional(), allowComments: z.boolean().optional() }).strict();
 
 const variants = {
   hero: ["floral", "dark", "split", "editorial", "ceremonial"],
@@ -159,7 +160,7 @@ export const storyBuilderV4SectionSchema = z.discriminatedUnion("type", [
   makeSection("countdown", variants.countdown, countdownContent), makeSection("loveStory", variants.loveStory, loveStoryContent),
   makeSection("events", variants.events, eventsContent), makeSection("gallery", variants.gallery, galleryContent),
   makeSection("weddingParty", variants.weddingParty, weddingPartyContent),
-  makeSection("rsvp", variants.rsvp, rsvpContent), makeSection("wishes", variants.wishes, simpleContent),
+  makeSection("rsvp", variants.rsvp, rsvpContent), makeSection("wishes", variants.wishes, wishesContent),
   makeSection("gift", variants.gift, simpleContent),
 ]);
 

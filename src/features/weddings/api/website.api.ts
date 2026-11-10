@@ -78,7 +78,19 @@ export const storyWishSchema = z.object({
   name: z.string(),
   message: z.string(),
   createdAt: z.string(),
+  likeCount: z.number().int().nonnegative().default(0),
+  commentCount: z.number().int().nonnegative().default(0),
+  likedByMe: z.boolean().default(false),
 });
+export const storyWishCommentSchema = z.object({
+  id: z.string(), wishId: z.string(), name: z.string(), message: z.string(), createdAt: z.string(),
+});
+export const storyWishCommentPageSchema = z.object({
+  items: z.array(storyWishCommentSchema), totalCount: z.number().int().nonnegative(), skip: z.number().int().nonnegative(), take: z.number().int().positive(), hasMore: z.boolean(),
+});
+export const storyWishLikeSchema = z.object({ wishId: z.string(), likeCount: z.number().int().nonnegative(), liked: z.boolean() });
+export type StoryWish = z.infer<typeof storyWishSchema>;
+export type StoryWishComment = z.infer<typeof storyWishCommentSchema>;
 export const weddingEventSchema = z.object({
   id: z.string(), title: z.string(), description: z.string().nullable().optional(), startsAt: z.string().nullable().optional(),
   endsAt: z.string().nullable().optional(), timeZoneId: z.string(), venueName: z.string().nullable().optional(),
@@ -102,6 +114,13 @@ export const listStoryTemplates = (api: ApiClient) =>
 export const getStoryTemplate = (api: ApiClient, key: string) =>
   api.request(`/story-templates/${encodeURIComponent(key)}`, { schema: storyTemplateSummarySchema });
 export type Website = z.infer<typeof websiteSchema>;
+export const websiteVersionSchema = z.object({
+  id: z.string().uuid(), version: z.number().int().nonnegative(),
+  kind: z.enum(["BASELINE", "AUTO_SAVE", "PUBLISHED", "RESTORED"]), createdAt: z.string(),
+}).strict();
+export type WebsiteVersion = z.infer<typeof websiteVersionSchema>;
+export const websiteVersionDetailSchema = websiteVersionSchema.extend({ document: websiteDocumentSchema }).strict();
+export type WebsiteVersionDetail = z.infer<typeof websiteVersionDetailSchema>;
 
 export function isStudioDocument(doc: unknown): doc is StudioDocument {
   return (
@@ -196,6 +215,19 @@ function resolveDocumentMedia(doc: WebsiteDocument | null): WebsiteDocument | nu
 }
 
 const path = (id: string) => `/weddings/${encodeURIComponent(id)}/website`;
+const versionsPath = (id: string) => `${path(id)}/versions`;
+
+export const listWebsiteVersions = (api: ApiClient, id: string) =>
+  api.request(versionsPath(id), { schema: z.array(websiteVersionSchema) });
+
+export const getWebsiteVersion = (api: ApiClient, id: string, versionId: string) =>
+  api.request(`${versionsPath(id)}/${encodeURIComponent(versionId)}`, { schema: websiteVersionDetailSchema })
+    .then(version => ({ ...version, document: resolveDocumentMedia(version.document) ?? version.document }));
+
+export const restoreWebsiteVersion = (api: ApiClient, id: string, versionId: string, expectedVersion: number) =>
+  api.request(`${versionsPath(id)}/${encodeURIComponent(versionId)}/restore`, {
+    method: "POST", body: { expectedVersion }, schema: websiteSchema,
+  }).then(result => ({ ...result, document: resolveDocumentMedia(result.document) }));
 
 export const getWebsite = (api: ApiClient, id: string, signal?: AbortSignal) =>
   api
@@ -252,9 +284,10 @@ export const getPublicWebsite = (api: ApiClient, slug: string, signal?: AbortSig
       document: (resolveDocumentMedia(res.document) ?? res.document) as WebsiteDocument,
     }));
 
-export const listStoryWishes = (api: ApiClient, slug: string) =>
+export const listStoryWishes = (api: ApiClient, slug: string, visitorKey: string) =>
   api.request(`/public/weddings/${encodeURIComponent(slug)}/wishes`, {
     auth: "none",
+    headers: { "X-InviteMe-Visitor": visitorKey },
     schema: z.array(storyWishSchema),
   });
 
@@ -264,6 +297,28 @@ export const sendStoryWish = (api: ApiClient, slug: string, name: string, messag
     method: "POST",
     body: { name, message },
     schema: storyWishSchema,
+  });
+
+export const listStoryWishComments = (api: ApiClient, slug: string, wishId: string, skip = 0, take = 20) =>
+  api.request(`/public/weddings/${encodeURIComponent(slug)}/wishes/${encodeURIComponent(wishId)}/comments?skip=${skip}&take=${take}`, {
+    auth: "none",
+    schema: storyWishCommentPageSchema,
+  });
+
+export const sendStoryWishComment = (api: ApiClient, slug: string, wishId: string, name: string, message: string) =>
+  api.request(`/public/weddings/${encodeURIComponent(slug)}/wishes/${encodeURIComponent(wishId)}/comments`, {
+    auth: "none",
+    method: "POST",
+    body: { name, message },
+    schema: storyWishCommentSchema,
+  });
+
+export const setStoryWishLiked = (api: ApiClient, slug: string, wishId: string, visitorKey: string, liked: boolean) =>
+  api.request(`/public/weddings/${encodeURIComponent(slug)}/wishes/${encodeURIComponent(wishId)}/like`, {
+    auth: "none",
+    method: liked ? "PUT" : "DELETE",
+    headers: { "X-InviteMe-Visitor": visitorKey },
+    schema: storyWishLikeSchema,
   });
 
 export const listWeddingMedia = (api: ApiClient, id: string) =>
