@@ -20,6 +20,7 @@ const fallbackColors: Colors = { primary: "#e98ca3", background: "#fffaf8", acce
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const text = (value: unknown) => typeof value === "string" ? value : "";
 const array = (value: unknown): Record<string, unknown>[] => Array.isArray(value) ? value.map(record) : [];
+const builderFieldPath = (...parts: (string | number)[]) => parts.map(part => String(part).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")).filter(Boolean).join(".").slice(0, 160);
 
 function templateColors(document: StoryBuilderV4Document): { colors: Colors; heading: string; body: string } {
   const snapshot = record(document.templateSnapshot);
@@ -204,14 +205,15 @@ function Countdown({ target, variant }: { target: string; variant: string }) {
   return <div className="mt-6 inline-flex items-center gap-4 rounded-full border border-[var(--site-rule)] px-5 py-3"><strong className="font-serif text-4xl tabular-nums" style={{ color: "var(--site-accent)", fontFamily: "var(--site-heading)" }} aria-label={`Còn ${days} ngày`}>{days}</strong><span className="text-sm opacity-75">ngày nữa</span></div>;
 }
 
-function InlineText({ value, editable, onSave, className, tag = "p", style }: {
-  value: string; editable: boolean; onSave?: (value: string) => void; className?: string; tag?: "h1" | "h2" | "h3" | "p"; style?: CSSProperties;
+function InlineText({ value, editable, onSave, className, tag = "p", style, presencePath }: {
+  value: string; editable: boolean; onSave?: (value: string) => void; className?: string; tag?: "h1" | "h2" | "h3" | "p"; style?: CSSProperties; presencePath?: string;
 }) {
   const [editing, setEditing] = useState(false); const [draft, setDraft] = useState(value);
   const cancelEdit = useRef(false);
-  if (editing) return <input autoFocus aria-label="Chỉnh sửa nội dung trên website" className={`${className ?? ""} w-full rounded-md border border-primary bg-background/90 px-2 py-1 text-inherit outline-none focus-visible:ring-2 focus-visible:ring-primary`} style={style} value={draft} onChange={event => setDraft(event.target.value)} onBlur={() => { if (cancelEdit.current) { cancelEdit.current = false; setDraft(value); } else onSave?.(draft); setEditing(false); }} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } if (event.key === "Escape") { event.preventDefault(); cancelEdit.current = true; event.currentTarget.blur(); } }} />;
+  if (editing) return <input autoFocus aria-label="Chỉnh sửa nội dung trên website" data-builder-field-path={presencePath} className={`${className ?? ""} w-full rounded-md border border-primary bg-background/90 px-2 py-1 text-inherit outline-none focus-visible:ring-2 focus-visible:ring-primary`} style={style} value={draft} onChange={event => setDraft(event.target.value)} onBlur={() => { if (cancelEdit.current) { cancelEdit.current = false; setDraft(value); } else onSave?.(draft); setEditing(false); }} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } if (event.key === "Escape") { event.preventDefault(); cancelEdit.current = true; event.currentTarget.blur(); } }} />;
   return createElement(tag, {
     className: `${className ?? ""} ${editable ? "cursor-text rounded-sm outline-none hover:outline hover:outline-1 hover:outline-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" : ""}`,
+    "data-builder-field-path": presencePath,
     style,
     tabIndex: editable ? 0 : undefined,
     onDoubleClick: editable ? () => { setDraft(value); setEditing(true); } : undefined,
@@ -240,8 +242,8 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
       const imageUrl = text(content.imageUrl);
       const copy = <div className="story-hero__copy relative z-10 max-w-3xl">
         {text(content.eyebrow) && <p className="mb-5 text-xs uppercase tracking-[0.24em] opacity-75">{text(content.eyebrow)}</p>}
-        <InlineText tag="h1" editable={editable} value={text(content.title) || "Ngày vui của chúng mình"} onSave={value => onInlineEdit?.(section.id, "title", value)} className="font-serif text-4xl leading-[1.06] sm:text-6xl" style={{ fontFamily: "var(--site-heading)" }} />
-        {text(content.subtitle) && <InlineText tag="p" editable={editable} value={text(content.subtitle)} onSave={value => onInlineEdit?.(section.id, "subtitle", value)} className="mt-5 max-w-2xl text-base leading-7 opacity-80 sm:text-lg" />}
+        <InlineText tag="h1" editable={editable} value={text(content.title) || "Ngày vui của chúng mình"} onSave={value => onInlineEdit?.(section.id, "title", value)} presencePath={builderFieldPath(section.id, "hero", "title")} className="font-serif text-4xl leading-[1.06] sm:text-6xl" style={{ fontFamily: "var(--site-heading)" }} />
+        {text(content.subtitle) && <InlineText tag="p" editable={editable} value={text(content.subtitle)} onSave={value => onInlineEdit?.(section.id, "subtitle", value)} presencePath={builderFieldPath(section.id, "hero", "subtitle")} className="mt-5 max-w-2xl text-base leading-7 opacity-80 sm:text-lg" />}
         {ctaTarget && <a href={`#${ctaTarget}`} className="mt-8 inline-flex min-h-11 items-center rounded-full bg-[var(--site-text)] px-6 text-sm font-medium text-[var(--site-background)] transition hover:opacity-85">{text(content.ctaLabel) || ctaLabel || "Xem ngày vui"}</a>}
       </div>;
       const image = imageUrl ? <img src={imageUrl} alt="Ảnh bìa đám cưới" decoding="async" className="story-hero__image size-full object-cover" /> : <div aria-hidden="true" className="story-hero__image grid size-full min-h-64 place-items-center bg-[var(--site-primary)]/30"><span className="size-24 rounded-full border border-[var(--site-accent)]/40" /></div>;
@@ -306,7 +308,7 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
           {text(person.photoUrl) && <img loading="lazy" decoding="async" className={`story-couple__image w-full object-cover ${section.variant === "two-columns" ? "-mt-2 aspect-[4/5] rounded-xl sm:mt-0 sm:aspect-[5/4]" : section.variant === "editorial" ? "aspect-[4/5]" : "aspect-[4/5] rounded-[22px]"}`} src={text(person.photoUrl)} alt={text(person.displayName || person.fullName)} />}
           <div className={section.variant === "two-columns" ? "pt-5" : ""}>
             <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--site-accent)]">{key === "groom" ? "Chú rể" : "Cô dâu"}</p>
-            <InlineText tag="h3" editable={editable} value={text(person.displayName || person.fullName)} onSave={value => onInlineEdit?.(section.id, key, { ...person, displayName: value })} className="mt-2 font-serif text-3xl sm:text-4xl" style={{ fontFamily: "var(--site-heading)" }} />
+            <InlineText tag="h3" editable={editable} value={text(person.displayName || person.fullName)} onSave={value => onInlineEdit?.(section.id, key, { ...person, displayName: value })} presencePath={builderFieldPath(section.id, "couple", key, "displayName")} className="mt-2 font-serif text-3xl sm:text-4xl" style={{ fontFamily: "var(--site-heading)" }} />
             {text(person.bio) && <p className="mt-3 max-w-prose whitespace-pre-line leading-7 opacity-80">{text(person.bio)}</p>}
             {(text(person.fatherName) || text(person.motherName)) && <p className="mt-3 text-sm leading-6 opacity-70">{text(person.fatherName) && <>Cha: {text(person.fatherName)}</>}{text(person.fatherName) && text(person.motherName) ? " · " : ""}{text(person.motherName) && <>Mẹ: {text(person.motherName)}</>}</p>}
           </div>
@@ -327,7 +329,7 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
         {array(content.items).map((item, index) => <li key={text(item.id) || index} className={section.variant === "editorial" ? "overflow-hidden border-t border-[var(--site-rule)] pt-5" : "relative grid gap-4 border-t border-[var(--site-rule)] py-5 sm:grid-cols-[120px_1fr]"}>
           {section.variant === "timeline" && <span aria-hidden="true" className="absolute -left-[25px] top-7 size-3 rounded-full border-2 border-[var(--site-background)] bg-[var(--site-accent)] sm:-left-[35px]" />}
           {text(item.imageUrl) && <img loading="lazy" decoding="async" src={text(item.imageUrl)} alt={text(item.title)} className={`w-full object-cover ${section.variant === "editorial" ? "mb-5 aspect-[4/3]" : "aspect-square max-h-56 rounded-xl sm:max-h-none"}`} />}
-          <div className={section.variant === "editorial" ? "pb-4" : ""}><p className="text-xs uppercase tracking-[0.16em] text-[var(--site-accent)]">{text(item.date) || String(index + 1).padStart(2, "0")}</p><InlineText tag="h3" editable={editable} value={text(item.title)} onSave={value => onInlineEdit?.(section.id, "items", array(content.items).map((entry, itemIndex) => itemIndex === index ? { ...entry, title: value } : entry))} className={`mt-2 font-serif ${section.variant === "editorial" ? "text-3xl sm:text-4xl" : "text-2xl"}`} style={{ fontFamily: "var(--site-heading)" }} /><InlineText tag="p" editable={editable} value={text(item.body)} onSave={value => onInlineEdit?.(section.id, "items", array(content.items).map((entry, itemIndex) => itemIndex === index ? { ...entry, body: value } : entry))} className="mt-3 whitespace-pre-line leading-7 opacity-80" /></div>
+          <div className={section.variant === "editorial" ? "pb-4" : ""}><p className="text-xs uppercase tracking-[0.16em] text-[var(--site-accent)]">{text(item.date) || String(index + 1).padStart(2, "0")}</p><InlineText tag="h3" editable={editable} value={text(item.title)} onSave={value => onInlineEdit?.(section.id, "items", array(content.items).map((entry, itemIndex) => itemIndex === index ? { ...entry, title: value } : entry))} presencePath={builderFieldPath(section.id, "loveStory", "items", text(item.id) || index, "title")} className={`mt-2 font-serif ${section.variant === "editorial" ? "text-3xl sm:text-4xl" : "text-2xl"}`} style={{ fontFamily: "var(--site-heading)" }} /><InlineText tag="p" editable={editable} value={text(item.body)} onSave={value => onInlineEdit?.(section.id, "items", array(content.items).map((entry, itemIndex) => itemIndex === index ? { ...entry, body: value } : entry))} presencePath={builderFieldPath(section.id, "loveStory", "items", text(item.id) || index, "body")} className="mt-3 whitespace-pre-line leading-7 opacity-80" /></div>
         </li>)}
         {!array(content.items).length && <li className="text-sm opacity-65">Thêm những dấu mốc hai bạn muốn chia sẻ.</li>}
       </ol>;
@@ -336,7 +338,7 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
       body = <div className={`story-events story-events--${section.variant} grid gap-5 ${section.variant === "minimal" ? "" : "sm:grid-cols-2"}`}>
         {array(content.events).map((event, index) => { const links = calendarLinks(event); return <article key={text(event.id) || index} className={`story-event ${section.variant === "minimal" ? "border-t border-[var(--site-rule)] py-5" : "rounded-2xl border border-[var(--site-rule)] bg-[var(--site-background)]/80 p-5 sm:p-6"}`}>
           <p className="text-xs uppercase tracking-[0.16em] text-[var(--site-accent)]">{dateLabel(text(event.startsAt), "vi-VN", text(event.timeZoneId) || undefined)}</p>
-          <InlineText tag="h3" editable={editable && !Array.isArray(content.eventIds)} value={text(event.title)} onSave={value => onInlineEdit?.(section.id, "events", array(content.events).map((entry, eventIndex) => eventIndex === index ? { ...entry, title: value } : entry))} className="mt-2 font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }} />
+          <InlineText tag="h3" editable={editable && !Array.isArray(content.eventIds)} value={text(event.title)} onSave={value => onInlineEdit?.(section.id, "events", array(content.events).map((entry, eventIndex) => eventIndex === index ? { ...entry, title: value } : entry))} presencePath={builderFieldPath(section.id, "events", "events", text(event.id) || index, "title")} className="mt-2 font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }} />
           {text(event.venueName) && <p className="mt-2 font-medium">{text(event.venueName)}</p>}
           {text(event.address) && <p className="mt-1 opacity-75">{text(event.address)}</p>}
           {text(event.mapUrl).startsWith("https://") && <a className="mt-3 inline-block text-sm text-[var(--site-accent)] underline" href={text(event.mapUrl)} target="_blank" rel="noreferrer">Mở bản đồ</a>}
@@ -395,8 +397,8 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
     {hidden && <span className="absolute right-5 top-4 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">Đang ẩn</span>}
     {section.type !== "hero" && <header className={sectionHeaderClass}>
       {family === "editorial" && <span className="story-section__number mb-2 block text-xs font-semibold tracking-[0.24em] text-[var(--site-accent)]">{String(sectionIndex + 1).padStart(2, "0")}</span>}
-      {title && <InlineText tag="h2" editable={editable} value={title} onSave={value => onInlineEdit?.(section.id, "title", value)} className="story-section__title font-serif text-3xl sm:text-4xl" style={{ fontFamily: "var(--site-heading)" }} />}
-      {intro && <InlineText tag="p" editable={editable} value={intro} onSave={value => onInlineEdit?.(section.id, "intro", value)} className="mt-3 leading-7 opacity-75" />}
+      {title && <InlineText tag="h2" editable={editable} value={title} onSave={value => onInlineEdit?.(section.id, "title", value)} presencePath={builderFieldPath(section.id, section.type, "title")} className="story-section__title font-serif text-3xl sm:text-4xl" style={{ fontFamily: "var(--site-heading)" }} />}
+      {intro && <InlineText tag="p" editable={editable} value={intro} onSave={value => onInlineEdit?.(section.id, "intro", value)} presencePath={builderFieldPath(section.id, section.type, "intro")} className="mt-3 leading-7 opacity-75" />}
     </header>}
     {body}
   </section>;

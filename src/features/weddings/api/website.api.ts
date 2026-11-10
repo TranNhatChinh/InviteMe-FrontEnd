@@ -102,6 +102,13 @@ export const listStoryTemplates = (api: ApiClient) =>
 export const getStoryTemplate = (api: ApiClient, key: string) =>
   api.request(`/story-templates/${encodeURIComponent(key)}`, { schema: storyTemplateSummarySchema });
 export type Website = z.infer<typeof websiteSchema>;
+export const websiteVersionSchema = z.object({
+  id: z.string().uuid(), version: z.number().int().nonnegative(),
+  kind: z.enum(["BASELINE", "AUTO_SAVE", "PUBLISHED", "RESTORED"]), createdAt: z.string(),
+}).strict();
+export type WebsiteVersion = z.infer<typeof websiteVersionSchema>;
+export const websiteVersionDetailSchema = websiteVersionSchema.extend({ document: websiteDocumentSchema }).strict();
+export type WebsiteVersionDetail = z.infer<typeof websiteVersionDetailSchema>;
 
 export function isStudioDocument(doc: unknown): doc is StudioDocument {
   return (
@@ -196,6 +203,19 @@ function resolveDocumentMedia(doc: WebsiteDocument | null): WebsiteDocument | nu
 }
 
 const path = (id: string) => `/weddings/${encodeURIComponent(id)}/website`;
+const versionsPath = (id: string) => `${path(id)}/versions`;
+
+export const listWebsiteVersions = (api: ApiClient, id: string) =>
+  api.request(versionsPath(id), { schema: z.array(websiteVersionSchema) });
+
+export const getWebsiteVersion = (api: ApiClient, id: string, versionId: string) =>
+  api.request(`${versionsPath(id)}/${encodeURIComponent(versionId)}`, { schema: websiteVersionDetailSchema })
+    .then(version => ({ ...version, document: resolveDocumentMedia(version.document) ?? version.document }));
+
+export const restoreWebsiteVersion = (api: ApiClient, id: string, versionId: string, expectedVersion: number) =>
+  api.request(`${versionsPath(id)}/${encodeURIComponent(versionId)}/restore`, {
+    method: "POST", body: { expectedVersion }, schema: websiteSchema,
+  }).then(result => ({ ...result, document: resolveDocumentMedia(result.document) }));
 
 export const getWebsite = (api: ApiClient, id: string, signal?: AbortSignal) =>
   api
