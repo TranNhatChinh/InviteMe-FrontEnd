@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Heart, MessageCircle, PenLine } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, MessageCircle, PenLine, RotateCcw } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import {
   listStoryWishComments,
@@ -34,13 +34,23 @@ function displayDate(value: string) {
   }).format(new Date(value));
 }
 
+function wishBubbleStyle(index: number): CSSProperties {
+  return {
+    "--wish-delay": `${index * 1.05}s`,
+    "--wish-duration": `${7.2 + (index % 3) * 0.8}s`,
+    "--wish-drift": `${index % 2 === 0 ? "22px" : "-22px"}`,
+  } as CSSProperties;
+}
+
 export function StoryWishes({
   slug,
+  variant = "default",
   displayLimit = 3,
   allowLikes = false,
   allowComments = false,
 }: {
   slug?: string;
+  variant?: "default" | "fountain";
   displayLimit?: number;
   allowLikes?: boolean;
   allowComments?: boolean;
@@ -53,7 +63,9 @@ export function StoryWishes({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [wishArchiveOpen, setWishArchiveOpen] = useState(false);
   const [visibleWishCount, setVisibleWishCount] = useState(displayLimit === 0 ? Number.MAX_SAFE_INTEGER : displayLimit);
+  const [fountainReplay, setFountainReplay] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const wishListKey = ["story-wishes", slug, visitorKey] as const;
@@ -69,13 +81,18 @@ export function StoryWishes({
 
   useEffect(() => setVisitorKey(getVisitorKey()), []);
   useEffect(() => setVisibleWishCount(displayLimit === 0 ? Number.MAX_SAFE_INTEGER : displayLimit), [displayLimit]);
+  useEffect(() => setWishArchiveOpen(false), [variant]);
 
   if (!slug) {
     return (
-      <div className="mx-auto max-w-xl space-y-4" style={wishesStyle}>
+      <div className={`story-wishes mx-auto max-w-2xl space-y-4 ${variant === "fountain" ? "story-wishes--fountain" : ""}`} style={wishesStyle}>
         <p className="rounded-xl bg-white/60 p-4 text-center text-sm opacity-70">
           Khách có thể gửi lời chúc sau khi website được xuất bản.
         </p>
+        {variant === "fountain" && <div data-wish-stream data-wish-replay={fountainReplay ? "1" : "0"} className="wish-bubble-stage" aria-hidden="true">
+          {["Chúc hai bạn luôn yêu thương và đồng hành cùng nhau.", "Mong mỗi ngày bên nhau đều tràn ngập niềm vui.", "Chúc đôi bạn có một hành trình thật hạnh phúc."].map((sample, index) => <article key={sample} data-floating-wish style={wishBubbleStyle(index)}><span className="wish-bubble-name">Lời chúc minh họa {index + 1}</span><p>{sample}</p></article>)}
+        </div>}
+        {variant === "fountain" && <button type="button" onClick={() => setFountainReplay(value => !value)} className="mx-auto inline-flex min-h-9 items-center gap-2 rounded-full border border-[var(--wishes-rule)] bg-white/70 px-3 text-xs font-medium text-[var(--wishes-accent)]"><RotateCcw className="size-3.5" />Xem lại hiệu ứng</button>}
         {(allowLikes || allowComments) && (
           <div className="rounded-xl border border-[var(--wishes-rule)] bg-white/75 p-4">
             <p className="text-sm opacity-70">Tương tác sẽ xuất hiện bên dưới mỗi lời chúc.</p>
@@ -122,7 +139,7 @@ export function StoryWishes({
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5" style={wishesStyle}>
+    <div className={`story-wishes mx-auto max-w-2xl space-y-5 ${variant === "fountain" ? "story-wishes--fountain" : ""}`} style={wishesStyle}>
       <div className="overflow-hidden rounded-2xl border border-[var(--wishes-rule)] bg-white/70">
         <button type="button" aria-expanded={composerOpen} onClick={() => { setComposerOpen(open => !open); setError(""); }} className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--wishes-accent)]">
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--wishes-accent)]/10 text-[var(--wishes-accent)]"><PenLine className="size-4" /></span>
@@ -144,16 +161,25 @@ export function StoryWishes({
       </div>
 
       <section aria-label="Lời chúc của khách" className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-serif text-lg sm:text-xl" style={{ fontFamily: "var(--site-heading, var(--story-heading-font, Georgia))" }}>Lời chúc từ khách</h3>
-          {wishes.data && <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-1 text-xs opacity-70">{wishes.data.length} lời chúc</span>}
+          <div className="flex items-center gap-2">
+            {wishes.data && <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-1 text-xs opacity-70">{wishes.data.length} lời chúc</span>}
+            {variant === "fountain" && wishes.data && wishes.data.length > 0 && <button type="button" onClick={() => setFountainReplay(value => !value)} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-[var(--wishes-rule)] bg-white/70 px-2.5 text-[11px] font-medium text-[var(--wishes-accent)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wishes-accent)]"><RotateCcw className="size-3.5" /><span className="hidden sm:inline">Xem lại hiệu ứng</span><span className="sm:hidden">Xem lại</span></button>}
+          </div>
         </div>
         {wishes.isPending && <p className="rounded-xl bg-white/60 p-4 text-sm opacity-70">Đang tải lời chúc…</p>}
         {wishes.isError && <div className="rounded-xl border border-[var(--wishes-rule)] bg-white/70 p-4" role="alert"><p className="text-sm">Chưa tải được lời chúc. Vui lòng thử lại.</p><button type="button" className="mt-3 min-h-10 rounded-full border border-[var(--wishes-rule)] px-4 text-sm hover:bg-black/5" onClick={() => void wishes.refetch()}>Tải lại lời chúc</button></div>}
         {wishes.data?.length === 0 && <p className="rounded-xl bg-white/60 p-4 text-center text-sm opacity-70">Chưa có lời chúc nào. Hãy là người đầu tiên gửi lời thương nhé.</p>}
-        {wishes.data?.slice(0, visibleWishCount).map(wish => <StoryWishCard key={wish.id} slug={publicSlug} wish={wish} visitorKey={visitorKey} allowLikes={allowLikes} allowComments={allowComments} wishListKey={wishListKey} />)}
-        {displayLimit > 0 && wishes.data && wishes.data.length > visibleWishCount && <button type="button" onClick={() => setVisibleWishCount(count => Math.min(wishes.data?.length ?? count, count + displayLimit))} className="min-h-10 w-full rounded-xl border border-[var(--wishes-rule)] bg-white/65 px-4 text-sm font-medium text-[var(--wishes-accent)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wishes-accent)]">Xem thêm {Math.min(displayLimit, wishes.data.length - visibleWishCount)} lời chúc</button>}
-        {displayLimit > 0 && visibleWishCount > displayLimit && <button type="button" onClick={() => setVisibleWishCount(displayLimit)} className="mx-auto block min-h-9 px-4 text-xs opacity-65 underline underline-offset-4 hover:opacity-100">Thu gọn danh sách</button>}
+        {variant === "fountain" && wishes.data && wishes.data.length > 0 && <div data-wish-stream data-wish-replay={fountainReplay ? "1" : "0"} className="wish-bubble-stage" aria-hidden="true">
+          {wishes.data.slice(0, 6).map((wish, index) => <article key={wish.id} data-floating-wish style={wishBubbleStyle(index)}><span className="wish-bubble-name">{wish.name}</span><p>{wish.message}</p></article>)}
+        </div>}
+        {variant === "fountain" && wishes.data && wishes.data.length > 0 && <button type="button" aria-expanded={wishArchiveOpen} onClick={() => setWishArchiveOpen(open => !open)} className="min-h-11 w-full rounded-xl border border-[var(--wishes-rule)] bg-white/70 px-4 text-sm font-medium text-[var(--wishes-accent)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wishes-accent)]">{wishArchiveOpen ? "Thu gọn danh sách" : `Đọc lời chúc và xem tương tác · ${wishes.data.length}`}</button>}
+        {(variant !== "fountain" || wishArchiveOpen) && <div data-wish-list className="space-y-3">
+          {wishes.data?.slice(0, visibleWishCount).map(wish => <StoryWishCard key={wish.id} slug={publicSlug} wish={wish} visitorKey={visitorKey} allowLikes={allowLikes} allowComments={allowComments} wishListKey={wishListKey} />)}
+        </div>}
+        {(variant !== "fountain" || wishArchiveOpen) && displayLimit > 0 && wishes.data && wishes.data.length > visibleWishCount && <button type="button" onClick={() => setVisibleWishCount(count => Math.min(wishes.data?.length ?? count, count + displayLimit))} className="min-h-10 w-full rounded-xl border border-[var(--wishes-rule)] bg-white/65 px-4 text-sm font-medium text-[var(--wishes-accent)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wishes-accent)]">Xem thêm {Math.min(displayLimit, wishes.data.length - visibleWishCount)} lời chúc</button>}
+        {(variant !== "fountain" || wishArchiveOpen) && displayLimit > 0 && visibleWishCount > displayLimit && <button type="button" onClick={() => setVisibleWishCount(displayLimit)} className="mx-auto block min-h-9 px-4 text-xs opacity-65 underline underline-offset-4 hover:opacity-100">Thu gọn danh sách</button>}
       </section>
     </div>
   );

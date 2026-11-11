@@ -2606,6 +2606,267 @@ body:has(.landing-dialog[open]) {
   }
 }
 
+/* Gallery flipbook: an accessible paper album with restrained InviteMe color and motion. */
+.story-gallery__item {
+  scroll-margin-block: 5rem;
+}
+.story-gallery__caption {
+  color: var(--site-accent);
+}
+.story-flipbook {
+  width: min(100%, 68rem);
+  margin-inline: auto;
+  perspective: 1800px;
+}
+.story-flipbook__cover {
+  position: relative;
+  display: grid;
+  width: min(100%, 54rem);
+  min-height: 28rem;
+  margin-inline: auto;
+  overflow: hidden;
+  isolation: isolate;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--site-accent) 48%, transparent);
+  border-radius: 1.5rem 1.8rem 1.8rem 1.5rem;
+  background: var(--site-accent);
+  color: var(--site-background);
+  box-shadow: 0 24px 65px color-mix(in srgb, var(--site-text) 20%, transparent), inset 10px 0 18px color-mix(in srgb, var(--site-text) 18%, transparent);
+  text-align: center;
+}
+.story-flipbook__cover-image,
+.story-flipbook__cover-veil {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+}
+.story-flipbook__cover-copy,
+.story-flipbook__cover-frame {
+  z-index: 1;
+}
+.story-flipbook__cover-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: .28;
+  transition: transform 800ms cubic-bezier(.2,.7,.2,1);
+}
+.story-flipbook__cover-veil {
+  background: linear-gradient(115deg, color-mix(in srgb, var(--site-text) 55%, transparent), color-mix(in srgb, var(--site-accent) 52%, transparent));
+}
+.story-flipbook__cover:hover .story-flipbook__cover-image img {
+  transform: scale(1.035);
+}
+.story-flipbook__cover-frame {
+  position: absolute;
+  z-index: 1;
+  inset: 1rem;
+  border: 1px solid color-mix(in srgb, var(--site-background) 58%, transparent);
+  border-radius: 1rem;
+  pointer-events: none;
+}
+.story-flipbook__cover-copy {
+  width: min(100% - 4rem, 40rem);
+  padding-block: 3rem;
+  text-shadow: 0 2px 18px color-mix(in srgb, var(--site-text) 55%, transparent);
+}
+.story-flipbook__open {
+  position: relative;
+  padding: clamp(.6rem, 2vw, 1.5rem);
+  border: 1px solid var(--site-rule);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--site-primary) 10%, var(--site-background));
+  box-shadow: 0 20px 55px color-mix(in srgb, var(--site-text) 12%, transparent);
+}
+.story-flipbook__spread {
+  position: relative;
+  display: grid;
+  min-height: clamp(22rem, 47vw, 36rem);
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid color-mix(in srgb, var(--site-accent) 24%, var(--site-rule));
+  border-radius: .75rem;
+  background: color-mix(in srgb, var(--site-background) 92%, white);
+  box-shadow: inset 0 0 28px color-mix(in srgb, var(--site-accent) 5%, transparent);
+}
+.story-flipbook__binding {
+  position: absolute;
+  z-index: 2;
+  top: .4rem;
+  bottom: .4rem;
+  left: 50%;
+  width: 1px;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--site-accent) 35%, transparent), transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--site-text) 14%, transparent);
+  pointer-events: none;
+}
+.story-flipbook__left-page,
+.story-flipbook__right-page {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  padding: clamp(.75rem, 3vw, 2.5rem);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--site-primary) 10%, var(--site-background)), var(--site-background));
+}
+.story-flipbook__left-page {
+  align-items: center;
+  border-radius: .65rem 0 0 .65rem;
+  text-align: center;
+}
+.story-flipbook__right-page {
+  border-radius: 0 .65rem .65rem 0;
+  background: linear-gradient(260deg, color-mix(in srgb, var(--site-primary) 7%, var(--site-background)), var(--site-background));
+}
+.story-flipbook__dedication {
+  max-width: 26rem;
+  padding: 1rem;
+}
+.story-flipbook__previous-image {
+  width: 100%;
+  max-height: 26rem;
+  aspect-ratio: 4 / 5;
+  border-radius: .35rem;
+  object-fit: cover;
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--site-text) 12%, transparent);
+}
+.story-flipbook__image-button {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  place-items: center;
+  border-radius: .35rem;
+  outline-offset: 4px;
+}
+.story-flipbook__image-button:focus-visible {
+  outline: 2px solid var(--site-accent);
+}
+.story-flipbook__active-image {
+  width: 100%;
+  max-height: 29rem;
+  aspect-ratio: 4 / 5;
+  border-radius: .35rem;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--site-primary) 9%, var(--site-background));
+}
+.story-flipbook__caption {
+  margin-top: .75rem;
+  color: var(--site-accent);
+  font-family: var(--site-heading);
+  font-size: .9rem;
+  line-height: 1.5;
+  text-align: center;
+}
+.story-flipbook__turning-page {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform-origin: left center;
+  pointer-events: none;
+}
+.story-flipbook__turning-page--next {
+  animation: story-page-turn-next 760ms cubic-bezier(.3,.05,.2,1) both;
+}
+.story-flipbook__turning-page--previous {
+  animation: story-page-turn-previous 760ms cubic-bezier(.3,.05,.2,1) both;
+}
+.story-flipbook__leaf-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  backface-visibility: hidden;
+  background: var(--site-background);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--site-text) 18%, transparent);
+}
+.story-flipbook__leaf-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.story-flipbook__leaf-face--back {
+  transform: rotateY(180deg);
+}
+.story-flipbook__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .6rem;
+  padding-top: 1rem;
+}
+.story-flipbook__control,
+.story-flipbook__close {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  border: 1px solid var(--site-rule);
+  border-radius: 999px;
+  padding-inline: .85rem;
+  color: var(--site-text);
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.story-flipbook__control:hover:not(:disabled),
+.story-flipbook__close:hover {
+  border-color: var(--site-accent);
+  background: color-mix(in srgb, var(--site-primary) 20%, var(--site-background));
+}
+.story-flipbook__control:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+.story-flipbook__counter {
+  min-width: 4rem;
+  color: var(--site-accent);
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.story-flipbook__close {
+  margin-left: .35rem;
+  border-color: transparent;
+  color: var(--site-accent);
+}
+.story-flipbook__control:focus-visible,
+.story-flipbook__close:focus-visible,
+.story-flipbook__cover:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 3px;
+}
+@keyframes story-page-turn-next {
+  from { transform: rotateY(0); }
+  to { transform: rotateY(-180deg); }
+}
+@keyframes story-page-turn-previous {
+  from { transform: rotateY(0); }
+  to { transform: rotateY(180deg); }
+}
+@media (max-width: 640px) {
+  .story-flipbook__cover { min-height: 23rem; }
+  .story-flipbook__cover-copy { width: calc(100% - 2.5rem); }
+  .story-flipbook__spread { min-height: 25rem; grid-template-columns: 1fr; }
+  .story-flipbook__left-page,
+  .story-flipbook__binding { display: none; }
+  .story-flipbook__right-page { border-radius: .65rem; }
+  .story-flipbook__active-image { max-height: 31rem; }
+  .story-flipbook__turning-page { width: 100%; transform-origin: left center; }
+  .story-flipbook__controls { gap: .35rem; }
+  .story-flipbook__control,
+  .story-flipbook__close { min-height: 2.6rem; padding-inline: .65rem; font-size: .78rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-flipbook__cover-image img { transition: none; }
+  .story-flipbook__turning-page--next,
+  .story-flipbook__turning-page--previous { animation-duration: 1ms; }
+  .story-flipbook__control,
+  .story-flipbook__close { transition: none; }
+}
+
 /* V4 wedding sites use their database category as a visual direction, while all copy,
    palette, fonts and section data continue to come from the saved template document. */
 .template-canvas[data-design-family="outdoor"] .story-hero--coastal {
@@ -2742,6 +3003,33 @@ body:has(.landing-dialog[open]) {
   background: var(--site-background);
 }
 
+/* Couple profiles use the template's own palette while each saved layout keeps a distinct composition. */
+.story-couple__fallback {
+  background:
+    radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--site-background) 88%, transparent), transparent 72%),
+    color-mix(in srgb, var(--site-primary) 22%, var(--site-background));
+}
+.story-couple--editorial .story-couple__portrait {
+  border-radius: 48% 48% 2px 2px;
+}
+.story-couple--alternating .story-couple__person:nth-child(1) .story-couple__portrait {
+  border-radius: 46% 46% 1.25rem 1.25rem;
+}
+.story-couple--alternating .story-couple__person:nth-child(2) .story-couple__portrait {
+  border-radius: 1.25rem 1.25rem 46% 46%;
+}
+.story-couple--two-columns .story-couple__portrait {
+  border: 1px solid var(--site-rule);
+}
+.template-canvas[data-design-family="minimal"] .story-couple--two-columns .story-couple__person {
+  border-radius: 0;
+  background: transparent;
+}
+.template-canvas[data-design-family="traditional"] .story-couple--editorial .story-couple__portrait {
+  outline: 1px solid var(--site-accent);
+  outline-offset: 4px;
+}
+
 .story-gallery-preview {
   height: 440px;
   overflow: hidden;
@@ -2806,6 +3094,37 @@ body:has(.landing-dialog[open]) {
   background: color-mix(in srgb, var(--site-primary) 62%, var(--site-background));
 }
 
+.story-countdown__panel {
+  isolation: isolate;
+}
+.story-countdown__ornament {
+  position: absolute;
+  z-index: -1;
+  top: 0.65rem;
+  right: 1rem;
+  color: var(--site-accent);
+  font-family: var(--site-heading);
+  font-size: 2.5rem;
+  line-height: 1;
+  opacity: 0.16;
+  pointer-events: none;
+}
+.story-countdown__panel--inline .story-countdown__ornament {
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.1;
+}
+.story-countdown__value {
+  animation: story-countdown-number-in 240ms ease-out both;
+}
+@keyframes story-countdown-number-in {
+  from { opacity: 0.55; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-countdown__value { animation: none; }
+}
+
 .template-canvas[data-design-family="autumn"] .story-section--events .story-event {
   border-radius: 4px 22px 4px 4px;
 }
@@ -2816,12 +3135,235 @@ body:has(.landing-dialog[open]) {
   border-radius: 0;
   box-shadow: none;
 }
+
+.story-moment {
+  scroll-margin-block: 5rem;
+}
+.story-timeline--photo-journal .story-moment__image {
+  background: color-mix(in srgb, var(--site-primary) 55%, var(--site-background));
+}
+.story-timeline--photo-journal .story-moment__image img {
+  transition: transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .story-timeline--photo-journal .story-moment__image:hover img {
+    transform: scale(1.025);
+  }
+}
+.story-moment--inspector-focus {
+  animation: story-moment-inspector-focus 1.8s ease-out both;
+}
+@keyframes story-moment-inspector-focus {
+  0%, 45% {
+    background-color: color-mix(in srgb, var(--site-primary) 22%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--site-accent) 35%, transparent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-timeline--photo-journal .story-moment__image img { transition: none; }
+  .story-moment--inspector-focus { animation: none; outline: 2px solid var(--site-accent); outline-offset: 3px; }
+}
 .template-canvas[data-design-family="traditional"] .story-section--gift .story-gift > article {
   border-radius: 2px;
   box-shadow: inset 0 0 0 4px var(--site-background), inset 0 0 0 5px var(--site-rule);
 }
 .template-canvas[data-design-family="romantic"] .story-section--gift .story-gift > article {
   border-radius: 28px 28px 8px 28px;
+}
+
+/* Wishes fountain: messages travel upward in a soft, continuous bubble stream. */
+.story-wishes--fountain .wish-bubble-stage {
+  --wish-rise: -31rem;
+  position: relative;
+  height: 22rem;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--wishes-rule);
+  border-radius: 28px;
+  background:
+    radial-gradient(ellipse at 16% 100%, color-mix(in srgb, var(--site-primary, #f4dce2) 35%, transparent), transparent 48%),
+    radial-gradient(ellipse at 84% 0%, color-mix(in srgb, var(--site-accent, #9d4d62) 10%, transparent), transparent 42%),
+    color-mix(in srgb, var(--site-background, #fffaf8) 88%, white);
+}
+.story-wishes--fountain .wish-bubble-stage::before,
+.story-wishes--fountain .wish-bubble-stage::after {
+  position: absolute;
+  z-index: -1;
+  border: 1px solid color-mix(in srgb, var(--wishes-accent) 12%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--site-primary, #f4dce2) 10%, transparent);
+  content: "";
+  pointer-events: none;
+}
+.story-wishes--fountain .wish-bubble-stage::before {
+  right: 12%;
+  bottom: 12%;
+  width: 52px;
+  height: 52px;
+}
+.story-wishes--fountain .wish-bubble-stage::after {
+  bottom: 23%;
+  left: 12%;
+  width: 24px;
+  height: 24px;
+}
+.story-wishes--fountain [data-floating-wish] {
+  position: absolute;
+  bottom: -6rem;
+  width: 68%;
+  padding: 0.85rem 1.1rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--wishes-accent) 22%, white);
+  border-radius: 26px 26px 24px 10px;
+  background: color-mix(in srgb, var(--site-background, #fffaf8) 88%, white);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--wishes-accent) 12%, transparent), inset 0 1px 0 white;
+  color: var(--site-text, #392b30);
+  text-align: left;
+}
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 1) { left: 2%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 2) { left: 29%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 3) { left: 6%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 4) { left: 31%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 5) { left: 13%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n) { left: 30%; }
+.story-wishes--fountain [data-floating-wish]::after {
+  position: absolute;
+  bottom: -6px;
+  left: 22px;
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid color-mix(in srgb, var(--wishes-accent) 22%, white);
+  border-bottom: 1px solid color-mix(in srgb, var(--wishes-accent) 22%, white);
+  background: color-mix(in srgb, var(--site-background, #fffaf8) 88%, white);
+  content: "";
+  transform: rotate(45deg);
+}
+.story-wishes--fountain .wish-bubble-name {
+  display: block;
+  overflow: hidden;
+  color: var(--wishes-accent);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.story-wishes--fountain [data-floating-wish] p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.story-wishes--fountain [data-wish-list] > article {
+  position: relative;
+  width: min(100%, 38rem);
+  border-radius: 28px 28px 24px 10px;
+  background: radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--site-primary, #f4dce2) 35%, white), transparent 58%), color-mix(in srgb, var(--site-background, #fffaf8) 92%, white);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--site-accent, #9d4d62) 10%, transparent);
+}
+.template-canvas:not([data-motion-ready="true"]) [data-section-type="wishes"][data-variant="fountain"] .wish-bubble-stage,
+.template-canvas[data-motion-ready="true"] [data-section-type="wishes"][data-variant="fountain"]:not([data-revealed="true"]) .wish-bubble-stage {
+  display: grid;
+  height: auto;
+  min-height: 0;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+.template-canvas:not([data-motion-ready="true"]) [data-section-type="wishes"][data-variant="fountain"] [data-floating-wish],
+.template-canvas[data-motion-ready="true"] [data-section-type="wishes"][data-variant="fountain"]:not([data-revealed="true"]) [data-floating-wish] {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+.story-wishes--fountain [data-wish-card]::after {
+  position: absolute;
+  bottom: -7px;
+  left: 24px;
+  width: 14px;
+  height: 14px;
+  border-right: 1px solid var(--wishes-rule);
+  border-bottom: 1px solid var(--wishes-rule);
+  background: color-mix(in srgb, var(--site-background, #fffaf8) 92%, white);
+  content: "";
+  transform: rotate(45deg);
+}
+@media (min-width: 640px) {
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish] {
+    width: min(16rem, 44%);
+  }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 1) { left: 5%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 2) { left: 28%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 3) { left: 53%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 4) { left: 17%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 5) { left: 40%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n) { left: 55%; }
+  .story-wishes--fountain [data-wish-list] > article:nth-child(3n + 1) {
+    width: calc(100% - 2.5rem);
+    align-self: flex-start;
+  }
+  .story-wishes--fountain [data-wish-list] > article:nth-child(3n + 2) {
+    width: calc(100% - 2.5rem);
+    align-self: flex-end;
+  }
+}
+@media (max-width: 639px) {
+  .story-wishes--fountain .wish-bubble-stage {
+    --wish-rise: -26rem;
+    height: 18rem;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .template-canvas[data-motion-ready="true"] [data-section-type="wishes"][data-variant="fountain"][data-revealed="true"] [data-wish-stream][data-wish-replay="0"] [data-floating-wish] {
+    animation-name: wishes-float-up-a;
+  }
+  .template-canvas[data-motion-ready="true"] [data-section-type="wishes"][data-variant="fountain"][data-revealed="true"] [data-wish-stream][data-wish-replay="1"] [data-floating-wish] {
+    animation-name: wishes-float-up-b;
+  }
+  .story-wishes--fountain [data-floating-wish] {
+    animation-duration: var(--wish-duration, 8s);
+    animation-delay: var(--wish-delay, 0s);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-fill-mode: both;
+    will-change: opacity, transform;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-wishes--fountain .wish-bubble-stage {
+    display: grid;
+    height: auto;
+    min-height: 0;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+  .story-wishes--fountain [data-floating-wish] {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes wishes-float-up-a {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.82); }
+  12% { opacity: 1; }
+  76% { opacity: 0.95; }
+  100% { opacity: 0; transform: translate3d(var(--wish-drift, 18px), var(--wish-rise, -26rem), 0) scale(1.06); }
+}
+@keyframes wishes-float-up-b {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.78); }
+  16% { opacity: 1; }
+  82% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate3d(var(--wish-drift, -18px), var(--wish-rise, -26rem), 0) scale(1.1); }
 }
 
 /* Reveal sections only when they enter the viewport; server-rendered content stays visible until enhancement is ready. */
