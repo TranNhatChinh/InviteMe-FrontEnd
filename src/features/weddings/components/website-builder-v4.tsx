@@ -15,12 +15,14 @@ import { LoadingState } from "@/shared/feedback/loading-state";
 // eslint-disable-next-line architecture/boundaries -- Template access uses the shared wedding plan entitlement contract.
 import { FeatureLimitNotice, useWeddingPlan } from "@/features/plans";
 import { applyStoryBuilderV4Template, createStoryBuilderV4Document, createV4Section, isStoryBuilderV4Document, summarizeStoryBuilderV4TemplateChange } from "../schemas/story-builder-v4.document";
-import { describeV4Issue, describeV4ValidationIssues, moveV4Page } from "../schemas/story-builder-v4.helpers";
+import { describeV4Issue, describeV4ValidationIssues, isImageFilename, moveV4Page } from "../schemas/story-builder-v4.helpers";
 import { storyBuilderV4DocumentSchema, storyTemplateConfigSchema, type StoryBuilderV4Document, type StoryBuilderV4Section, type StorySectionType, type StoryTemplateSummaryV4 } from "../schemas/story-builder-v4.schema";
 import type { Website } from "../api/website.api";
 import { createWeddingEvent, deleteWeddingEvent, deleteWeddingMedia, getWebsite, getWebsiteVersion, listStoryTemplates, listWeddingEvents, listWeddingMedia, listWebsiteVersions, mediaUrl, publishWebsite, restoreWebsiteVersion, saveWebsite, updateWeddingEvent, unpublishWebsite, uploadWeddingMedia, type WebsiteVersion, type WeddingEvent, type WeddingEventInput } from "../api/website.api";
 import { isoToLocalDateTime, localDateTimeToIso, type WeddingSetup } from "../schemas/wedding.schema";
 import { StoryBuilderV4Renderer } from "./story-builder-v4-renderer";
+// eslint-disable-next-line architecture/boundaries -- Website gift inspector reuses the wedding's existing gift-account API and DTO.
+import { getGiftAccounts, type GiftBankAccount } from "@/features/gifts";
 import { mergeStoryDocuments, resolveStoryMergeConflict, type StoryMergeConflict } from "../schemas/story-builder-v4-collaboration";
 import { applyStoryHistoryOperation, type StoryHistoryOperation } from "../schemas/story-builder-v4-collaboration";
 import type { BuilderPresence } from "@/core/realtime/signalr-client";
@@ -49,9 +51,9 @@ const sectionNames: Record<SectionType, string> = { hero: "Ảnh bìa", couple: 
 const presenceFieldNames: Record<string, string> = {
   title: "Tiêu đề", subtitle: "Lời dẫn", intro: "Giới thiệu", description: "Mô tả", image: "Ảnh",
   eyebrow: "Dòng nhấn", ctaLabel: "Nhãn nút", submitLabel: "Nhãn nút gửi", displayName: "Tên hiển thị",
-  bio: "Lời giới thiệu", fatherName: "Tên cha", motherName: "Tên mẹ", targetDate: "Ngày giờ mục tiêu",
+  bio: "Lời giới thiệu", fatherName: "Tên cha", motherName: "Tên mẹ", targetDate: "Ngày giờ mục tiêu", x: "Ngang", y: "Dọc",
   date: "Ngày hoặc dấu mốc", startsAt: "Ngày giờ", venueName: "Địa điểm", address: "Địa chỉ",
-  mapUrl: "Liên kết bản đồ", imageUrl: "Ảnh", photoUrl: "Ảnh chân dung", alt: "Mô tả ảnh",
+  mapUrl: "Liên kết bản đồ", imageUrl: "Ảnh", photoUrl: "Ảnh chân dung", alt: "Mô tả ảnh", caption: "Chú thích ảnh",
   name: "Họ tên", role: "Vai trò", navigationLabel: "Tiêu đề điều hướng", slug: "Đường dẫn",
   paletteId: "Bảng màu", fontHeading: "Phông tiêu đề", fontBody: "Phông nội dung", tools: "Tiện ích khách mời",
   decoration: "Hiệu ứng trang trí", intensity: "Mức độ hiệu ứng", animation: "Hiệu ứng chuyển động", background: "Nền phần",
@@ -192,6 +194,8 @@ const errText = (error: unknown) => {
     };
     const mappedMessage = error.backendCode ? messages[error.backendCode] : undefined;
     if (mappedMessage) return mappedMessage;
+    if (error.backendCode === "PLAN_LIMIT_REACHED") return "Gói cưới đã dùng hết dung lượng ảnh. Hãy nâng cấp gói hoặc gỡ ảnh không dùng rồi thử lại.";
+    if (error.status === 429) return "Bạn vừa tải nhiều ảnh liên tiếp. Vui lòng đợi một chút rồi thử lại.";
     if (error.backendCode?.startsWith("WEBSITE_"))
       return `Máy chủ chưa thể hoàn tất thao tác website. Hãy kiểm tra nội dung rồi thử lại. Mã lỗi: ${error.backendCode}.`;
     if (error.status === 400) return "Máy chủ chưa chấp nhận dữ liệu website. Hãy mở kiểm tra xuất bản để xem các vị trí cần sửa.";
@@ -548,7 +552,10 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const [pageName, setPageName] = useState(""); const [pageSlug, setPageSlug] = useState("");
   const [status, setStatus] = useState(initialSite.status);
   const hasEventsSection = Boolean(doc?.pages.some(page => page.sections.some(section => section.type === "events")));
-  const weddingEventsQuery = useQuery({ queryKey: ["wedding-events", weddingId], queryFn: () => listWeddingEvents(api, weddingId), enabled: hasEventsSection, staleTime: 30_000 });
+  const hasCountdownSection = Boolean(doc?.pages.some(page => page.sections.some(section => section.type === "countdown")));
+  const hasGiftSection = Boolean(doc?.pages.some(page => page.sections.some(section => section.type === "gift")));
+  const weddingEventsQuery = useQuery({ queryKey: ["wedding-events", weddingId], queryFn: () => listWeddingEvents(api, weddingId), enabled: hasEventsSection || hasCountdownSection, staleTime: 30_000 });
+  const giftAccountsQuery = useQuery({ queryKey: ["gift-accounts", weddingId], queryFn: ({ signal }) => getGiftAccounts(api, weddingId, signal), enabled: hasGiftSection, staleTime: 0, refetchOnMount: "always" });
   const templateQuery = useQuery({ queryKey: ["story-templates"], queryFn: () => listStoryTemplates(api), staleTime: 60_000 });
   const mediaLibrary = useQuery({ queryKey: ["wedding-media", weddingId], queryFn: () => listWeddingMedia(api, weddingId), enabled: mediaPickerOpen });
   const templateKey = doc?.templateKey;
@@ -615,7 +622,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const missingGalleryDescriptions = doc?.pages.flatMap(page => page.sections.filter((section): section is Extract<StoryBuilderV4Section, { type: "gallery" }> => section.type === "gallery").flatMap(section => {
     const content = record(section.content);
     const images = Array.isArray(content.images) ? content.images.map(record) : [];
-    return images.flatMap((image, index) => String(image.imageUrl ?? "").trim() && !String(image.alt ?? "").trim() ? [{ pageId: page.id, sectionId: section.id, page: page.title, section: sectionNames.gallery, imageIndex: index + 1 }] : []);
+    return images.flatMap((image, index) => String(image.imageUrl ?? "").trim() && (!String(image.alt ?? "").trim() || isImageFilename(String(image.alt))) ? [{ pageId: page.id, sectionId: section.id, page: page.title, section: sectionNames.gallery, imageIndex: index + 1 }] : []);
   })) ?? [];
   const publicSections = doc?.pages.filter(page => page.visible !== false).flatMap(page => page.sections.filter(section => section.visible !== false).map(section => ({ page, section }))) ?? [];
   const needsRsvp = !publicSections.some(({ section }) => section.type === "rsvp");
@@ -1221,10 +1228,10 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     return () => window.removeEventListener("keydown", handleHistoryShortcut);
   }, [busy, history, undoStack.length, redoStack.length]);
   async function uploadImage(file: File): Promise<string | null> {
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) { setError("Chọn ảnh JPEG, PNG hoặc WebP tối đa 5 MB."); return null; }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) throw new Error("Chọn ảnh JPEG, PNG hoặc WebP tối đa 5 MB.");
     setBusy(true); setError("");
     try { const result = await uploadWeddingMedia(api, weddingId, file); void cache.invalidateQueries({ queryKey: ["wedding-media", weddingId] }); return mediaUrl(result.url) ?? result.url; }
-    catch (cause) { setError(errText(cause)); return null; }
+    catch (cause) { setError(errText(cause)); throw cause; }
     finally { setBusy(false); }
   }
   async function publish() {
@@ -1313,6 +1320,23 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
   const mainWeddingEvent: WeddingEvent = { id: "main", title: "Lễ cưới", startsAt: setup.eventDateTime, timeZoneId: setup.timeZoneId, venueName: setup.venueName, address: setup.venueAddress, sortOrder: 0 };
   const eventById = new Map([[mainWeddingEvent.id, mainWeddingEvent], ...(weddingEventsQuery.data ?? []).map(event => [event.id, event] as const)]);
   for (const page of renderedDocument.pages) for (const section of page.sections) {
+    if (section.type === "hero") {
+      const binding = section.bindings?.find(item => item.target === "heroImageUrl");
+      if (binding && binding.mode !== "manual") section.content.imageUrl = setup.coverImageUrl ?? "";
+      continue;
+    }
+    if (section.type === "countdown") {
+      const targetEventId = section.content.targetEventId;
+      if (targetEventId) {
+        const targetEvent = eventById.get(targetEventId);
+        section.content.targetDate = targetEvent?.startsAt ?? undefined;
+        section.content.timeZoneId = targetEvent?.timeZoneId ?? setup.timeZoneId;
+      }
+      else if (section.bindings?.some(binding => binding.target === "countdown.targetDate" && (binding.mode === undefined || binding.mode === "dynamic")))
+        { section.content.targetDate = setup.eventDateTime || undefined; section.content.timeZoneId = setup.timeZoneId; }
+      else section.content.timeZoneId ??= setup.timeZoneId;
+      continue;
+    }
     if (section.type !== "events") continue;
     const content = section.content;
     const ids = content.eventIds ?? (content.events?.length ? null : ["main"]);
@@ -1370,13 +1394,52 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     template={currentTemplate}
     onAppearance={(patch) => mutate(copy => { copy.appearance = { ...copy.appearance, ...patch }; })}
     gift={doc.content.gift}
-    onGift={(patch) => mutate(copy => { copy.content.gift = { ...copy.content.gift, ...patch, enabled: copy.content.gift?.enabled ?? true }; })}
+    giftAccounts={giftAccountsQuery.data ?? []}
+    giftAccountsLoading={giftAccountsQuery.isLoading}
+    giftAccountsError={giftAccountsQuery.isError ? "Không tải được danh sách tài khoản quà mừng." : ""}
+    onReloadGiftAccounts={() => void giftAccountsQuery.refetch()}
+    onGift={(patch) => mutate(copy => { copy.content.gift = { ...copy.content.gift, ...patch, enabled: patch.enabled ?? copy.content.gift?.enabled ?? false }; })}
     issues={validationIssues}
     pageIndex={pageIndex}
     sectionIndex={sectionIndex}
     weddingId={weddingId}
     selectedEventIds={currentSection?.type === "events" ? currentSection.content.eventIds ?? (currentSection.content.events?.length ? [] : ["main"]) : []}
     onEventIds={ids => currentSection?.type === "events" && editContent(currentSection.id, "eventIds", ids)}
+    onFocusStoryItem={(sectionId, itemId) => {
+      window.requestAnimationFrame(() => {
+        const target = document.getElementById(`story-moment-${sectionId}-${itemId}`) ?? document.getElementById(`story-gallery-image-${sectionId}-${itemId}`) ?? document.getElementById(sectionId);
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        target?.classList.add("story-moment--inspector-focus");
+        window.setTimeout(() => target?.classList.remove("story-moment--inspector-focus"), 1800);
+      });
+    }}
+    onCountdownSource={(sourceId, targetDate) => {
+      if (currentSection?.type !== "countdown") return;
+      mutate(copy => {
+        const targetSection = copy.pages.find(page => page.id === selectedPageId)?.sections.find(section => section.id === currentSection.id);
+        if (targetSection?.type !== "countdown") return;
+        const content = { ...targetSection.content };
+        const nextBindings = (targetSection.bindings ?? []).filter(binding => binding.target !== "countdown.targetDate");
+        if (sourceId === "main") {
+          delete content.targetEventId;
+          content.timeZoneId = setup.timeZoneId;
+          targetSection.bindings = [...nextBindings, { target: "countdown.targetDate", source: "wedding.mainEventAt", mode: "dynamic" }];
+        } else {
+          if (sourceId === "manual") delete content.targetEventId;
+          else content.targetEventId = sourceId;
+          content.timeZoneId = sourceId === "manual" ? setup.timeZoneId : eventById.get(sourceId)?.timeZoneId ?? setup.timeZoneId;
+          if (targetDate) content.targetDate = targetDate;
+          else delete content.targetDate;
+          targetSection.bindings = nextBindings.length ? nextBindings : undefined;
+        }
+        targetSection.content = content;
+      });
+    }}
+    countdownEvents={[...eventById.values()]}
+    countdownEventsLoading={weddingEventsQuery.isLoading}
+    countdownEventsError={weddingEventsQuery.isError}
+    onReloadCountdownEvents={() => void weddingEventsQuery.refetch()}
   />;
   function openGuestExperienceSettings() {
     setExperienceSettingsOpen(true);
@@ -1384,7 +1447,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
     if (window.matchMedia("(max-width: 767px)").matches) setMobilePanel("inspector");
   }
 
-  return <div className="fixed inset-0 z-40 flex flex-col bg-[#faf8f7] text-foreground"
+  return <div className="fixed inset-0 z-40 flex w-full min-w-0 max-w-[100vw] flex-col overflow-x-hidden bg-[#faf8f7] text-foreground"
     onFocusCapture={event => {
       const field = displayFieldName(event.target);
       focusedFieldRef.current = field;
@@ -1535,17 +1598,18 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
           <div className="mx-auto min-h-full overflow-hidden rounded-xl border border-border bg-background shadow-sm transition-[width]" style={{ width: viewportWidth, maxWidth: "100%" }}>
             <StoryBuilderV4Renderer
               document={renderedDocument}
+              giftAccounts={giftAccountsQuery.data ?? []}
               pagePath={currentPage?.slug}
               showHidden={!preview}
               editable={!preview}
-              showGuestExperiencePreview
+              showGuestExperiencePreview={preview || experienceSettingsOpen}
               selectedSectionId={currentSection?.id}
               onSelectSection={selectSection}
               onInlineEdit={(sectionId, key, value) => {
                 const activeSection = currentPage?.sections.find(item => item.id === sectionId);
                 if (activeSection) editContent(sectionId, key, value);
               }}
-              onNavigatePage={preview ? pagePath => {
+              onNavigatePage={preview || experienceSettingsOpen ? pagePath => {
                 const page = doc.pages.find(item => item.slug === pagePath);
                 if (!page) return;
                 setSelectedPageId(page.id);
@@ -1555,7 +1619,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
           </div>
         </div>
       </main>
-      {!preview && rightOpen && <aside className="hidden w-[310px] shrink-0 flex-col overflow-y-auto border-l border-border bg-background md:flex">{inspectorPanel}</aside>}
+      {!preview && rightOpen && <aside className="hidden w-[310px] min-w-0 shrink-0 flex-col overflow-x-hidden overflow-y-auto border-l border-border bg-background md:flex">{inspectorPanel}</aside>}
       {!preview && !rightOpen && <button type="button" className="hidden w-9 shrink-0 place-items-center border-l border-border bg-background text-muted-foreground hover:text-foreground md:grid" onClick={() => setRightOpen(true)} aria-label="Mở thanh chỉnh sửa"><ChevronLeft className="size-4" /></button>}
     </div>
     {!preview && <nav aria-label="Công cụ website trên điện thoại" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(55,35,40,0.08)] backdrop-blur md:hidden">
@@ -1564,9 +1628,9 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
       <button type="button" className={`flex min-h-14 flex-col items-center justify-center gap-1 text-xs ${experienceSettingsOpen ? "text-primary" : "text-muted-foreground"}`} aria-label="Cài đặt trải nghiệm khách mời" aria-pressed={experienceSettingsOpen} onClick={openGuestExperienceSettings}><Sparkles className="size-4" />Khách mời</button>
       <button type="button" className="flex min-h-14 flex-col items-center justify-center gap-1 text-xs text-primary" aria-label="Xem trước website" onClick={() => setPreview(true)}><Eye className="size-4" />Xem trước</button>
     </nav>}
-    {mobilePanel && !preview && <div className="fixed inset-0 z-30 bg-black/30 md:hidden" role="presentation" onClick={() => setMobilePanel(null)}><section role="dialog" aria-modal="true" aria-label={mobilePanel === "structure" ? "Trang và phần website" : experienceSettingsOpen ? "Trải nghiệm khách mời" : "Chỉnh sửa nội dung website"} className="absolute inset-x-0 bottom-0 flex max-h-[78dvh] flex-col overflow-hidden rounded-t-2xl border-t border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl" onClick={event => event.stopPropagation()}>
-      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3"><div className="flex gap-1 rounded-lg bg-muted p-1"><button type="button" aria-pressed={mobilePanel === "structure"} className={`rounded-md px-3 py-2 text-sm ${mobilePanel === "structure" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={() => setMobilePanel("structure")}>Trang & phần</button><button type="button" aria-pressed={mobilePanel === "inspector" && !experienceSettingsOpen} className={`rounded-md px-3 py-2 text-sm ${mobilePanel === "inspector" && !experienceSettingsOpen ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={() => { setExperienceSettingsOpen(false); setMobilePanel("inspector"); }}>Chỉnh sửa</button><button type="button" aria-pressed={mobilePanel === "inspector" && experienceSettingsOpen} className={`rounded-md px-3 py-2 text-sm ${mobilePanel === "inspector" && experienceSettingsOpen ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={openGuestExperienceSettings}>Khách mời</button></div><Button variant="ghost" size="sm" onClick={() => setMobilePanel(null)} aria-label="Đóng bảng chỉnh sửa"><X className="size-4" /></Button></div>
-      {mobilePanel === "structure" ? <div className="min-h-0 flex-1 overflow-y-auto p-4">
+    {mobilePanel && !preview && <div className="fixed inset-0 z-30 w-full max-w-[100vw] overflow-x-hidden bg-black/30 md:hidden" role="presentation" onClick={() => setMobilePanel(null)}><section role="dialog" aria-modal="true" aria-label={mobilePanel === "structure" ? "Trang và phần website" : experienceSettingsOpen ? "Trải nghiệm khách mời" : "Chỉnh sửa nội dung website"} className="absolute inset-x-0 bottom-0 flex w-full min-w-0 max-w-[100vw] max-h-[78dvh] flex-col overflow-x-hidden overflow-y-hidden rounded-t-2xl border-t border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl" onClick={event => event.stopPropagation()}>
+      <div className="flex min-w-0 shrink-0 items-center gap-2 border-b border-border px-2 py-3"><div className="flex min-w-0 flex-1 gap-1 overflow-hidden rounded-lg bg-muted p-1"><button type="button" aria-pressed={mobilePanel === "structure"} className={`min-w-0 flex-1 truncate rounded-md px-2 py-2 text-xs sm:text-sm ${mobilePanel === "structure" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={() => setMobilePanel("structure")}>Trang & phần</button><button type="button" aria-pressed={mobilePanel === "inspector" && !experienceSettingsOpen} className={`min-w-0 flex-1 truncate rounded-md px-2 py-2 text-xs sm:text-sm ${mobilePanel === "inspector" && !experienceSettingsOpen ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={() => { setExperienceSettingsOpen(false); setMobilePanel("inspector"); }}>Chỉnh sửa</button><button type="button" aria-pressed={mobilePanel === "inspector" && experienceSettingsOpen} className={`min-w-0 flex-1 truncate rounded-md px-2 py-2 text-xs sm:text-sm ${mobilePanel === "inspector" && experienceSettingsOpen ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`} onClick={openGuestExperienceSettings}>Khách mời</button></div><Button className="shrink-0" variant="ghost" size="sm" onClick={() => setMobilePanel(null)} aria-label="Đóng bảng chỉnh sửa"><X className="size-4" /></Button></div>
+      {mobilePanel === "structure" ? <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4">
       <p className="mb-2 text-xs font-medium text-muted-foreground">TRANG</p>
       {doc.pages.map((page, index) => <div key={page.id} className={`mb-1 flex items-center gap-1 rounded-lg ${page.id === currentPage?.id ? "bg-primary/10" : ""}`}>
         <button type="button" className="min-h-11 min-w-0 flex-1 truncate px-3 text-left text-sm" onClick={() => selectPage(page.id)} aria-current={page.id === currentPage?.id ? "page" : undefined}>{page.navigationLabel || page.title}{page.isHome ? " · Trang chủ" : ""}</button>
@@ -1580,7 +1644,7 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
       <div className="mb-2 flex items-center justify-between"><p className="text-xs font-medium text-muted-foreground">CÁC PHẦN</p><Button type="button" size="sm" variant="outline" className="min-h-10" disabled={!currentPage || currentPage.sections.length >= 24 || doc.pages.reduce((total, page) => total + page.sections.length, 0) >= 80} onClick={openSectionLibrary}><Plus className="mr-1 size-3.5" />Thêm phần</Button></div>
       {currentPage?.sections.map((section, index) => <div key={section.id} className={`mb-1 flex items-center gap-1 rounded-lg border px-1 ${section.id === currentSection?.id ? "border-primary/40 bg-primary/5" : "border-transparent"}`}><button type="button" className="min-h-11 min-w-0 flex-1 truncate px-2 text-left text-sm" onClick={() => selectSection(section.id)} aria-current={section.id === currentSection?.id ? "true" : undefined}>{sectionNames[section.type]}{section.visible === false ? " · Đang ẩn" : ""}</button><button type="button" className="grid size-9 place-items-center rounded-md" aria-label={`Chuyển ${sectionNames[section.type]} lên`} disabled={index === 0 || section.type === "hero" || currentPage.sections[index - 1]?.type === "hero"} onClick={() => { const target = currentPage.sections[index - 1]; if (target) reorderSection(section.id, target.id); }}><ChevronUp className="size-4" /></button><button type="button" className="grid size-9 place-items-center rounded-md" aria-label={`Chuyển ${sectionNames[section.type]} xuống`} disabled={index === currentPage.sections.length - 1 || section.type === "hero"} onClick={() => { const target = currentPage.sections[index + 1]; if (target) reorderSection(section.id, target.id); }}><ChevronDown className="size-4" /></button><button type="button" className="grid size-9 place-items-center rounded-md" onClick={() => replaceSection(section.id, { visible: section.visible === false })} aria-label={section.visible === false ? `Hiện ${sectionNames[section.type]}` : `Ẩn ${sectionNames[section.type]}`}>{section.visible === false ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></div>)}
       <label className="mt-4 grid gap-1 text-xs text-muted-foreground">Kiểu điều hướng<select className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground" value={doc.navigationMode} onChange={event => mutate(copy => { copy.navigationMode = event.target.value as StoryBuilderV4Document["navigationMode"]; })}>{doc.pages.length === 1 && <option value="one-page">Một trang</option>}{doc.pages.length >= 2 && <option value="multi-page">Nhiều trang</option>}<option value="hybrid">Kết hợp</option></select></label>
-      </div> : <div className="min-h-0 flex-1 overflow-y-auto">{inspectorPanel}</div>}
+      </div> : <div className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">{inspectorPanel}</div>}
     </section></div>}
     <WebsiteVersionHistoryDialog
       open={versionHistoryOpen}
@@ -1851,7 +1915,7 @@ function GuestExperienceInspector({ document, settings, onChange }: {
     tools[destination] = currentTool;
     onChange({ ...settings, tools });
   };
-  return <div className="min-h-[300px]">
+  return <div className="min-h-[300px] w-full min-w-0 max-w-full overflow-x-hidden">
     <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3"><p className="text-xs text-muted-foreground">CÀI ĐẶT WEBSITE</p><h2 className="mt-1 text-sm font-semibold">Trải nghiệm khách mời</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Chọn lối tắt và hiệu ứng cho khách. Thay đổi xem được ngay trong bản xem trước và tự lưu cùng website.</p></div>
     <div className="space-y-6 p-4">
       <section className="space-y-3">
@@ -1900,7 +1964,224 @@ function GuestExperienceInspector({ document, settings, onChange }: {
   </div>;
 }
 
-function Inspector({ section, page, sectionName, onSection, onContent, onNested, onAppendGalleryImages, onUpload, onChooseMedia, setup, onBinding, onDuplicate, onDelete, pageChange, pageDelete, appearance, paletteId, template, onAppearance, gift, onGift, issues, pageIndex, sectionIndex, weddingId, selectedEventIds, onEventIds }: {
+type StoryMoment = NonNullable<Extract<StoryBuilderV4Section, { type: "loveStory" }>['content']['items']>[number];
+type GalleryItem = NonNullable<Extract<StoryBuilderV4Section, { type: "gallery" }>['content']['images']>[number];
+
+function StoryMomentsEditor({ sectionId, items, onChange, onUpload, onChooseMedia, getError, onFocusItem }: {
+  sectionId: string;
+  items: StoryMoment[];
+  onChange: (items: StoryMoment[]) => void;
+  onUpload: (file: File) => Promise<string | null>;
+  onChooseMedia: (onChoose: (url: string) => void) => void;
+  getError: (index: number, field: "title" | "date" | "body" | "imageUrl") => string | undefined;
+  onFocusItem: (itemId: string) => void;
+}) {
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(items[0]?.id ?? null);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+
+  const patchItem = (index: number, patch: Partial<StoryMoment>) =>
+    onChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
+
+  const addItem = () => {
+    const nextItem: StoryMoment = { id: id(), title: "Dấu mốc mới", date: "", body: "" };
+    onChange([...items, nextItem]);
+    setExpandedItemId(nextItem.id);
+  };
+
+  const duplicateItem = (index: number) => {
+    const source = items[index];
+    if (!source || items.length >= 20) return;
+    const copy: StoryMoment = { ...source, id: id() };
+    const next = [...items];
+    next.splice(index + 1, 0, copy);
+    onChange(next);
+    setExpandedItemId(copy.id);
+  };
+
+  const moveTo = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return;
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    if (!moved) return;
+    next.splice(to, 0, moved);
+    onChange(next);
+  };
+
+  const dropOn = (event: React.DragEvent<HTMLElement>, targetIndex: number) => {
+    event.preventDefault();
+    const sourceId = event.dataTransfer.getData("text/plain") || draggedItemId;
+    const sourceIndex = items.findIndex(item => item.id === sourceId);
+    moveTo(sourceIndex, targetIndex);
+    setDraggedItemId(null);
+  };
+
+  return <div className="space-y-3">
+    <div className="flex items-end justify-between gap-3">
+      <div><h3 className="text-sm font-semibold text-foreground">Hành trình của hai bạn</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Sắp xếp theo thời gian. Ảnh chỉ được gỡ khỏi câu chuyện, không bị xóa khỏi thư viện.</p></div>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{items.length}/20</span>
+    </div>
+
+    {items.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-5">
+      <p className="text-sm font-medium text-foreground">Chưa có dấu mốc nào</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">Thêm một khoảnh khắc hai bạn muốn kể. Bạn có thể thêm ảnh và sắp xếp lại sau.</p>
+      <Button type="button" size="sm" variant="outline" className="mt-3" onClick={addItem}><Plus className="mr-1.5 size-3.5" />Thêm dấu mốc đầu tiên</Button>
+    </div> : <ol className="divide-y divide-border/70 border-y border-border/70">
+      {items.map((item, index) => {
+        const itemId = String(item.id);
+        const itemTitle = String(item.title ?? "").trim() || `Dấu mốc ${index + 1}`;
+        const imageUrl = String(item.imageUrl ?? "");
+        return <li key={itemId} onDragOver={event => { if (draggedItemId) event.preventDefault(); }} onDrop={event => dropOn(event, index)} className={`py-2.5 transition-colors ${draggedItemId === itemId ? "opacity-45" : ""}`}>
+          <div className="flex min-w-0 items-center gap-2">
+            <button type="button" draggable aria-label={`Kéo để sắp xếp dấu mốc ${index + 1}`} title="Kéo để sắp xếp" onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", itemId); setDraggedItemId(itemId); }} onDragEnd={() => setDraggedItemId(null)} className="grid size-9 shrink-0 cursor-grab touch-none place-items-center rounded-lg text-muted-foreground hover:bg-muted active:cursor-grabbing"><GripVertical className="size-4" /></button>
+            <details open={expandedItemId === itemId} onToggle={event => { const isOpen = event.currentTarget.open; setExpandedItemId(current => isOpen ? itemId : current === itemId ? null : current); }} className="group min-w-0 flex-1">
+              <summary className="flex min-h-14 list-none cursor-pointer items-center gap-3 rounded-lg px-1 py-1.5 marker:hidden hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                {imageUrl ? <Image src={mediaUrl(imageUrl) ?? imageUrl} alt="" width={52} height={52} unoptimized className="size-12 shrink-0 rounded-md object-cover" /> : <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-md bg-primary/10 font-serif text-lg text-primary">{String(index + 1).padStart(2, "0")}</span>}
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">{itemTitle}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{String(item.date ?? "").trim() || "Chưa ghi mốc thời gian"}</span></span>
+                <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="space-y-3 px-1 pb-2 pt-3">
+                <Field label="Tiêu đề" maxLength={150} presencePath={builderFieldPath(sectionId, "loveStory", "items", itemId, "title")} value={String(item.title ?? "")} placeholder="Ví dụ: Ngày đầu gặp nhau" error={getError(index, "title")} onChange={value => patchItem(index, { title: value })} />
+                <Field label="Ngày hoặc dấu mốc" maxLength={50} presencePath={builderFieldPath(sectionId, "loveStory", "items", itemId, "date")} value={String(item.date ?? "")} placeholder="Ví dụ: Tháng 6, 2022" error={getError(index, "date")} onChange={value => patchItem(index, { date: value })} />
+                <Field label="Câu chuyện" maxLength={3000} presencePath={builderFieldPath(sectionId, "loveStory", "items", itemId, "body")} value={String(item.body ?? "")} placeholder="Kể ngắn gọn điều hai bạn muốn lưu lại…" multiline error={getError(index, "body")} onChange={value => patchItem(index, { body: value })} />
+                <ImageField label="Ảnh dấu mốc" presencePath={builderFieldPath(sectionId, "loveStory", "items", itemId, "imageUrl")} value={imageUrl} error={getError(index, "imageUrl")} onChange={value => patchItem(index, { imageUrl: value || undefined })} onUpload={onUpload} onChooseMedia={onChooseMedia} />
+              </div>
+            </details>
+          </div>
+          <div className="ml-11 mt-1 flex flex-wrap items-center gap-1.5">
+            <Button type="button" size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => onFocusItem(itemId)}><Eye className="mr-1 size-3.5" />Xem</Button>
+            <Button type="button" size="sm" variant="ghost" className="size-8 p-0" aria-label={`Đưa dấu mốc ${index + 1} lên`} title="Lên" disabled={index === 0} onClick={() => moveTo(index, index - 1)}><ChevronUp className="size-4" /></Button>
+            <Button type="button" size="sm" variant="ghost" className="size-8 p-0" aria-label={`Đưa dấu mốc ${index + 1} xuống`} title="Xuống" disabled={index === items.length - 1} onClick={() => moveTo(index, index + 1)}><ChevronDown className="size-4" /></Button>
+            <Button type="button" size="sm" variant="ghost" className="size-8 p-0" aria-label={`Nhân đôi dấu mốc ${index + 1}`} title="Nhân đôi" disabled={items.length >= 20} onClick={() => duplicateItem(index)}><Copy className="size-3.5" /></Button>
+            <Button type="button" size="sm" variant="ghost" className="size-8 p-0 text-destructive hover:bg-destructive/5 hover:text-destructive" aria-label={`Xóa dấu mốc ${index + 1}`} title="Xóa" onClick={() => { const next = items.filter((_, itemIndex) => itemIndex !== index); onChange(next); if (expandedItemId === itemId) setExpandedItemId(next[Math.min(index, next.length - 1)]?.id ?? null); }}><Trash2 className="size-3.5" /></Button>
+          </div>
+        </li>;
+      })}
+    </ol>}
+
+    {items.length > 0 && <Button type="button" size="sm" variant="outline" disabled={items.length >= 20} onClick={addItem}><Plus className="mr-1.5 size-3.5" />{items.length >= 20 ? "Đã đạt tối đa 20 dấu mốc" : "Thêm dấu mốc"}</Button>}
+  </div>;
+}
+
+function GalleryImagesEditor({ sectionId, images, onChange, onAppend, onUpload, onChooseMedia, getError, onFocusItem }: {
+  sectionId: string;
+  images: GalleryItem[];
+  onChange: (images: GalleryItem[]) => void;
+  onAppend: (images: Record<string, unknown>[]) => number;
+  onUpload: (file: File) => Promise<string | null>;
+  onChooseMedia: (onChoose: (url: string) => void) => void;
+  getError: (index: number, field: "imageUrl" | "alt" | "caption") => string | undefined;
+  onFocusItem: (itemId: string) => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(images[0]?.id ?? null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [failedFiles, setFailedFiles] = useState<File[]>([]);
+  const [uploadStatus, setUploadStatus] = useState("");
+  const inputId = useId();
+  const activeId = selectedId && images.some(image => image.id === selectedId) ? selectedId : images[0]?.id ?? null;
+  const selectedIndex = Math.max(0, images.findIndex(image => image.id === activeId));
+  const selected = images[selectedIndex];
+
+  function reorder(fromId: string, toId: string) {
+    if (fromId === toId) return;
+    const from = images.findIndex(image => image.id === fromId);
+    const to = images.findIndex(image => image.id === toId);
+    if (from < 0 || to < 0) return;
+    const next = [...images];
+    const [item] = next.splice(from, 1);
+    if (!item) return;
+    next.splice(to, 0, item);
+    onChange(next);
+  }
+
+  async function uploadFiles(files: File[]) {
+    const remaining = Math.max(0, 30 - images.length);
+    const selectedFiles = files.slice(0, remaining);
+    if (!selectedFiles.length) {
+      setUploadStatus("Album đã đủ 30 ảnh. Gỡ một ảnh trước khi thêm ảnh mới.");
+      return;
+    }
+    setUploading(true);
+    setUploadStatus("");
+    const added: Record<string, unknown>[] = [];
+    const failed: File[] = [];
+    const validFiles = selectedFiles.filter(file => ["image/jpeg", "image/png", "image/webp"].includes(file.type) && file.size <= 5 * 1024 * 1024);
+    const invalidCount = selectedFiles.length - validFiles.length;
+    let failureReason = "";
+    let current = 0;
+    let completed = 0;
+    const worker = async () => {
+      while (current < validFiles.length) {
+        const index = current++;
+        const file = validFiles[index];
+        if (!file) continue;
+        setUploadStatus(`Đang tải ${Math.min(completed + 1, validFiles.length)}/${validFiles.length} ảnh…`);
+        try {
+          const imageUrl = await onUpload(file);
+          if (imageUrl) added[index] = { id: id(), imageUrl };
+          else failed.push(file);
+        } catch (cause) { failed.push(file); failureReason ||= errText(cause); }
+        completed += 1;
+        setUploadStatus(`Đã xử lý ${completed}/${validFiles.length} ảnh…`);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, validFiles.length) }, () => worker()));
+    const successful = added.filter(Boolean);
+    const appended = successful.length ? onAppend(successful) : 0;
+    setFailedFiles(failed);
+    const skipped = files.length - selectedFiles.length;
+    if (appended > 0) setSelectedId(String(successful[0]?.id ?? images[0]?.id ?? ""));
+    setUploadStatus([
+      appended ? `Đã thêm ${appended} ảnh vào album.` : "",
+      failed.length ? `${failed.length} ảnh tải chưa thành công; ${failureReason || "bạn có thể thử lại riêng các ảnh này."}` : "",
+      invalidCount ? `${invalidCount} ảnh không đúng định dạng JPEG, PNG, WebP hoặc vượt quá 5 MB.` : "",
+      skipped > 0 ? `Chưa nhận ${skipped} ảnh vì album tối đa 30 ảnh.` : "",
+      appended < successful.length ? "Album vừa chạm giới hạn; một số ảnh tải lên chưa được thêm vào album." : "",
+    ].filter(Boolean).join(" ") || "Không có ảnh nào được thêm.");
+    setUploading(false);
+  }
+
+  function patchSelected(patch: Partial<GalleryItem>) {
+    onChange(images.map((image, index) => index === selectedIndex ? { ...image, ...patch } : image));
+  }
+
+  function removeSelected() {
+    if (!selected) return;
+    const next = images.filter(image => image.id !== selected.id);
+    onChange(next);
+    setSelectedId(next[Math.min(selectedIndex, next.length - 1)]?.id ?? null);
+  }
+
+  return <div className="space-y-4">
+    <div className="flex items-end justify-between gap-3">
+      <div><h3 className="text-sm font-semibold text-foreground">Ảnh trong album</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Kéo ảnh để sắp xếp. Gỡ ảnh khỏi album không xóa tệp trong thư viện.</p></div>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{images.length}/30</span>
+    </div>
+
+    <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+      {images.map((image, index) => <button key={image.id} type="button" draggable={!uploading} onDragStart={event => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", image.id); setDraggedId(image.id); }} onDragEnd={() => setDraggedId(null)} onDragOver={event => { if (draggedId) event.preventDefault(); }} onDrop={event => { event.preventDefault(); reorder(event.dataTransfer.getData("text/plain") || draggedId || "", image.id); setDraggedId(null); }} onClick={() => setSelectedId(image.id)} aria-pressed={activeId === image.id} aria-label={`Chọn ảnh ${index + 1}${image.caption ? `: ${image.caption}` : ""}`} className={`group relative aspect-square min-w-0 touch-none overflow-hidden rounded-lg border-2 bg-muted/30 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${activeId === image.id ? "border-primary ring-2 ring-primary/20" : "border-transparent hover:border-primary/40"} ${draggedId === image.id ? "opacity-45" : ""}`}>
+        <Image src={mediaUrl(image.imageUrl) ?? image.imageUrl} alt="" fill sizes="80px" unoptimized className="object-cover" />
+        <span className="absolute left-1 top-1 grid size-5 place-items-center rounded-full bg-black/60 text-[10px] text-white">{index + 1}</span>
+      </button>)}
+      {images.length > 0 && images.length < 30 && <label htmlFor={inputId} className={`grid aspect-square cursor-pointer place-items-center rounded-lg border border-dashed border-border bg-muted/15 text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5 hover:text-primary focus-within:ring-2 focus-within:ring-ring ${uploading ? "pointer-events-none opacity-50" : ""}`}><span className="grid justify-items-center gap-1 text-[11px]"><Plus className="size-5" />Thêm ảnh</span></label>}
+    </div>
+    <input id={inputId} type="file" multiple disabled={uploading || images.length >= 30} accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; if (files.length) void uploadFiles(files); }} />
+    {images.length > 0 && images.length < 30 && <div onDragOver={event => { if (Array.from(event.dataTransfer.types).includes("Files")) event.preventDefault(); }} onDrop={event => { const files = Array.from(event.dataTransfer.files ?? []); if (!files.length) return; event.preventDefault(); void uploadFiles(files); }} className={`flex min-h-11 items-center justify-center rounded-lg border border-dashed border-border/80 px-3 text-center text-xs text-muted-foreground transition-colors ${uploading ? "opacity-50" : "hover:border-primary/45 hover:bg-primary/[0.03]"}`}>
+      <span>Kéo thả ảnh vào đây hoặc <label htmlFor={inputId} className="cursor-pointer font-medium text-primary underline underline-offset-2">chọn từ thiết bị</label>.</span>
+    </div>}
+    {uploading && <p role="status" aria-live="polite" className="rounded-lg bg-primary/5 px-3 py-2 text-xs text-muted-foreground">{uploadStatus}</p>}
+    {!uploading && uploadStatus && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/35 px-3 py-2.5"><p role="status" aria-live="polite" className="min-w-0 flex-1 text-xs leading-5 text-muted-foreground">{uploadStatus}</p>{failedFiles.length > 0 && images.length < 30 && <Button type="button" size="sm" variant="outline" onClick={() => void uploadFiles(failedFiles)}>Thử lại {failedFiles.length} ảnh lỗi</Button>}</div>}
+    {!images.length ? <div className="rounded-xl border border-dashed border-border bg-muted/15 px-4 py-5"><p className="text-sm font-medium text-foreground">Album đang trống</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Thêm ảnh JPEG, PNG hoặc WebP. Có thể tải nhiều ảnh cùng lúc rồi sắp xếp lại.</p><label htmlFor={inputId} className="mt-3 inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary-hover"><Upload className="size-4" />Chọn ảnh</label></div> : selected && <section className="space-y-3 rounded-xl border border-border bg-background p-3" aria-label={`Chỉnh ảnh ${selectedIndex + 1}`}>
+      <div className="flex items-center justify-between gap-2"><div><p className="text-sm font-semibold">Ảnh {selectedIndex + 1} / {images.length}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{selected.caption || (selected.alt && !isImageFilename(selected.alt) ? selected.alt : "Chưa có chú thích")}</p></div><button type="button" className="grid size-9 shrink-0 place-items-center rounded-lg text-destructive transition hover:bg-destructive/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Gỡ ảnh ${selectedIndex + 1} khỏi album`} title="Gỡ khỏi album" onClick={removeSelected}><Trash2 className="size-4" /></button></div>
+      <ImageField label="Ảnh album" presencePath={builderFieldPath(sectionId, "gallery", "images", selected.id, "imageUrl")} value={selected.imageUrl} error={getError(selectedIndex, "imageUrl")} onChange={value => value ? patchSelected({ imageUrl: value }) : removeSelected()} onUpload={onUpload} onChooseMedia={onChooseMedia} />
+      <Field label="Mô tả ảnh cho trình đọc màn hình" maxLength={200} presencePath={builderFieldPath(sectionId, "gallery", "images", selected.id, "alt")} value={isImageFilename(selected.alt ?? "") ? "" : selected.alt ?? ""} placeholder="Ví dụ: Cô dâu và chú rể trong vườn hoa" error={getError(selectedIndex, "alt")} onChange={value => patchSelected({ alt: value || undefined })} />
+      <Field label="Chú thích hiển thị dưới ảnh (không bắt buộc)" maxLength={200} presencePath={builderFieldPath(sectionId, "gallery", "images", selected.id, "caption")} value={selected.caption ?? ""} placeholder="Ví dụ: Ngày đầu tiên cùng nhau" error={getError(selectedIndex, "caption")} onChange={value => patchSelected({ caption: value || undefined })} />
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2"><Button type="button" size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => onFocusItem(selected.id)}><Eye className="mr-1 size-3.5" />Xem trên trang</Button><Button type="button" size="sm" variant="ghost" className="size-8 p-0" aria-label="Đưa ảnh lên trước" title="Lên" disabled={selectedIndex === 0} onClick={() => onChange(moveItem(images, selectedIndex, -1))}><ChevronUp className="size-4" /></Button><Button type="button" size="sm" variant="ghost" className="size-8 p-0" aria-label="Đưa ảnh xuống sau" title="Xuống" disabled={selectedIndex === images.length - 1} onClick={() => onChange(moveItem(images, selectedIndex, 1))}><ChevronDown className="size-4" /></Button><span className="ml-auto text-[11px] text-muted-foreground">Kéo ảnh thu nhỏ để sắp xếp</span></div>
+    </section>}
+  </div>;
+}
+
+function Inspector({ section, page, sectionName, onSection, onContent, onNested, onAppendGalleryImages, onUpload, onChooseMedia, setup, onBinding, onDuplicate, onDelete, pageChange, pageDelete, appearance, paletteId, template, onAppearance, gift, giftAccounts, giftAccountsLoading, giftAccountsError, onReloadGiftAccounts, onGift, issues, pageIndex, sectionIndex, weddingId, selectedEventIds, onEventIds, countdownEvents, countdownEventsLoading, countdownEventsError, onReloadCountdownEvents, onCountdownSource, onFocusStoryItem }: {
   section?: StoryBuilderV4Section; page?: StoryBuilderV4Document["pages"][number]; sectionName?: string;
   onSection: (patch: Partial<StoryBuilderV4Section>) => void; onContent: (key: string, value: unknown) => void;
   onNested: (key: string, field: string, value: unknown) => void;
@@ -1913,13 +2194,18 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
   pageChange: (patch: Partial<StoryBuilderV4Document["pages"][number]>) => void; pageDelete: () => void;
   appearance: StoryBuilderV4Document["appearance"]; paletteId: string; template?: StoryTemplateSummaryV4;
   onAppearance: (patch: Partial<StoryBuilderV4Document["appearance"]>) => void;
-  gift?: StoryBuilderV4Document["content"]["gift"]; onGift: (patch: Partial<NonNullable<StoryBuilderV4Document["content"]["gift"]>>) => void;
+  gift?: StoryBuilderV4Document["content"]["gift"]; giftAccounts: GiftBankAccount[]; giftAccountsLoading: boolean; giftAccountsError: string; onReloadGiftAccounts: () => void;
+  onGift: (patch: Partial<NonNullable<StoryBuilderV4Document["content"]["gift"]>>) => void;
   issues: readonly BuilderIssue[]; pageIndex: number; sectionIndex: number;
   weddingId: string; selectedEventIds: string[]; onEventIds: (ids: string[]) => void;
+  countdownEvents: WeddingEvent[]; countdownEventsLoading: boolean; countdownEventsError: boolean; onReloadCountdownEvents: () => void;
+  onCountdownSource: (sourceId: string, targetDate?: string) => void;
+  onFocusStoryItem: (sectionId: string, itemId: string) => void;
 }) {
   const content = record(section?.content); const [tab, setTab] = useState<"content" | "style">("content");
-  const [batchUploading, setBatchUploading] = useState(false); const [batchStatus, setBatchStatus] = useState("");
+  const [addingHeroSlideFor, setAddingHeroSlideFor] = useState<string | null>(null);
   if (!section) return <div className="p-5 text-sm text-muted-foreground">Chọn một phần trên canvas hoặc trong danh sách để chỉnh nội dung.</div>;
+  const addingHeroSlide = addingHeroSlideFor === section.id;
   const errorAt = (path: readonly PropertyKey[]) => {
     const issue = issues.find(item => item.path.length === path.length && path.every((part, index) => item.path[index] === part));
     return issue ? describeV4Issue(issue) : undefined;
@@ -1930,30 +2216,19 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
   const inputClass = "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const availableBindings = setupBindings[section.type] ?? [];
   const bindings = section.bindings ?? [];
-  const list = (key: "items" | "images" | "events" | "groom" | "bride") => Array.isArray(content[key]) ? content[key] as Record<string, unknown>[] : [];
-  async function uploadGalleryBatch(files: File[]) {
-    const remaining = Math.max(0, 30 - list("images").length);
-    const selected = files.slice(0, remaining);
-    if (!selected.length) { setBatchStatus("Album đã đạt tối đa 30 ảnh."); return; }
-    setBatchUploading(true);
-    setBatchStatus(selected.length < files.length ? `Chỉ nhận ${selected.length} ảnh để không vượt giới hạn 30 ảnh.` : "");
-    const added: Record<string, unknown>[] = [];
-    let failed = false;
-    for (const [index, file] of selected.entries()) {
-      setBatchStatus(`Đang tải ảnh ${index + 1}/${selected.length}: ${file.name}`);
-      const url = await onUpload(file);
-      if (!url) { failed = true; break; }
-      added.push({ id: id(), imageUrl: url, alt: file.name });
-    }
-    const appended = added.length ? onAppendGalleryImages(added) : 0;
-    const capped = appended < added.length;
-    setBatchStatus(failed ? `Đã thêm ${appended} ảnh. Một ảnh tải lỗi; bạn có thể chọn lại ảnh đó.` : capped ? `Đã thêm ${appended} ảnh. Album vừa đạt giới hạn 30 ảnh.` : `Đã thêm ${appended} ảnh vào album.`);
-    setBatchUploading(false);
-  }
-  return <div className="min-h-[300px]">
+  const list = (key: "items" | "images" | "events" | "slides" | "groom" | "bride") => Array.isArray(content[key]) ? content[key] as Record<string, unknown>[] : [];
+  const giftSelections = gift?.selectedAccounts ?? [];
+  const selectGiftAccount = (role: "groom" | "bride", accountId: string) => {
+    const next = giftSelections.filter(item => item.role !== role && (!accountId || item.accountId !== accountId));
+    if (accountId) next.push({ role, accountId });
+    // Keep the role order stable for predictable drafts and previews.
+    next.sort((left, right) => left.role === "groom" ? -1 : right.role === "groom" ? 1 : 0);
+    onGift({ selectedAccounts: next });
+  };
+  return <div className="min-h-[300px] w-full min-w-0 max-w-full overflow-x-hidden">
     <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3"><p className="text-xs text-muted-foreground">ĐANG CHỈNH SỬA</p><h2 className="mt-1 text-sm font-semibold">{sectionName}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{sectionDescriptions[section.type]}</p>{errorAt(sectionPath) && <p role="alert" className="mt-2 text-xs font-medium text-destructive">{errorAt(sectionPath)}</p>}</div>
-    <div className="flex border-b border-border px-4" role="group" aria-label={`Chỉnh ${sectionName}`}><button type="button" aria-pressed={tab === "content"} className={`border-b-2 px-3 py-2.5 text-sm ${tab === "content" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("content")}>Nội dung</button><button type="button" aria-pressed={tab === "style"} className={`border-b-2 px-3 py-2.5 text-sm ${tab === "style" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("style")}>Kiểu hiển thị</button></div>
-    <div className="space-y-5 p-4">
+    <div className="flex w-full min-w-0 border-b border-border px-4" role="group" aria-label={`Chỉnh ${sectionName}`}><button type="button" aria-pressed={tab === "content"} className={`min-w-0 flex-1 border-b-2 px-2 py-2.5 text-xs sm:px-3 sm:text-sm ${tab === "content" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("content")}>Nội dung</button><button type="button" aria-pressed={tab === "style"} className={`min-w-0 flex-1 border-b-2 px-2 py-2.5 text-xs sm:px-3 sm:text-sm ${tab === "style" ? "border-primary text-primary-hover" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("style")}>Kiểu hiển thị</button></div>
+    <div className="w-full min-w-0 max-w-full space-y-5 overflow-x-hidden p-4">
       {page && tab === "content" && <details className="border-b border-border pb-4" open={issues.some(issue => issue.path[0] === "pages" && issue.path[1] === pageIndex && issue.path[2] !== "sections")}>
         <summary className="min-h-10 cursor-pointer py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cài đặt trang · {page.title}</summary>
         <div className="mt-3 space-y-3">
@@ -1968,19 +2243,147 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
       </details>}
       {tab === "content" ? <>
         <Field label="Tiêu đề điều hướng" value={section.navigationLabel ?? ""} error={errorAt([...sectionPath, "navigationLabel"])} onChange={value => onSection({ navigationLabel: value })} placeholder={sectionName} />
-        {section.type === "hero" && <>{field("Tiêu đề lớn", "title", "Tên hai bạn hoặc tên đám cưới")}{field("Lời dẫn", "subtitle", "Lời mời ngắn")}{field("Nhãn nút chính", "ctaLabel", "Ví dụ: Xem lịch trình")}{field("Dòng nhấn", "eyebrow", "")}
-          <ImageField label="Ảnh bìa" presencePath={builderFieldPath(section.id, "hero", "content", "imageUrl")} value={String(content.imageUrl ?? "")} placeholder="Dán liên kết ảnh hoặc tải từ thiết bị" error={contentError("imageUrl")} onChange={value => onContent("imageUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} />
-        </>}
-        {section.type === "couple" && <>{field("Giới thiệu", "intro", "", true)}{(["groom", "bride"] as const).map((personKey, index) => { const person = record(content[personKey]); const personPath = (key: string) => builderFieldPath(section.id, "couple", personKey, key); return <fieldset key={personKey} className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold text-muted-foreground">{index === 0 ? "Chú rể" : "Cô dâu"}</legend><Field label="Tên hiển thị" presencePath={personPath("displayName")} value={String(person.displayName ?? person.fullName ?? "")} error={contentError(personKey, "displayName")} onChange={value => onNested(personKey, "displayName", value)} /><Field label="Giới thiệu" presencePath={personPath("bio")} value={String(person.bio ?? "")} multiline error={contentError(personKey, "bio")} onChange={value => onNested(personKey, "bio", value)} /><Field label="Tên cha" presencePath={personPath("fatherName")} value={String(person.fatherName ?? "")} error={contentError(personKey, "fatherName")} onChange={value => onNested(personKey, "fatherName", value)} /><Field label="Tên mẹ" presencePath={personPath("motherName")} value={String(person.motherName ?? "")} error={contentError(personKey, "motherName")} onChange={value => onNested(personKey, "motherName", value)} /><ImageField label="Ảnh chân dung" presencePath={personPath("photoUrl")} value={String(person.photoUrl ?? "")} error={contentError(personKey, "photoUrl")} onChange={value => onNested(personKey, "photoUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} /></fieldset>; })}</>}
-        {section.type === "countdown" && <>{field("Tiêu đề", "title")}<DateTimeField label="Ngày giờ mục tiêu" presencePath={builderFieldPath(section.id, "countdown", "content", "targetDate")} value={String(content.targetDate ?? "")} timeZone={setup.timeZoneId} error={contentError("targetDate")} onChange={value => onContent("targetDate", value)} /></>}
-        {section.type === "loveStory" && <>{field("Giới thiệu", "intro", "", true)}<div className="space-y-3">{list("items").map((item, index) => <fieldset key={String(item.id)} className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between"><span className="text-sm font-semibold">Dấu mốc {index + 1} / {list("items").length}</span><button type="button" className="min-h-10 rounded-lg px-2 text-sm text-destructive hover:bg-destructive/5" onClick={() => onContent("items", list("items").filter((_, i) => i !== index))}>Xóa</button></div><Field label="Tiêu đề" presencePath={builderFieldPath(section.id, "loveStory", "items", String(item.id), "title")} value={String(item.title ?? "")} error={contentError("items", index, "title")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, title: value } : entry))} /><Field label="Ngày hoặc dấu mốc" presencePath={builderFieldPath(section.id, "loveStory", "items", String(item.id), "date")} value={String(item.date ?? "")} error={contentError("items", index, "date")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, date: value } : entry))} /><Field label="Mô tả" presencePath={builderFieldPath(section.id, "loveStory", "items", String(item.id), "body")} value={String(item.body ?? "")} multiline error={contentError("items", index, "body")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, body: value } : entry))} /><ImageField label="Ảnh dấu mốc" presencePath={builderFieldPath(section.id, "loveStory", "items", String(item.id), "imageUrl")} value={String(item.imageUrl ?? "")} error={contentError("items", index, "imageUrl")} onChange={value => onContent("items", list("items").map((entry, i) => i === index ? { ...entry, imageUrl: value } : entry))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("items", moveItem(list("items"), index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === list("items").length - 1} onClick={() => onContent("items", moveItem(list("items"), index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></fieldset>)}<Button type="button" size="sm" variant="outline" disabled={list("items").length >= 20} onClick={() => onContent("items", [...list("items"), { id: id(), title: "", date: "", body: "" }])}><Plus className="mr-1 size-3.5" />{list("items").length >= 20 ? "Đã đạt tối đa 20 dấu mốc" : "Thêm dấu mốc"}</Button></div></>}
-        {section.type === "gallery" && <>{field("Giới thiệu album", "intro", "", true)}<div className="space-y-3">{list("images").map((image, index) => <fieldset key={String(image.id)} className="rounded-xl border border-border p-3"><div className="mb-3 flex items-center justify-between"><span className="text-sm font-semibold">Ảnh {index + 1} / {list("images").length}</span><button type="button" className="grid size-9 place-items-center rounded-lg text-destructive hover:bg-destructive/5" aria-label={`Xóa ảnh ${index + 1}`} onClick={() => onContent("images", list("images").filter((_, i) => i !== index))}><Trash2 className="size-4" /></button></div><ImageField label="Ảnh album" presencePath={builderFieldPath(section.id, "gallery", "images", String(image.id), "imageUrl")} value={String(image.imageUrl ?? "")} error={contentError("images", index, "imageUrl")} onChange={value => onContent("images", list("images").map((entry, i) => i === index ? { ...entry, imageUrl: value } : entry))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><Field label="Mô tả ảnh (văn bản thay thế)" presencePath={builderFieldPath(section.id, "gallery", "images", String(image.id), "alt")} value={String(image.alt ?? "")} placeholder="Mô tả ngắn nội dung ảnh" error={contentError("images", index, "alt")} onChange={value => onContent("images", list("images").map((entry, i) => i === index ? { ...entry, alt: value } : entry))} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("images", moveItem(list("images"), index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === list("images").length - 1} onClick={() => onContent("images", moveItem(list("images"), index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></fieldset>)}{list("images").length < 30 && <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted ${batchUploading ? "pointer-events-none opacity-60" : ""}`}><Upload className="size-4" />{batchUploading ? "Đang tải album…" : "Chọn ảnh cho album"}<input type="file" multiple disabled={batchUploading} accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void uploadGalleryBatch(files); }} /></label>}{list("images").length >= 30 && <p className="text-xs text-muted-foreground">Album đã đạt giới hạn 30 ảnh.</p>}{batchStatus && <p aria-live="polite" role="status" className="text-xs text-muted-foreground">{batchStatus}</p>}</div></>}
+        {section.type === "hero" && (() => {
+          const setupBinding = bindings.find(binding => binding.target === "heroImageUrl");
+          const usingWeddingSetup = Boolean(setupBinding && setupBinding.mode !== "manual");
+          const coverUrl = usingWeddingSetup ? setup.coverImageUrl ?? "" : String(content.imageUrl ?? "");
+          const coverFocus = record(content.imageFocus);
+          const focusX = typeof coverFocus.x === "number" ? coverFocus.x : 50;
+          const focusY = typeof coverFocus.y === "number" ? coverFocus.y : 50;
+          const heroSlides = list("slides");
+          return <>
+            {field("Tiêu đề lớn", "title", "Tên hai bạn hoặc tên đám cưới")}{field("Lời dẫn", "subtitle", "Lời mời ngắn")}{field("Nhãn nút chính", "ctaLabel", "Ví dụ: Xem lịch trình")}{field("Dòng nhấn", "eyebrow", "")}
+            <fieldset className="w-full min-w-0 max-w-full space-y-3 rounded-xl border border-border p-3">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nguồn ảnh bìa</legend>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Chọn nguồn ảnh bìa">
+                <button type="button" aria-pressed={usingWeddingSetup} className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${usingWeddingSetup ? "border-primary bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover" : "border-border bg-background font-medium text-foreground hover:bg-muted"}`} onClick={() => onBinding("heroImageUrl", "dynamic")}>{usingWeddingSetup && <Check className="size-3.5" aria-hidden="true" />}Wedding Setup</button>
+                <button type="button" aria-pressed={!usingWeddingSetup} className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${!usingWeddingSetup ? "border-primary bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover" : "border-border bg-background font-medium text-foreground hover:bg-muted"}`} onClick={() => { if (setupBinding) onBinding("heroImageUrl", null); }}>{!usingWeddingSetup && <Check className="size-3.5" aria-hidden="true" />}Ảnh riêng</button>
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">{usingWeddingSetup ? "Ảnh bìa dùng chung với Wedding Setup. Muốn thay ảnh này, cập nhật ảnh trong thông tin đám cưới." : "Chọn ảnh riêng cho website; ảnh này không làm thay đổi Wedding Setup."}</p>
+              {usingWeddingSetup && !coverUrl && <p role="status" className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">Wedding Setup chưa có ảnh bìa. Chọn “Ảnh riêng” để thêm ảnh chỉ dùng trên website.</p>}
+              <ImageField display="cover" label={usingWeddingSetup ? "Ảnh từ Wedding Setup" : "Ảnh bìa website"} presencePath={builderFieldPath(section.id, "hero", "content", "imageUrl")} value={coverUrl} previewPosition={`${focusX}% ${focusY}%`} readOnly={usingWeddingSetup} placeholder="Dán liên kết ảnh hoặc tải từ thiết bị" error={contentError("imageUrl")} onChange={value => onContent("imageUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} />
+              <Field label="Văn bản mô tả ảnh" maxLength={200} presencePath={builderFieldPath(section.id, "hero", "content", "imageAlt")} value={String(content.imageAlt ?? "")} placeholder="Ví dụ: Cô dâu và chú rể trong bộ ảnh cưới" error={contentError("imageAlt")} onChange={value => onContent("imageAlt", value)} />
+            </fieldset>
+            <fieldset className="w-full min-w-0 max-w-full space-y-3 rounded-xl border border-border p-3">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Điểm lấy nét</legend>
+              <p className="text-xs leading-5 text-muted-foreground">Điều chỉnh vị trí ảnh được ưu tiên khi khung hình tự cắt trên điện thoại và máy tính.</p>
+              {([ ["x", "Ngang", focusX], ["y", "Dọc", focusY] ] as const).map(([axis, label, value]) => <label key={axis} className="grid gap-2 text-xs font-medium text-foreground">{label} · {value}%<input aria-label={`Điểm lấy nét ${label.toLocaleLowerCase()}`} type="range" min={0} max={100} value={value} className="w-full accent-primary" onChange={event => onContent("imageFocus", { x: axis === "x" ? Number(event.target.value) : focusX, y: axis === "y" ? Number(event.target.value) : focusY })} /></label>)}
+              <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Lớp phủ ảnh
+                <select className={inputClass} value={String(content.overlayStrength ?? "template")} onChange={event => onContent("overlayStrength", event.target.value === "template" ? undefined : event.target.value)}>
+                  <option value="template">Theo thiết kế mẫu</option><option value="none">Không phủ</option><option value="soft">Nhẹ</option><option value="strong">Đậm</option>
+                </select>
+              </label>
+            </fieldset>
+            <section className="w-full min-w-0 max-w-full space-y-3 overflow-x-hidden rounded-xl border border-border p-3">
+              <div><h3 className="text-sm font-semibold">Ảnh trình chiếu · {Math.min(3, heroSlides.length + (coverUrl ? 1 : 0))}/3</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Thêm tối đa hai ảnh phụ. Ảnh tự chuyển mỗi 6 giây; khách có thể tạm dừng hoặc chọn ảnh khác.</p></div>
+              {heroSlides.slice(0, 3).map((slide, index) => <fieldset key={String(slide.id)} className="space-y-3 rounded-lg border border-border/70 p-3">
+                <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold">Ảnh phụ {index + 1}</span><button type="button" className="grid size-9 place-items-center rounded-lg text-destructive hover:bg-destructive/5" aria-label={`Xóa ảnh phụ ${index + 1}`} onClick={() => onContent("slides", heroSlides.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="size-4" /></button></div>
+                <ImageField label="Ảnh trình chiếu" presencePath={builderFieldPath(section.id, "hero", "slides", String(slide.id), "imageUrl")} value={String(slide.imageUrl ?? "")} error={contentError("slides", index, "imageUrl")} onChange={value => onContent("slides", heroSlides.map((item, itemIndex) => itemIndex === index ? { ...item, imageUrl: value } : item))} onUpload={onUpload} onChooseMedia={onChooseMedia} />
+                <Field label="Mô tả ảnh" maxLength={200} presencePath={builderFieldPath(section.id, "hero", "slides", String(slide.id), "alt")} value={String(slide.alt ?? "")} error={contentError("slides", index, "alt")} onChange={value => onContent("slides", heroSlides.map((item, itemIndex) => itemIndex === index ? { ...item, alt: value } : item))} />
+                <div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent("slides", moveItem(heroSlides, index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === heroSlides.length - 1} onClick={() => onContent("slides", moveItem(heroSlides, index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div>
+              </fieldset>)}
+              {addingHeroSlide && heroSlides.length < 3 && <fieldset className="space-y-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3"><div className="flex items-center justify-between"><span className="text-xs font-semibold">Ảnh phụ mới</span><button type="button" className="min-h-9 px-2 text-xs text-muted-foreground" onClick={() => setAddingHeroSlideFor(null)}>Hủy</button></div><ImageField label="Chọn ảnh phụ" onChange={value => { if (value) onContent("slides", [...heroSlides, { id: id(), imageUrl: value, alt: "" }]); setAddingHeroSlideFor(null); }} value="" onUpload={onUpload} onChooseMedia={onChooseMedia} /></fieldset>}
+              {!addingHeroSlide && heroSlides.length < 2 && <Button type="button" size="sm" variant="outline" onClick={() => setAddingHeroSlideFor(section.id)}><Plus className="mr-1.5 size-3.5" />Thêm ảnh phụ</Button>}
+              {heroSlides.length >= 2 && <p className="text-xs text-muted-foreground">Đã đạt giới hạn hai ảnh phụ.</p>}
+            </section>
+          </>;
+        })()}
+        {section.type === "couple" && <>{field("Giới thiệu", "intro", "Một câu ngắn về hai bạn", true)}{(["groom", "bride"] as const).map((personKey, index) => {
+          const person = record(content[personKey]);
+          const social = record(person.social);
+          const personPath = (...keys: string[]) => builderFieldPath(section.id, "couple", personKey, ...keys);
+          const roleLabel = index === 0 ? "Chú rể" : "Cô dâu";
+          return <fieldset key={personKey} className="space-y-3 rounded-xl border border-border p-3 sm:p-4">
+            <legend className="px-2 text-sm font-semibold text-foreground">{roleLabel}</legend>
+            <Field label="Tên hiển thị" maxLength={50} presencePath={personPath("displayName")} value={String(person.displayName ?? person.fullName ?? "")} placeholder={index === 0 ? "Tên chú rể" : "Tên cô dâu"} error={contentError(personKey, "displayName")} onChange={value => onNested(personKey, "displayName", value)} />
+            <ImageField label="Ảnh chân dung" presencePath={personPath("photoUrl")} value={String(person.photoUrl ?? "")} error={contentError(personKey, "photoUrl")} onChange={value => onNested(personKey, "photoUrl", value)} onUpload={onUpload} onChooseMedia={onChooseMedia} />
+            <Field label="Lời giới thiệu" maxLength={2000} presencePath={personPath("bio")} value={String(person.bio ?? "")} placeholder="Sở thích, tính cách hoặc một điều muốn chia sẻ…" multiline error={contentError(personKey, "bio")} onChange={value => onNested(personKey, "bio", value)} />
+            <details className="border-t border-border pt-3">
+              <summary className="min-h-10 cursor-pointer py-2 text-xs font-medium text-muted-foreground">Thông tin gia đình · không bắt buộc</summary>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label="Tên cha" maxLength={100} presencePath={personPath("fatherName")} value={String(person.fatherName ?? "")} error={contentError(personKey, "fatherName")} onChange={value => onNested(personKey, "fatherName", value)} />
+                <Field label="Tên mẹ" maxLength={100} presencePath={personPath("motherName")} value={String(person.motherName ?? "")} error={contentError(personKey, "motherName")} onChange={value => onNested(personKey, "motherName", value)} />
+              </div>
+            </details>
+            <details className="border-t border-border pt-3" open={Boolean(contentError(personKey, "social", "facebook") || contentError(personKey, "social", "instagram"))}>
+              <summary className="min-h-10 cursor-pointer py-2 text-xs font-medium text-muted-foreground">Mạng xã hội · không bắt buộc</summary>
+              <div className="mt-3 grid gap-3">
+                <Field label="Facebook" type="url" maxLength={500} presencePath={personPath("social", "facebook")} value={String(social.facebook ?? "")} placeholder="https://facebook.com/..." error={contentError(personKey, "social", "facebook")} onChange={value => onNested(personKey, "social", { ...social, facebook: value })} />
+                <Field label="Instagram" type="url" maxLength={500} presencePath={personPath("social", "instagram")} value={String(social.instagram ?? "")} placeholder="https://instagram.com/..." error={contentError(personKey, "social", "instagram")} onChange={value => onNested(personKey, "social", { ...social, instagram: value })} />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">Chỉ hiện liên kết HTTPS đã nhập trên website công khai.</p>
+            </details>
+          </fieldset>;
+        })}</>}
+        {section.type === "countdown" && (() => {
+          const dateBinding = bindings.find(binding => binding.target === "countdown.targetDate");
+          const targetEventId = String(content.targetEventId ?? (dateBinding && dateBinding.mode !== "manual" ? "main" : "manual"));
+          const targetEvent = countdownEvents.find(event => event.id === targetEventId);
+          const targetZone = (targetEventId === "main" ? setup.timeZoneId : targetEvent?.timeZoneId || setup.timeZoneId) ?? undefined;
+          const targetValue = (targetEventId === "main" ? dateBinding?.mode === "static" ? String(content.targetDate ?? "") : setup.eventDateTime : targetEvent?.startsAt) ?? undefined;
+          const formatLocal = (value?: string, zone = targetZone) => value ? isoToLocalDateTime(value, zone).replace("T", " · ") : "Chưa có ngày giờ";
+          const changeTarget = (nextId: string) => {
+            if (nextId === "main") {
+              onCountdownSource("main");
+              return;
+            }
+            if (nextId === "manual") {
+              const currentDate = targetValue || (targetEventId === "manual" ? String(content.targetDate ?? "") : "");
+              onCountdownSource("manual", currentDate || undefined);
+              return;
+            }
+            const event = countdownEvents.find(item => item.id === nextId);
+            onCountdownSource(nextId, event?.startsAt || undefined);
+          };
+          return <>
+            {field("Tiêu đề", "title")}
+            {field("Lời dẫn", "intro", "Ví dụ: Chúng mình rất mong được gặp bạn.", true)}
+            <fieldset className="space-y-3 rounded-xl border border-border bg-primary/[0.025] p-3">
+              <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ngày đếm ngược</legend>
+              <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Đếm đến
+                <select className={inputClass} value={targetEventId} onChange={event => changeTarget(event.target.value)}>
+                  <option value="main">Ngày cưới chính · Wedding Setup</option>
+                  {countdownEvents.filter(event => event.id !== "main").map(event => <option key={event.id} value={event.id} disabled={!event.startsAt}>{event.title}{event.startsAt ? ` · ${formatLocal(event.startsAt, event.timeZoneId)}` : " · Chưa có ngày giờ"}</option>)}
+                  {targetEventId !== "main" && targetEventId !== "manual" && !targetEvent && <option value={targetEventId}>Sự kiện không còn trong danh sách</option>}
+                  <option value="manual">Tự nhập ngày giờ</option>
+                </select>
+              </label>
+              {targetEventId === "manual" ? <DateTimeField label="Ngày giờ mục tiêu" presencePath={builderFieldPath(section.id, "countdown", "content", "targetDate")} value={String(content.targetDate ?? "")} timeZone={setup.timeZoneId ?? undefined} error={contentError("targetDate")} onChange={value => onContent("targetDate", value)} /> : <div className="rounded-lg border border-primary/10 bg-background px-3 py-2.5"><p className="text-xs font-medium text-foreground">{targetEventId === "main" ? "Wedding Setup tự đồng bộ ngày cưới chính" : targetEvent?.title ?? "Sự kiện đã chọn"}</p><p className="mt-1 text-xs text-muted-foreground">{formatLocal(targetValue)} · Múi giờ {targetZone ?? "Asia/Ho_Chi_Minh"}</p>{!targetValue && <p className="mt-1 text-xs text-amber-700">Hãy bổ sung ngày giờ cho sự kiện đã chọn để bộ đếm hoạt động.</p>}</div>}
+              {countdownEventsError && <div className="flex items-center justify-between gap-2 rounded-lg bg-destructive/5 p-2.5 text-xs text-destructive"><span>Không tải được danh sách sự kiện.</span><Button type="button" size="sm" variant="outline" onClick={onReloadCountdownEvents}>Tải lại</Button></div>}
+              {countdownEventsLoading && <p role="status" className="text-xs text-muted-foreground">Đang tải các sự kiện…</p>}
+            </fieldset>
+            <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border px-3 py-2 text-sm"><span><span className="block font-medium text-foreground">Hiển thị giây</span><span className="block text-xs text-muted-foreground">Tắt để giữ đồng hồ nhẹ nhàng hơn.</span></span><input type="checkbox" checked={content.showSeconds === true} onChange={event => onContent("showSeconds", event.target.checked)} /></label>
+            <Field label="Lời nhắn khi đến ngày vui" maxLength={200} value={String(content.completedMessage ?? "")} placeholder="Mặc định: Hôm nay là ngày vui của chúng mình!" error={contentError("completedMessage")} onChange={value => onContent("completedMessage", value || undefined)} />
+          </>;
+        })()}
+        {section.type === "loveStory" && <div className="space-y-4">{field("Giới thiệu", "intro", "", true)}<StoryMomentsEditor sectionId={section.id} items={list("items") as StoryMoment[]} onChange={items => onContent("items", items)} onUpload={onUpload} onChooseMedia={onChooseMedia} getError={(index, key) => contentError("items", index, key)} onFocusItem={itemId => onFocusStoryItem(section.id, itemId)} /></div>}
+        {section.type === "gallery" && <div className="space-y-4">{field("Giới thiệu album", "intro", "", true)}<GalleryImagesEditor sectionId={section.id} images={list("images") as GalleryItem[]} onChange={images => onContent("images", images)} onAppend={onAppendGalleryImages} onUpload={onUpload} onChooseMedia={onChooseMedia} getError={(index, key) => contentError("images", index, key)} onFocusItem={itemId => onFocusStoryItem(section.id, itemId)} /></div>}
         {section.type === "events" && <><Field label="Giới thiệu" presencePath={builderFieldPath(section.id, "events", "content", "intro")} value={String(content.intro ?? "")} multiline error={contentError("intro")} onChange={value => onContent("intro", value)} /><WeddingEventPicker weddingId={weddingId} setup={setup} selectedIds={selectedEventIds} onChange={onEventIds} presencePrefix={builderFieldPath(section.id, "events", "event")} /><details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Dữ liệu sự kiện cũ của website</summary><p className="mt-2 text-xs leading-5 text-muted-foreground">Các sự kiện đã lưu trực tiếp trong bản V4 cũ vẫn được giữ nguyên. Hãy dùng danh sách phía trên cho sự kiện mới.</p>{list("events").map(event => <p key={String(event.id)} className="mt-2 text-sm">{String(event.title ?? "Sự kiện")}</p>)}</details></>}
         {section.type === "weddingParty" && <>{field("Giới thiệu", "intro", "", true)}{(["groom", "bride"] as const).map((side, sideIndex) => { const members = list(side); return <fieldset key={side} className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold text-muted-foreground">{sideIndex === 0 ? "Phù rể" : "Phù dâu"}</legend>{members.map((member, index) => <div key={String(member.id)} className="space-y-3 rounded-xl border border-border p-3"><div className="flex items-center justify-between"><span className="text-sm font-medium">Thành viên {index + 1}</span><button type="button" className="min-h-10 px-2 text-sm text-destructive" onClick={() => onContent(side, members.filter((_, i) => i !== index))}>Xóa</button></div><Field label="Họ tên" presencePath={builderFieldPath(section.id, "weddingParty", side, String(member.id), "name")} value={String(member.name ?? "")} error={contentError(side, index, "name")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, name: value } : item))} /><Field label="Vai trò" presencePath={builderFieldPath(section.id, "weddingParty", side, String(member.id), "role")} value={String(member.role ?? "")} placeholder={side === "groom" ? "Bạn thân chú rể" : "Bạn thân cô dâu"} error={contentError(side, index, "role")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, role: value } : item))} /><Field label="Lời giới thiệu" presencePath={builderFieldPath(section.id, "weddingParty", side, String(member.id), "bio")} value={String(member.bio ?? "")} multiline error={contentError(side, index, "bio")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, bio: value } : item))} /><ImageField label="Ảnh thành viên" presencePath={builderFieldPath(section.id, "weddingParty", side, String(member.id), "photoUrl")} value={String(member.photoUrl ?? "")} error={contentError(side, index, "photoUrl")} onChange={value => onContent(side, members.map((item, i) => i === index ? { ...item, photoUrl: value } : item))} onUpload={onUpload} onChooseMedia={onChooseMedia} /><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => onContent(side, moveItem(members, index, -1))}><ChevronUp className="mr-1 size-3.5" />Lên</Button><Button type="button" size="sm" variant="outline" disabled={index === members.length - 1} onClick={() => onContent(side, moveItem(members, index, 1))}><ChevronDown className="mr-1 size-3.5" />Xuống</Button></div></div>)}<Button type="button" size="sm" variant="outline" disabled={members.length >= 12} onClick={() => onContent(side, [...members, { id: id(), name: "", role: "" }])}><Plus className="mr-1 size-3.5" />Thêm {sideIndex === 0 ? "phù rể" : "phù dâu"}</Button></fieldset>; })}</>}
         {section.type === "rsvp" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}{field("Nhãn nút", "submitLabel")}</>}
         {section.type === "wishes" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}<label className="grid gap-1.5 text-sm"><span className="font-medium">Số lời chúc hiện ban đầu</span><select className={inputClass} value={typeof content.displayLimit === "number" ? String(content.displayLimit) : "3"} onChange={event => onContent("displayLimit", Number(event.target.value))}><option value="3">3 lời chúc · gọn</option><option value="6">6 lời chúc</option><option value="9">9 lời chúc</option><option value="12">12 lời chúc</option><option value="0">Tất cả lời chúc</option></select><span className="text-xs text-muted-foreground">Khách có thể mở xem thêm bất cứ lúc nào.</span></label><fieldset className="space-y-3 border-t border-border pt-4"><legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tương tác của khách</legend><label className="flex min-h-11 items-center justify-between gap-3 text-sm"><span><span className="block font-medium text-foreground">Cho phép thả tim</span><span className="block text-xs text-muted-foreground">Khách có thể bày tỏ yêu thích với từng lời chúc.</span></span><input type="checkbox" checked={content.allowLikes === true} onChange={event => onContent("allowLikes", event.target.checked)} /></label><label className="flex min-h-11 items-center justify-between gap-3 text-sm"><span><span className="block font-medium text-foreground">Cho phép bình luận</span><span className="block text-xs text-muted-foreground">Bình luận sẽ hiển thị công khai ngay sau khi gửi.</span></span><input type="checkbox" checked={content.allowComments === true} onChange={event => onContent("allowComments", event.target.checked)} /></label></fieldset></>}
-        {section.type === "gift" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}<label className="flex min-h-10 items-center justify-between border-t border-border pt-3 text-sm">Hiển thị thông tin mừng cưới<input type="checkbox" checked={gift?.enabled ?? false} onChange={event => onGift({ enabled: event.target.checked })} /></label>{gift?.enabled && (["groomBank", "groomHolder", "groomAccount", "brideBank", "brideHolder", "brideAccount"] as const).map(key => <Field key={key} label={{ groomBank: "Ngân hàng chú rể", groomHolder: "Chủ tài khoản chú rể", groomAccount: "Số tài khoản chú rể", brideBank: "Ngân hàng cô dâu", brideHolder: "Chủ tài khoản cô dâu", brideAccount: "Số tài khoản cô dâu" }[key]} value={gift[key] ?? ""} error={errorAt(["content", "gift", key])} onChange={value => onGift({ [key]: value })} />)}</>}
-        {availableBindings.length > 0 && <fieldset className="space-y-3 border-t border-border pt-4">
+        {section.type === "gift" && <>{field("Tiêu đề", "title")}{field("Mô tả", "intro", "", true)}<label className="flex min-h-10 items-center justify-between border-t border-border pt-3 text-sm">Hiển thị thông tin mừng cưới<input type="checkbox" checked={gift?.enabled ?? false} onChange={event => onGift({ enabled: event.target.checked })} /></label><div className="space-y-4 border-t border-border pt-4">
+          {!gift?.enabled && <p className="rounded-lg bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">Bạn vẫn có thể cấu hình tài khoản khi section đang tắt. Khách chỉ nhìn thấy phần này sau khi bật công tắc phía trên.</p>}
+          <div className="flex items-start justify-between gap-2"><div><h3 className="text-sm font-semibold text-foreground">Tài khoản nhận quà</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Chọn tối đa một tài khoản cho mỗi người. Thông tin sẽ lấy trực tiếp từ phần Quà mừng.</p></div><Button type="button" size="sm" variant="outline" disabled={giftAccountsLoading} onClick={onReloadGiftAccounts}>{giftAccountsLoading ? "Đang tải" : "Làm mới"}</Button></div>
+          {giftAccountsLoading ? <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">Đang tải tài khoản quà mừng…</p> : giftAccountsError ? <div className="space-y-2 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs"><p>{giftAccountsError}</p><Button type="button" size="sm" variant="outline" onClick={onReloadGiftAccounts}>Tải lại</Button></div> : giftAccounts.length === 0 ? <div className="space-y-2 rounded-lg border border-dashed border-border p-3 text-xs"><p className="leading-5 text-muted-foreground">Chưa có tài khoản nhận quà. Thêm tài khoản trước để dùng dữ liệu thống nhất trên website.</p><Button asChild type="button" size="sm" variant="outline"><Link href={`/weddings/${encodeURIComponent(weddingId)}/gifts`}>Quản lý tài khoản</Link></Button></div> : <>
+            {(["groom", "bride"] as const).map(role => {
+              const selectedId = giftSelections.find(item => item.role === role)?.accountId ?? "";
+              const selectedExists = !selectedId || giftAccounts.some(account => account.id === selectedId);
+              const otherId = giftSelections.find(item => item.role !== role)?.accountId;
+              const personLabel = role === "groom" ? "Chú rể" : "Cô dâu";
+              return <fieldset key={role} className="space-y-2 rounded-xl bg-muted/20 p-3">
+                <label className="grid gap-1.5 text-xs font-medium text-foreground">Tài khoản {personLabel.toLocaleLowerCase()}
+                  <select className={inputClass} value={selectedId} onChange={event => selectGiftAccount(role, event.target.value)}><option value="">Chưa chọn</option>{giftAccounts.map(account => <option key={account.id} value={account.id} disabled={account.id === otherId}>{account.label ? `${account.label} · ` : ""}${account.bankName} · ${account.accountNumber}</option>)}</select>
+                </label>
+                {selectedId && !selectedExists && <p className="text-xs text-amber-700">Tài khoản đã bị gỡ. Hãy chọn tài khoản khác để tránh hiển thị thông tin cũ.</p>}
+                <Field label="Nhãn hiển thị" value={gift?.[`${role}Label`] ?? ""} placeholder={role === "groom" ? "Chú rể / Nhà trai" : "Cô dâu / Nhà gái"} error={errorAt(["content", "gift", `${role}Label`])} onChange={value => onGift({ [`${role}Label`]: value })} />
+              </fieldset>;
+            })}
+          </>}
+          {!giftSelections.length && <details className="rounded-lg border border-border px-3 py-2"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Dùng thông tin nhập thủ công từ website cũ</summary><div className="mt-3 space-y-3">{(["groomBank", "groomHolder", "groomAccount", "brideBank", "brideHolder", "brideAccount"] as const).map(key => <Field key={key} label={{ groomBank: "Ngân hàng chú rể", groomHolder: "Chủ tài khoản chú rể", groomAccount: "Số tài khoản chú rể", brideBank: "Ngân hàng cô dâu", brideHolder: "Chủ tài khoản cô dâu", brideAccount: "Số tài khoản cô dâu" }[key]} value={gift?.[key] ?? ""} error={errorAt(["content", "gift", key])} onChange={value => onGift({ [key]: value })} />)}</div></details>}
+          {giftSelections.length > 0 && <p className="text-xs leading-5 text-muted-foreground">Tài khoản đã chọn sẽ được kiểm tra thuộc đúng đám cưới khi lưu và xuất bản. Khách chỉ xem thông tin chuyển khoản; giao dịch không được xác nhận tự động ở website công khai.</p>}
+        </div></>}
+        {availableBindings.length > 0 && section.type !== "hero" && <fieldset className="space-y-3 border-t border-border pt-4">
           <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dữ liệu Wedding Setup</legend>
           <p className="text-xs leading-5 text-muted-foreground">Liên kết để đồng bộ ngày giờ, địa điểm hoặc ảnh bìa từ thông tin đám cưới. Có thể đổi về nội dung riêng bất cứ lúc nào.</p>
           {bindings.map(binding => {
@@ -2031,8 +2434,8 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
   </div>;
 }
 
-const variantOptions: Record<SectionType, string[]> = { hero: ["floral", "dark", "split", "editorial", "ceremonial"], couple: ["alternating", "two-columns", "editorial"], countdown: ["classic", "banner", "inline"], loveStory: ["timeline", "editorial"], events: ["cards", "minimal"], weddingParty: ["classic", "editorial"], gallery: ["grid", "masonry"], rsvp: ["default"], wishes: ["default", "fountain"], gift: ["default", "minimal"] };
-const variantNames: Record<string, string> = { floral: "Hoa nhẹ nhàng", dark: "Nền trầm", split: "Chia đôi", editorial: "Biên tập", ceremonial: "Trang trọng", alternating: "Xen kẽ", "two-columns": "Hai cột", classic: "Cổ điển", banner: "Dải ngang", inline: "Ngang gọn", timeline: "Dòng thời gian", cards: "Thẻ sự kiện", minimal: "Tối giản", grid: "Lưới", masonry: "So le", fountain: "Bong bóng bay lên", default: "Danh sách gọn" };
+const variantOptions: Record<SectionType, string[]> = { hero: ["floral", "dark", "split", "editorial", "ceremonial"], couple: ["alternating", "two-columns", "editorial"], countdown: ["classic", "banner", "inline"], loveStory: ["timeline", "editorial", "photo-journal"], events: ["cards", "minimal"], weddingParty: ["classic", "editorial"], gallery: ["grid", "masonry", "featured", "flipbook"], rsvp: ["default"], wishes: ["default", "fountain"], gift: ["default", "minimal"] };
+const variantNames: Record<string, string> = { floral: "Hoa nhẹ nhàng", dark: "Nền trầm", split: "Chia đôi", editorial: "Biên tập", ceremonial: "Trang trọng", alternating: "Xen kẽ", "two-columns": "Hai cột", classic: "Cổ điển", banner: "Dải ngang", inline: "Ngang gọn", timeline: "Dòng thời gian", "photo-journal": "Album hành trình", cards: "Thẻ sự kiện", minimal: "Tối giản", grid: "Lưới", masonry: "So le", featured: "Ảnh nổi bật", flipbook: "Sách lật", fountain: "Bong bóng bay lên", default: "Danh sách gọn" };
 
 function WeddingEventPicker({ weddingId, setup, selectedIds, onChange, presencePrefix }: { weddingId: string; setup: WeddingSetup; selectedIds: string[]; onChange: (ids: string[]) => void; presencePrefix?: string }) {
   const { api } = useRuntime(); const cache = useQueryClient(); const checkboxPrefix = useId();
@@ -2092,11 +2495,11 @@ function setupBindingValue(target: string, setup: WeddingSetup) {
   }
 }
 
-function Field({ label, value, placeholder, multiline, maxLength, error, presencePath, onChange }: { label: string; value: string; placeholder?: string; multiline?: boolean; maxLength?: number; error?: string; presencePath?: string; onChange: (value: string) => void }) {
+function Field({ label, value, placeholder, multiline, maxLength, error, presencePath, type = "text", onChange }: { label: string; value: string; placeholder?: string; multiline?: boolean; maxLength?: number; error?: string; presencePath?: string; type?: "text" | "url"; onChange: (value: string) => void }) {
   const errorId = useId();
   const className = `w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${error ? "border-destructive focus-visible:ring-destructive" : "border-input"}`;
   const normalizedPath = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">{label}{multiline ? <textarea data-builder-field-path={presencePath ?? `field.${normalizedPath}`} maxLength={maxLength} className={`${className} min-h-20 resize-y`} value={value} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={event => onChange(event.target.value)} /> : <input data-builder-field-path={presencePath ?? `field.${normalizedPath}`} maxLength={maxLength} className={`${className} h-10`} value={value} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={event => onChange(event.target.value)} />}{error && <span id={errorId} role="alert" className="font-normal text-destructive">{error}</span>}</label>;
+  return <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">{label}{multiline ? <textarea data-builder-field-path={presencePath ?? `field.${normalizedPath}`} maxLength={maxLength} className={`${className} min-h-20 resize-y`} value={value} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={event => onChange(event.target.value)} /> : <input data-builder-field-path={presencePath ?? `field.${normalizedPath}`} type={type} maxLength={maxLength} className={`${className} h-10`} value={value} placeholder={placeholder} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} onChange={event => onChange(event.target.value)} />}{error && <span id={errorId} role="alert" className="font-normal text-destructive">{error}</span>}</label>;
 }
 
 function DateTimeField({ label, value, timeZone, error, presencePath, onChange }: { label: string; value: string; timeZone?: string; error?: string; presencePath?: string; onChange: (value: string | undefined) => void }) {
@@ -2118,7 +2521,7 @@ function DateTimeField({ label, value, timeZone, error, presencePath, onChange }
   </label>;
 }
 
-function ImageField({ label, value, placeholder, error, presencePath, onChange, onUpload, onChooseMedia }: { label: string; value: string; placeholder?: string; error?: string; presencePath?: string; onChange: (value: string) => void; onUpload: (file: File) => Promise<string | null>; onChooseMedia: (onChoose: (url: string) => void) => void }) {
+function ImageField({ label, value, placeholder, error, presencePath, onChange, onUpload, onChooseMedia, display = "thumbnail", previewPosition, readOnly = false }: { label: string; value: string; placeholder?: string; error?: string; presencePath?: string; onChange: (value: string) => void; onUpload: (file: File) => Promise<string | null>; onChooseMedia: (onChoose: (url: string) => void) => void; display?: "thumbnail" | "cover"; previewPosition?: string; readOnly?: boolean }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [previewFailedFor, setPreviewFailedFor] = useState("");
@@ -2140,42 +2543,42 @@ function ImageField({ label, value, placeholder, error, presencePath, onChange, 
       const url = await onUpload(file);
       if (url) onChange(url);
       else setUploadError("Tải ảnh chưa thành công. Hãy thử lại.");
-    } catch {
-      setUploadError("Tải ảnh chưa thành công. Hãy thử lại.");
+    } catch (cause) {
+      setUploadError(errText(cause));
     } finally {
       setUploading(false);
     }
   }
-  return <div className="space-y-2">
+  return <div className="w-full min-w-0 max-w-full space-y-2">
     <span className="block text-sm font-medium text-foreground">{label}</span>
-    {value.trim() ? <div className="grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-3 rounded-xl border border-border bg-muted/30 p-3">
-      <div className="relative grid size-[4.5rem] shrink-0 place-items-center overflow-hidden rounded-lg bg-primary/10 text-primary">
+    {value.trim() ? <div className={`w-full min-w-0 overflow-hidden rounded-xl border border-border bg-muted/30 ${display === "cover" ? "max-w-[280px]" : "grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-3 p-3"}`}>
+      <div className={`relative grid place-items-center overflow-hidden bg-primary/10 text-primary ${display === "cover" ? "aspect-video w-full" : "size-[4.5rem] shrink-0 rounded-lg"}`}>
         {!previewFailed
-          ? <Image src={mediaUrl(value) ?? value} alt={label} fill sizes="72px" unoptimized className="object-cover" onError={() => setPreviewFailedFor(value)} />
+          ? <Image src={mediaUrl(value) ?? value} alt={label} fill sizes={display === "cover" ? "(max-width: 768px) 100vw, 420px" : "72px"} unoptimized className="object-cover" style={previewPosition ? { objectPosition: previewPosition } : undefined} onError={() => setPreviewFailedFor(value)} />
           : <ImageIcon className="size-6" aria-hidden="true" />}
       </div>
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">Ảnh đã được thêm</p>
+      <div className={`min-w-0 ${display === "cover" ? "p-3" : ""}`}>
+        <p className="text-sm font-medium text-foreground">{readOnly ? "Đang đồng bộ từ Wedding Setup" : "Ảnh đã được thêm"}</p>
         <p className="mt-1 truncate text-xs text-muted-foreground" title={fileName}>{fileName}</p>
         {previewFailed && <p role="status" className="mt-1 text-xs text-amber-700">Không tải được ảnh xem trước. Bạn có thể chọn ảnh khác.</p>}
       </div>
-    </div> : <div className="flex min-h-20 items-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-      <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><ImageIcon className="size-5" aria-hidden="true" /></span>
-      <span>Chưa chọn ảnh. Tải ảnh lên hoặc chọn từ thư viện của đám cưới.</span>
+    </div> : <div className={`w-full min-w-0 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground ${display === "cover" ? "grid aspect-video max-w-[280px] place-items-center text-center" : "flex min-h-20 items-center gap-3"}`}>
+      <span className={`grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary ${display === "cover" ? "mb-2" : ""}`}><ImageIcon className="size-5" aria-hidden="true" /></span>
+      <span>{readOnly ? "Chưa có ảnh để xem trước." : "Chưa chọn ảnh. Tải ảnh lên hoặc chọn từ thư viện của đám cưới."}</span>
     </div>}
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-    <div className="flex flex-wrap items-center gap-2">
+    {!readOnly && <div className="flex flex-wrap items-center gap-2">
       <label htmlFor={inputId} className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium transition hover:bg-muted focus-within:ring-2 focus-within:ring-ring ${uploading ? "pointer-events-none opacity-60" : ""}`}><Upload className="size-3.5" />{uploading ? "Đang tải ảnh…" : value ? "Thay ảnh" : "Tải ảnh lên"}</label>
       <input id={inputId} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; void selectImage(file); }} />
       <Button type="button" size="sm" variant="outline" disabled={uploading} onClick={() => onChooseMedia(onChange)}><ImageIcon className="mr-1.5 size-3.5" />Chọn từ thư viện</Button>
       {value && <Button type="button" size="sm" variant="ghost" className="text-destructive hover:bg-destructive/5 hover:text-destructive" disabled={uploading} onClick={() => { onChange(""); setUploadError(""); }}><Trash2 className="mr-1.5 size-3.5" />Gỡ khỏi mục này</Button>}
       {uploading && <span role="status" aria-live="polite" className="text-xs text-muted-foreground">Đang tải ảnh lên…</span>}
-    </div>
-    <p className="text-xs leading-5 text-muted-foreground">Gỡ ảnh chỉ bỏ ảnh khỏi mục này; tệp vẫn được giữ trong thư viện ảnh.</p>
-    <details className="group rounded-lg border border-border/70 px-3 py-2">
+    </div>}
+    {!readOnly && <p className="text-xs leading-5 text-muted-foreground">Gỡ ảnh chỉ bỏ ảnh khỏi mục này; tệp vẫn được giữ trong thư viện ảnh.</p>}
+    {!readOnly && <details className="group rounded-lg border border-border/70 px-3 py-2">
       <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground marker:hidden">Nhập liên kết ảnh thủ công <ChevronDown className="ml-1 inline size-3.5 transition group-open:rotate-180" /></summary>
       <div className="mt-3"><Field label="Liên kết ảnh" presencePath={presencePath} value={value} placeholder={placeholder ?? "Dán liên kết ảnh"} onChange={onChange} /></div>
-    </details>
+    </details>}
     {uploadError && <p role="alert" className="text-xs text-destructive">{uploadError}</p>}
   </div>;
 }

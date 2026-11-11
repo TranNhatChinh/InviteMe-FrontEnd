@@ -1,5 +1,13 @@
 import type { StoryBuilderV4Document } from "./story-builder-v4.schema";
 
+const imageFileExtension = /\.(?:jpe?g|png|webp|gif|avif|heic)(?:[?#].*)?$/i;
+
+/** Uploaded source filenames are storage details, not visitor-facing image descriptions. */
+export function isImageFilename(value: string): boolean {
+  const normalized = value.trim();
+  return normalized.length > 0 && imageFileExtension.test(normalized);
+}
+
 export function moveV4Page(
   pages: StoryBuilderV4Document["pages"],
   index: number,

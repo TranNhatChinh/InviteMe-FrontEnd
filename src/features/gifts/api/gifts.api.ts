@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
 
-const bank = z.object({
+export const giftBankAccountSchema = z.object({
   id: z.string(),
   bankBin: z.string(),
   bankName: z.string(),
@@ -11,6 +11,8 @@ const bank = z.object({
   /** Linked through SePay Bank Hub: transfers into it are confirmed automatically. */
   bankHubLinked: z.boolean().optional().default(false),
 });
+export type GiftBankAccount = z.infer<typeof giftBankAccountSchema>;
+const bank = giftBankAccountSchema;
 const guestGift = z.object({
   id: z.string(),
   code: z.string().nullable(),

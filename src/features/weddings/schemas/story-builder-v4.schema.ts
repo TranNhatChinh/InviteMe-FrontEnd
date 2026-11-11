@@ -48,6 +48,7 @@ const guestExperienceDefaultsSchema = z.object({
   intensity: z.enum(["light", "medium", "vivid"]).nullish(),
 }).strict();
 const imageItemSchema = z.object({ id: z.string().min(1).max(100), imageUrl: imageUrlSchema, alt: z.string().max(200).optional() }).strict();
+const galleryImageItemSchema = imageItemSchema.extend({ caption: z.string().max(200).optional() }).strict();
 const personSchema = z.object({
   displayName: z.string().max(50).optional(), fullName: z.string().max(100).optional(),
   photoUrl: imageUrlSchema.optional(), bio: z.string().max(2000).optional(),
@@ -131,13 +132,13 @@ const sectionCommon = {
   style: z.object({ background: z.enum(["default", "soft", "accent"]).optional(), spacing: z.enum(["compact", "normal", "spacious"]).optional(), animation: z.enum(["none", "fade", "rise", "stagger", "zoom"]).optional() }).strict().optional(),
   bindings: z.array(z.object({ target: z.string().min(1).max(100), source: z.string().min(1).max(100), mode: z.enum(["dynamic", "manual", "static"]).optional() }).strict()).max(4).optional(),
 };
-const heroContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), eyebrow: z.string().max(120).optional(), subtitle: z.string().max(500).optional(), ctaLabel: z.string().max(60).optional(), imageUrl: imageUrlSchema.optional(), slides: z.array(imageItemSchema).max(3).optional() }).strict();
+const heroContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), eyebrow: z.string().max(120).optional(), subtitle: z.string().max(500).optional(), ctaLabel: z.string().max(60).optional(), imageUrl: imageUrlSchema.optional(), imageAlt: z.string().max(200).optional(), imageFocus: z.object({ x: z.number().int().min(0).max(100), y: z.number().int().min(0).max(100) }).strict().optional(), overlayStrength: z.enum(["none", "soft", "strong"]).optional(), slides: z.array(imageItemSchema).max(3).optional() }).strict();
 const coupleContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(1000).optional(), groom: personSchema.optional(), bride: personSchema.optional() }).strict();
-const countdownContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), targetDate: z.iso.datetime({ offset: true }).optional(), targetEventId: z.string().max(100).optional() }).strict();
+const countdownContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), targetDate: z.iso.datetime({ offset: true }).optional(), targetEventId: z.string().max(100).optional(), timeZoneId: z.string().max(100).optional(), showSeconds: z.boolean().optional(), completedMessage: z.string().max(200).optional() }).strict();
 const loveStoryContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), items: z.array(storyItemSchema).max(20).optional() }).strict();
 const eventsContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), events: z.array(eventSchema).max(20).optional(), eventIds: z.array(z.string().min(1).max(100)).max(20).optional() }).strict();
 const weddingPartyContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), groom: z.array(weddingPartyMemberSchema).max(12).optional(), bride: z.array(weddingPartyMemberSchema).max(12).optional() }).strict();
-const galleryContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), images: z.array(imageItemSchema).max(30).optional() }).strict();
+const galleryContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), images: z.array(galleryImageItemSchema).max(30).optional() }).strict();
 const rsvpContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), submitLabel: z.string().max(60).optional() }).strict();
 const simpleContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional() }).strict();
 const wishesContent = z.object({ title: z.string().max(150).optional(), intro: z.string().max(500).optional(), displayLimit: z.union([z.literal(0), z.literal(3), z.literal(6), z.literal(9), z.literal(12)]).optional(), allowLikes: z.boolean().optional(), allowComments: z.boolean().optional() }).strict();
@@ -146,10 +147,10 @@ const variants = {
   hero: ["floral", "dark", "split", "editorial", "ceremonial"],
   couple: ["alternating", "two-columns", "editorial"],
   countdown: ["classic", "banner", "inline"],
-  loveStory: ["timeline", "editorial"],
+  loveStory: ["timeline", "editorial", "photo-journal"],
   events: ["cards", "minimal"],
   weddingParty: ["classic", "editorial"],
-  gallery: ["grid", "masonry"],
+  gallery: ["grid", "masonry", "featured", "flipbook"],
   rsvp: ["default"], wishes: ["default", "fountain"], gift: ["default", "minimal"],
 } as const;
 const makeSection = <T extends keyof typeof variants, S extends z.ZodTypeAny>(type: T, variant: readonly string[], content: S) =>
@@ -174,7 +175,17 @@ const sharedContentSchema = z.object({
   groom: personSchema.optional(), bride: personSchema.optional(), events: z.array(eventSchema).max(20).optional(),
   mainEventId: z.string().optional(), gallery: z.array(imageItemSchema).max(30).optional(),
   loveStory: z.object({ enabled: z.boolean().optional(), intro: z.string().max(500).optional(), items: z.array(storyItemSchema).max(20).optional() }).strict().optional(),
-  gift: z.object({ enabled: z.boolean(), groomBank: z.string().max(100).optional(), groomHolder: z.string().max(100).optional(), groomAccount: z.string().max(100).optional(), brideBank: z.string().max(100).optional(), brideHolder: z.string().max(100).optional(), brideAccount: z.string().max(100).optional() }).strict().optional(),
+  gift: z.object({
+    enabled: z.boolean(),
+    groomBank: z.string().max(100).optional(), groomHolder: z.string().max(100).optional(), groomAccount: z.string().max(100).optional(),
+    brideBank: z.string().max(100).optional(), brideHolder: z.string().max(100).optional(), brideAccount: z.string().max(100).optional(),
+    groomLabel: z.string().max(100).optional(), brideLabel: z.string().max(100).optional(),
+    selectedAccounts: z.array(z.object({ role: z.enum(["groom", "bride"]), accountId: z.string().uuid() }).strict()).max(2)
+      .refine(items => new Set(items.map(item => item.role)).size === items.length && new Set(items.map(item => item.accountId)).size === items.length, "Mỗi vai trò và tài khoản chỉ được chọn một lần.").optional(),
+    // Returned only by the public projection; never sent when saving a draft.
+    publicAccounts: z.array(z.object({ role: z.enum(["groom", "bride"]), displayLabel: z.string().max(100), bankBin: z.string().max(20), bankName: z.string().max(100), accountName: z.string().max(100), accountNumber: z.string().max(100), label: z.string().max(100).nullable().optional() }).strict()).max(2).optional(),
+    accountsManaged: z.boolean().optional(),
+  }).strict().optional(),
   heroImageUrl: imageUrlSchema.optional(), heroSlides: z.array(imageItemSchema).max(3).optional(), countdownTitle: z.string().max(150).optional(),
   eventsEnabled: z.boolean().optional(), galleryEnabled: z.boolean().optional(), wishesEnabled: z.boolean().optional(),
 }).strict();
