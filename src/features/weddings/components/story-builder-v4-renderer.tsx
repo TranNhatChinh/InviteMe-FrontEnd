@@ -230,7 +230,8 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
   const content = record(section.content);
   const hidden = section.visible === false;
   const configuredEffect = section.style?.animation;
-  const revealEffect = configuredEffect === "none" ? undefined : configuredEffect ?? defaultRevealEffect(family, section.type);
+  const revealEffect = configuredEffect === "none" ? undefined : configuredEffect ??
+    (section.type === "wishes" && section.variant === "fountain" ? "stagger" : defaultRevealEffect(family, section.type));
   const classes = `story-section story-section--${section.type} relative mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24 ${hidden ? "opacity-45" : ""}`;
   const title = text(content.title || section.title);
   const intro = text(content.intro || section.intro);
@@ -372,7 +373,7 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
       body = <StoryRsvp label={text(content.submitLabel) || undefined} />;
       break;
     case "wishes":
-      body = <StoryWishes slug={slug} displayLimit={typeof content.displayLimit === "number" ? content.displayLimit : 3} allowLikes={content.allowLikes === true} allowComments={content.allowComments === true} />;
+      body = <StoryWishes slug={slug} variant={section.variant === "fountain" ? "fountain" : "default"} displayLimit={typeof content.displayLimit === "number" ? content.displayLimit : 3} allowLikes={content.allowLikes === true} allowComments={content.allowComments === true} />;
       break;
     case "gift": {
       const giftData = record(gift);

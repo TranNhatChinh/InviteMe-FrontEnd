@@ -2824,6 +2824,197 @@ body:has(.landing-dialog[open]) {
   border-radius: 28px 28px 8px 28px;
 }
 
+/* Wishes fountain: messages travel upward in a soft, continuous bubble stream. */
+.story-wishes--fountain .wish-bubble-stage {
+  --wish-rise: -31rem;
+  position: relative;
+  height: 22rem;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--wishes-rule);
+  border-radius: 28px;
+  background:
+    radial-gradient(ellipse at 16% 100%, color-mix(in srgb, var(--site-primary, #f4dce2) 35%, transparent), transparent 48%),
+    radial-gradient(ellipse at 84% 0%, color-mix(in srgb, var(--site-accent, #9d4d62) 10%, transparent), transparent 42%),
+    color-mix(in srgb, var(--site-background, #fffaf8) 88%, white);
+}
+.story-wishes--fountain .wish-bubble-stage::before,
+.story-wishes--fountain .wish-bubble-stage::after {
+  position: absolute;
+  z-index: -1;
+  border: 1px solid color-mix(in srgb, var(--wishes-accent) 12%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--site-primary, #f4dce2) 10%, transparent);
+  content: "";
+  pointer-events: none;
+}
+.story-wishes--fountain .wish-bubble-stage::before {
+  right: 12%;
+  bottom: 12%;
+  width: 52px;
+  height: 52px;
+}
+.story-wishes--fountain .wish-bubble-stage::after {
+  bottom: 23%;
+  left: 12%;
+  width: 24px;
+  height: 24px;
+}
+.story-wishes--fountain [data-floating-wish] {
+  position: absolute;
+  bottom: -6rem;
+  width: 68%;
+  padding: 0.85rem 1.1rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--wishes-accent) 22%, white);
+  border-radius: 26px 26px 24px 10px;
+  background: color-mix(in srgb, var(--site-background, #fffaf8) 88%, white);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--wishes-accent) 12%, transparent), inset 0 1px 0 white;
+  color: var(--site-text, #392b30);
+  text-align: left;
+}
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 1) { left: 2%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 2) { left: 29%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 3) { left: 6%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 4) { left: 31%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n + 5) { left: 13%; }
+.story-wishes--fountain [data-floating-wish]:nth-child(6n) { left: 30%; }
+.story-wishes--fountain [data-floating-wish]::after {
+  position: absolute;
+  bottom: -6px;
+  left: 22px;
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid color-mix(in srgb, var(--wishes-accent) 22%, white);
+  border-bottom: 1px solid color-mix(in srgb, var(--wishes-accent) 22%, white);
+  background: color-mix(in srgb, var(--site-background, #fffaf8) 88%, white);
+  content: "";
+  transform: rotate(45deg);
+}
+.story-wishes--fountain .wish-bubble-name {
+  display: block;
+  overflow: hidden;
+  color: var(--wishes-accent);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.story-wishes--fountain [data-floating-wish] p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.story-wishes--fountain [data-wish-list] > article {
+  position: relative;
+  width: min(100%, 38rem);
+  border-radius: 28px 28px 24px 10px;
+  background: radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--site-primary, #f4dce2) 35%, white), transparent 58%), color-mix(in srgb, var(--site-background, #fffaf8) 92%, white);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--site-accent, #9d4d62) 10%, transparent);
+}
+.template-canvas:not([data-motion-ready="true"]) [data-section-type="wishes"][data-variant="fountain"] .wish-bubble-stage,
+.template-canvas[data-motion-ready="true"] [data-section-type="wishes"][data-variant="fountain"]:not([data-revealed="true"]) .wish-bubble-stage {
+  display: grid;
+  height: auto;
+  min-height: 0;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+.template-canvas:not([data-motion-ready="true"]) [data-section-type="wishes"][data-variant="fountain"] [data-floating-wish],
+.template-canvas[data-motion-ready="true"] [data-section-type="wishes"][data-variant="fountain"]:not([data-revealed="true"]) [data-floating-wish] {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+.story-wishes--fountain [data-wish-card]::after {
+  position: absolute;
+  bottom: -7px;
+  left: 24px;
+  width: 14px;
+  height: 14px;
+  border-right: 1px solid var(--wishes-rule);
+  border-bottom: 1px solid var(--wishes-rule);
+  background: color-mix(in srgb, var(--site-background, #fffaf8) 92%, white);
+  content: "";
+  transform: rotate(45deg);
+}
+@media (min-width: 640px) {
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish] {
+    width: min(16rem, 44%);
+  }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 1) { left: 5%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 2) { left: 28%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 3) { left: 53%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 4) { left: 17%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n + 5) { left: 40%; }
+  .story-wishes--fountain .wish-bubble-stage [data-floating-wish]:nth-child(6n) { left: 55%; }
+  .story-wishes--fountain [data-wish-list] > article:nth-child(3n + 1) {
+    width: calc(100% - 2.5rem);
+    align-self: flex-start;
+  }
+  .story-wishes--fountain [data-wish-list] > article:nth-child(3n + 2) {
+    width: calc(100% - 2.5rem);
+    align-self: flex-end;
+  }
+}
+@media (max-width: 639px) {
+  .story-wishes--fountain .wish-bubble-stage {
+    --wish-rise: -26rem;
+    height: 18rem;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .template-canvas[data-motion-ready="true"] [data-section-type="wishes"][data-variant="fountain"][data-revealed="true"] [data-wish-stream][data-wish-replay="0"] [data-floating-wish] {
+    animation-name: wishes-float-up-a;
+  }
+  .template-canvas[data-motion-ready="true"] [data-section-type="wishes"][data-variant="fountain"][data-revealed="true"] [data-wish-stream][data-wish-replay="1"] [data-floating-wish] {
+    animation-name: wishes-float-up-b;
+  }
+  .story-wishes--fountain [data-floating-wish] {
+    animation-duration: var(--wish-duration, 8s);
+    animation-delay: var(--wish-delay, 0s);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-fill-mode: both;
+    will-change: opacity, transform;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-wishes--fountain .wish-bubble-stage {
+    display: grid;
+    height: auto;
+    min-height: 0;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+  .story-wishes--fountain [data-floating-wish] {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes wishes-float-up-a {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.82); }
+  12% { opacity: 1; }
+  76% { opacity: 0.95; }
+  100% { opacity: 0; transform: translate3d(var(--wish-drift, 18px), var(--wish-rise, -26rem), 0) scale(1.06); }
+}
+@keyframes wishes-float-up-b {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.78); }
+  16% { opacity: 1; }
+  82% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate3d(var(--wish-drift, -18px), var(--wish-rise, -26rem), 0) scale(1.1); }
+}
+
 /* Reveal sections only when they enter the viewport; server-rendered content stays visible until enhancement is ready. */
 @media (prefers-reduced-motion: no-preference) {
   .template-canvas[data-motion-ready="true"] [data-reveal-effect="fade"]:not([data-revealed="true"]) {

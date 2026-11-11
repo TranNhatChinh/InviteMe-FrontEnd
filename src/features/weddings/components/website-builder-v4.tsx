@@ -2012,7 +2012,7 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
             {errorAt(["appearance", key]) && <span className="text-xs text-destructive">{errorAt(["appearance", key])}</span>}
           </label>)}
         </>}
-        <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Biến thể
+        <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">{section.type === "wishes" ? "Kiểu hiển thị" : "Biến thể"}
           <select className={inputClass} value={section.variant} onChange={event => onSection({ variant: event.target.value } as Partial<StoryBuilderV4Section>)}>{variantOptions[section.type].map(value => <option key={value} value={value}>{variantNames[value] ?? value}</option>)}</select>
         </label>
         <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Khoảng cách
@@ -2031,8 +2031,8 @@ function Inspector({ section, page, sectionName, onSection, onContent, onNested,
   </div>;
 }
 
-const variantOptions: Record<SectionType, string[]> = { hero: ["floral", "dark", "split", "editorial", "ceremonial"], couple: ["alternating", "two-columns", "editorial"], countdown: ["classic", "banner", "inline"], loveStory: ["timeline", "editorial"], events: ["cards", "minimal"], weddingParty: ["classic", "editorial"], gallery: ["grid", "masonry"], rsvp: ["default"], wishes: ["default"], gift: ["default", "minimal"] };
-const variantNames: Record<string, string> = { floral: "Hoa nhẹ nhàng", dark: "Nền trầm", split: "Chia đôi", editorial: "Biên tập", ceremonial: "Trang trọng", alternating: "Xen kẽ", "two-columns": "Hai cột", classic: "Cổ điển", banner: "Dải ngang", inline: "Ngang gọn", timeline: "Dòng thời gian", cards: "Thẻ sự kiện", minimal: "Tối giản", grid: "Lưới", masonry: "So le", default: "Mặc định" };
+const variantOptions: Record<SectionType, string[]> = { hero: ["floral", "dark", "split", "editorial", "ceremonial"], couple: ["alternating", "two-columns", "editorial"], countdown: ["classic", "banner", "inline"], loveStory: ["timeline", "editorial"], events: ["cards", "minimal"], weddingParty: ["classic", "editorial"], gallery: ["grid", "masonry"], rsvp: ["default"], wishes: ["default", "fountain"], gift: ["default", "minimal"] };
+const variantNames: Record<string, string> = { floral: "Hoa nhẹ nhàng", dark: "Nền trầm", split: "Chia đôi", editorial: "Biên tập", ceremonial: "Trang trọng", alternating: "Xen kẽ", "two-columns": "Hai cột", classic: "Cổ điển", banner: "Dải ngang", inline: "Ngang gọn", timeline: "Dòng thời gian", cards: "Thẻ sự kiện", minimal: "Tối giản", grid: "Lưới", masonry: "So le", fountain: "Bong bóng bay lên", default: "Danh sách gọn" };
 
 function WeddingEventPicker({ weddingId, setup, selectedIds, onChange, presencePrefix }: { weddingId: string; setup: WeddingSetup; selectedIds: string[]; onChange: (ids: string[]) => void; presencePrefix?: string }) {
   const { api } = useRuntime(); const cache = useQueryClient(); const checkboxPrefix = useId();

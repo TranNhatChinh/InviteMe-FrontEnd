@@ -150,7 +150,7 @@ const variants = {
   events: ["cards", "minimal"],
   weddingParty: ["classic", "editorial"],
   gallery: ["grid", "masonry"],
-  rsvp: ["default"], wishes: ["default"], gift: ["default", "minimal"],
+  rsvp: ["default"], wishes: ["default", "fountain"], gift: ["default", "minimal"],
 } as const;
 const makeSection = <T extends keyof typeof variants, S extends z.ZodTypeAny>(type: T, variant: readonly string[], content: S) =>
   z.object({ ...sectionCommon, type: z.literal(type), variant: z.enum(variant as [string, ...string[]]), content }).strict();
