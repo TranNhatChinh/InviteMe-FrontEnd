@@ -125,9 +125,20 @@ function withTemplateDefaults(
   if (type === "hero") {
     if (defaults.eyebrow?.trim() && !text(next.eyebrow).trim()) next.eyebrow = defaults.eyebrow;
     if (defaults.subtitle?.trim() && (!text(next.subtitle).trim() || text(next.subtitle) === "Trân trọng mời bạn cùng chung vui")) next.subtitle = defaults.subtitle;
+    if (defaults.ctaLabel?.trim() && (!text(next.ctaLabel).trim() || text(next.ctaLabel) === "Xem ngày vui")) next.ctaLabel = defaults.ctaLabel;
+    if (defaults.overlayStrength) next.overlayStrength = defaults.overlayStrength;
   }
   if (type === "rsvp" && defaults.submitLabel?.trim() && (!text(next.submitLabel).trim() || text(next.submitLabel) === "Mở thiệp mời")) {
     next.submitLabel = defaults.submitLabel;
+  }
+  if (type === "countdown") {
+    if (typeof defaults.showSeconds === "boolean") next.showSeconds = defaults.showSeconds;
+    if (defaults.completedMessage?.trim()) next.completedMessage = defaults.completedMessage;
+  }
+  if (type === "wishes") {
+    if (typeof defaults.displayLimit === "number") next.displayLimit = defaults.displayLimit;
+    if (typeof defaults.allowLikes === "boolean") next.allowLikes = defaults.allowLikes;
+    if (typeof defaults.allowComments === "boolean") next.allowComments = defaults.allowComments;
   }
   return next;
 }

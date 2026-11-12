@@ -12,6 +12,13 @@ const templateDefaultContentSchema = z.object({
   eyebrow: z.string().max(120).optional(),
   subtitle: z.string().max(500).optional(),
   submitLabel: z.string().max(60).optional(),
+  ctaLabel: z.string().max(60).optional(),
+  overlayStrength: z.enum(["none", "soft", "strong"]).optional(),
+  showSeconds: z.boolean().optional(),
+  completedMessage: z.string().max(200).optional(),
+  displayLimit: z.union([z.literal(0), z.literal(3), z.literal(6), z.literal(9), z.literal(12)]).optional(),
+  allowLikes: z.boolean().optional(),
+  allowComments: z.boolean().optional(),
 }).strict();
 const guestExperienceDefaultsSchema = z.object({
   tools: z.array(z.enum(["rsvp", "calendar", "gift", "wishes", "share"]))
@@ -34,10 +41,14 @@ const templateSectionSchema = z.object({
   const defaults = section.defaultContent;
   if (!defaults) return;
   const allowed = section.type === "hero"
-    ? new Set(["title", "eyebrow", "subtitle"])
+    ? new Set(["title", "eyebrow", "subtitle", "ctaLabel", "overlayStrength"])
     : section.type === "rsvp"
       ? new Set(["title", "intro", "submitLabel"])
-      : new Set(["title", "intro"]);
+      : section.type === "countdown"
+        ? new Set(["title", "intro", "showSeconds", "completedMessage"])
+        : section.type === "wishes"
+          ? new Set(["title", "intro", "displayLimit", "allowLikes", "allowComments"])
+          : new Set(["title", "intro"]);
   for (const key of Object.keys(defaults)) {
     if (!allowed.has(key)) context.addIssue({ code: "custom", path: ["defaultContent", key], message: `Default content field ${key} is not supported for ${section.type}.` });
   }

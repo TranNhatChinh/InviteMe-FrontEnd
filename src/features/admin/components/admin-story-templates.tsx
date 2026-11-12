@@ -72,12 +72,16 @@ function createEmptyTemplate(): StoryTemplateConfig {
     key: "",
     name: "",
     sections: [
-      { type: "hero", variant: "floral" },
-      { type: "couple", variant: "alternating" },
-      { type: "countdown", variant: "classic" },
+      { type: "hero", variant: "floral", defaultContent: { eyebrow: "SAVE THE DATE", subtitle: "Một lời mời dành cho những người thân yêu.", ctaLabel: "Xem ngày vui", overlayStrength: "soft" } },
+      { type: "couple", variant: "alternating", defaultContent: { intro: "Hai cá tính, một hành trình chung." } },
+      { type: "countdown", variant: "banner", defaultContent: { showSeconds: false, completedMessage: "Hôm nay là ngày chúng mình mong đợi." } },
+      { type: "loveStory", variant: "photo-journal", defaultContent: { intro: "Những khoảnh khắc bình dị tạo nên câu chuyện của chúng mình." } },
       { type: "events", variant: "cards" },
-      { type: "gallery", variant: "grid" },
+      { type: "weddingParty", variant: "editorial" },
+      { type: "gallery", variant: "flipbook", defaultContent: { intro: "Cùng xem lại những khoảnh khắc đáng nhớ." } },
       { type: "rsvp", variant: "default" },
+      { type: "wishes", variant: "fountain", defaultContent: { displayLimit: 6, allowLikes: true, allowComments: true } },
+      { type: "gift", variant: "minimal" },
     ],
     theme: { colors, fontHeading: "Georgia", fontBody: "Georgia" },
     palettes: [{ id: "blush", label: "Hồng phấn", colors }],
@@ -230,16 +234,16 @@ export function AdminStoryTemplates() {
 
   const updateDefaultContent = (
     sectionIndex: number,
-    field: "title" | "intro" | "eyebrow" | "subtitle" | "submitLabel",
-    value: string,
+    field: string,
+    value: string | number | boolean | undefined,
   ) => {
     if (!form) return;
     const sections = form.sections.map((section, index) => {
       if (index !== sectionIndex) return section;
-      const defaultContent = { ...(section.defaultContent ?? {}) };
-      if (value.trim()) defaultContent[field] = value;
-      else delete defaultContent[field];
-      return { ...section, defaultContent: Object.keys(defaultContent).length ? defaultContent : undefined };
+      const defaultContent: Record<string, unknown> = { ...(section.defaultContent ?? {}) };
+      if (value === undefined || (typeof value === "string" && !value.trim())) delete defaultContent[field];
+      else defaultContent[field] = value;
+      return { ...section, defaultContent: Object.keys(defaultContent).length ? defaultContent as StoryTemplateConfig["sections"][number]["defaultContent"] : undefined };
     });
     change({ ...form, sections });
   };
@@ -954,6 +958,28 @@ export function AdminStoryTemplates() {
                                       className="h-9 text-sm"
                                     />
                                   </label>
+                                  <label className="grid gap-1 text-xs text-muted-foreground">
+                                    {t("storyTemplates.heroCtaLabel")}
+                                    <Input
+                                      value={section.defaultContent?.ctaLabel ?? ""}
+                                      maxLength={60}
+                                      onChange={(event) => updateDefaultContent(index, "ctaLabel", event.target.value)}
+                                      className="h-9 text-sm"
+                                    />
+                                  </label>
+                                  <label className="grid gap-1 text-xs text-muted-foreground">
+                                    {t("storyTemplates.heroOverlayLabel")}
+                                    <select
+                                      value={section.defaultContent?.overlayStrength ?? "template"}
+                                      onChange={(event) => updateDefaultContent(index, "overlayStrength", event.target.value === "template" ? undefined : event.target.value)}
+                                      className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                                    >
+                                      <option value="template">{t("storyTemplates.heroOverlayOptions.template")}</option>
+                                      <option value="none">{t("storyTemplates.heroOverlayOptions.none")}</option>
+                                      <option value="soft">{t("storyTemplates.heroOverlayOptions.soft")}</option>
+                                      <option value="strong">{t("storyTemplates.heroOverlayOptions.strong")}</option>
+                                    </select>
+                                  </label>
                                 </>}
                                 {section.type === "rsvp" && <label className="grid gap-1 text-xs text-muted-foreground">
                                   {t("storyTemplates.defaultSubmitLabel")}
@@ -966,6 +992,40 @@ export function AdminStoryTemplates() {
                                 </label>}
                               </div>
                             </details>
+                            {section.type === "countdown" && <details className="mt-2 rounded-md bg-muted/30 px-3 py-2">
+                              <summary className="cursor-pointer text-xs font-medium text-foreground">{t("storyTemplates.countdownOptionsTitle")}</summary>
+                              <p className="mt-2 text-xs leading-5 text-muted-foreground">{t("storyTemplates.countdownOptionsHelp")}</p>
+                              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                <label className="flex min-h-10 items-center gap-2 text-sm text-foreground">
+                                  <input type="checkbox" checked={section.defaultContent?.showSeconds ?? false} onChange={(event) => updateDefaultContent(index, "showSeconds", event.target.checked)} className="size-4 accent-primary" />
+                                  <span>{t("storyTemplates.countdownShowSeconds")}</span>
+                                </label>
+                                <label className="grid gap-1 text-xs text-muted-foreground">
+                                  {t("storyTemplates.countdownCompletedMessage")}
+                                  <Input value={section.defaultContent?.completedMessage ?? ""} maxLength={200} onChange={(event) => updateDefaultContent(index, "completedMessage", event.target.value)} className="h-9 text-sm" />
+                                </label>
+                              </div>
+                            </details>}
+                            {section.type === "wishes" && <details className="mt-2 rounded-md bg-muted/30 px-3 py-2">
+                              <summary className="cursor-pointer text-xs font-medium text-foreground">{t("storyTemplates.wishesOptionsTitle")}</summary>
+                              <p className="mt-2 text-xs leading-5 text-muted-foreground">{t("storyTemplates.wishesOptionsHelp")}</p>
+                              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                                <label className="grid gap-1 text-xs text-muted-foreground">
+                                  {t("storyTemplates.wishesDisplayLimit")}
+                                  <select value={section.defaultContent?.displayLimit ?? 3} onChange={(event) => updateDefaultContent(index, "displayLimit", Number(event.target.value))} className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground">
+                                    {[3, 6, 9, 12, 0].map((limit) => <option key={limit} value={limit}>{limit === 0 ? t("storyTemplates.wishesDisplayAll") : t("storyTemplates.wishesDisplayCount", { count: limit })}</option>)}
+                                  </select>
+                                </label>
+                                <label className="flex min-h-10 items-center gap-2 text-sm text-foreground">
+                                  <input type="checkbox" checked={section.defaultContent?.allowLikes ?? false} onChange={(event) => updateDefaultContent(index, "allowLikes", event.target.checked)} className="size-4 accent-primary" />
+                                  <span>{t("storyTemplates.wishesAllowLikes")}</span>
+                                </label>
+                                <label className="flex min-h-10 items-center gap-2 text-sm text-foreground">
+                                  <input type="checkbox" checked={section.defaultContent?.allowComments ?? false} onChange={(event) => updateDefaultContent(index, "allowComments", event.target.checked)} className="size-4 accent-primary" />
+                                  <span>{t("storyTemplates.wishesAllowComments")}</span>
+                                </label>
+                              </div>
+                            </details>}
                             <details className="mt-2 rounded-md bg-muted/30 px-3 py-2">
                               <summary className="cursor-pointer text-xs font-medium text-foreground">
                                 {t("storyTemplates.sectionStyleTitle")}

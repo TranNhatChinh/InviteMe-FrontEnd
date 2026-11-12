@@ -4,6 +4,7 @@
 import { createElement, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { ArrowUp, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Copy, Facebook, Gift, Heart, Instagram, MessageCircle, Pause, Play, Share2, X } from "lucide-react";
 import { resolveMediaUrl } from "@/core/config/media-url";
 import type { StoryBuilderV4Document, StoryBuilderV4Section } from "../schemas/story-builder-v4.schema";
@@ -92,7 +93,7 @@ function calendarLinks(event: Record<string, unknown>) {
   const endValue = Date.parse(text(event.endsAt));
   const end = Number.isFinite(endValue) && endValue > start ? endValue : start + 60 * 60 * 1000;
   const stamp = (value: number) => new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-  const title = text(event.title) || "Ngày vui";
+  const title = text(event.title);
   const location = [text(event.venueName), text(event.address)].filter(Boolean).join(", ");
   const details = text(event.description);
   const google = new URL("https://calendar.google.com/calendar/render");
@@ -130,12 +131,12 @@ function GuestDecoration({ effect, intensity, fixed }: { effect: GuestDecoration
   </div>;
 }
 
-const guestToolLabels: Record<GuestTool, { label: string; short: string; Icon: typeof Heart }> = {
-  rsvp: { label: "Xác nhận tham dự", short: "Xác nhận", Icon: Heart },
-  calendar: { label: "Thêm vào lịch", short: "Lịch", Icon: CalendarDays },
-  gift: { label: "Quà mừng", short: "Quà mừng", Icon: Gift },
-  wishes: { label: "Gửi lời chúc", short: "Lời chúc", Icon: MessageCircle },
-  share: { label: "Chia sẻ website", short: "Chia sẻ", Icon: Share2 },
+const guestToolLabels: Record<GuestTool, { Icon: typeof Heart }> = {
+  rsvp: { Icon: Heart },
+  calendar: { Icon: CalendarDays },
+  gift: { Icon: Gift },
+  wishes: { Icon: MessageCircle },
+  share: { Icon: Share2 },
 };
 
 function GuestUtilityBar({
@@ -147,6 +148,7 @@ function GuestUtilityBar({
   slug?: string;
   onNavigatePage?: (pagePath: string) => void;
 }) {
+  const { t } = useTranslation("public");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const event = events.find(item => Boolean(calendarLinks(item)));
   const calendar = event ? calendarLinks(event) : null;
@@ -180,32 +182,34 @@ function GuestUtilityBar({
 
   async function shareWebsite() {
     if (!slug) {
-      setShareStatus("Chia sẻ liên kết công khai sau khi xuất bản website.");
+      setShareStatus(t("storyBuilder.shareAfterPublish"));
       window.setTimeout(() => setShareStatus(""), 2500);
       return;
     }
     const url = new URL(window.location.href);
     url.searchParams.delete("inviteToken");
     try {
-      if (navigator.share) await navigator.share({ title: document.title || "Website cưới", url: url.toString() });
-      else { await navigator.clipboard.writeText(url.toString()); setShareStatus("Đã sao chép liên kết website."); }
+      if (navigator.share) await navigator.share({ title: document.title || t("storyBuilder.websiteTitle"), url: url.toString() });
+      else { await navigator.clipboard.writeText(url.toString()); setShareStatus(t("storyBuilder.copiedLink")); }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      try { await navigator.clipboard.writeText(url.toString()); setShareStatus("Đã sao chép liên kết website."); }
-      catch { setShareStatus("Không thể chia sẻ liên kết trên thiết bị này."); }
+      try { await navigator.clipboard.writeText(url.toString()); setShareStatus(t("storyBuilder.copiedLink")); }
+      catch { setShareStatus(t("storyBuilder.shareFailed")); }
     }
     window.setTimeout(() => setShareStatus(""), 2500);
   }
 
-  return <nav aria-label="Tiện ích cho khách mời" style={{ gridTemplateColumns: `repeat(${visibleTools.length}, minmax(0, 1fr))` }} className="inviteme-guest-tools fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 grid gap-1 rounded-2xl border border-[var(--site-rule)] bg-[var(--site-background)]/95 p-1.5 shadow-[0_12px_36px_rgba(52,36,42,0.16)] backdrop-blur sm:inset-x-auto sm:bottom-6 sm:right-5 sm:flex sm:flex-col sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
+  return <nav aria-label={t("storyBuilder.guestTools")} style={{ gridTemplateColumns: `repeat(${visibleTools.length}, minmax(0, 1fr))` }} className="inviteme-guest-tools fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 grid gap-1 rounded-2xl border border-[var(--site-rule)] bg-[var(--site-background)]/95 p-1.5 shadow-[0_12px_36px_rgba(52,36,42,0.16)] backdrop-blur sm:inset-x-auto sm:bottom-6 sm:right-5 sm:flex sm:flex-col sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
     {visibleTools.map(tool => {
-      const { label, short, Icon } = guestToolLabels[tool];
+      const { Icon } = guestToolLabels[tool];
+      const label = t(`storyBuilder.tools.${tool}.label`);
+      const short = t(`storyBuilder.tools.${tool}.short`);
       const buttonClass = "flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium text-[var(--site-text)] transition hover:bg-[var(--site-primary)]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)] sm:min-h-11 sm:flex-row sm:justify-start sm:gap-2 sm:rounded-full sm:border sm:border-[var(--site-rule)] sm:bg-[var(--site-background)] sm:px-4 sm:text-xs sm:shadow-md";
       if (tool === "calendar") return <div key={tool} className="relative">
         <button type="button" className={`${buttonClass} w-full`} aria-label={label} aria-expanded={calendarOpen} onClick={() => setCalendarOpen(open => !open)}><Icon className="size-4 shrink-0" /><span>{short}</span></button>
         {calendarOpen && calendar && <div className="absolute bottom-full right-0 mb-2 grid min-w-48 gap-1 rounded-xl border border-[var(--site-rule)] bg-[var(--site-background)] p-2 text-[var(--site-text)] shadow-xl sm:right-full sm:bottom-0 sm:mr-2 sm:mb-0">
-          <a className="rounded-lg px-3 py-2 text-sm hover:bg-[var(--site-primary)]/20" href={calendar.google} target="_blank" rel="noopener noreferrer">Mở Google Calendar</a>
-          <a className="rounded-lg px-3 py-2 text-sm hover:bg-[var(--site-primary)]/20" href={calendar.ics} download="ngay-cuoi.ics">Tải tệp lịch (.ics)</a>
+          <a className="rounded-lg px-3 py-2 text-sm hover:bg-[var(--site-primary)]/20" href={calendar.google} target="_blank" rel="noopener noreferrer">{t("storyBuilder.openCalendar")}</a>
+          <a className="rounded-lg px-3 py-2 text-sm hover:bg-[var(--site-primary)]/20" href={calendar.ics} download="wedding-event.ics">{t("storyBuilder.downloadCalendar")}</a>
         </div>}
       </div>;
       if (tool === "share") return <button key={tool} type="button" className={buttonClass} aria-label={label} onClick={() => void shareWebsite()}><Icon className="size-4 shrink-0" /><span>{short}</span></button>;
@@ -216,6 +220,7 @@ function GuestUtilityBar({
 }
 
 function Countdown({ target, timeZoneId, variant, showSeconds, completedMessage }: { target: string; timeZoneId: string; variant: string; showSeconds: boolean; completedMessage: string }) {
+  const { t, i18n } = useTranslation("public");
   const [now, setNow] = useState<number | null>(null);
   const targetMs = Date.parse(target);
   useEffect(() => {
@@ -235,9 +240,7 @@ function Countdown({ target, timeZoneId, variant, showSeconds, completedMessage 
   const timeZone = timeZoneId || "Asia/Ho_Chi_Minh";
   const targetDateLabel = (() => {
     try {
-      const parts = new Intl.DateTimeFormat("en-GB", { timeZone, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(targetMs));
-      const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value ?? "";
-      return `Ngày ${value("day")}/${value("month")}/${value("year")} · ${value("hour")}:${value("minute")}`;
+      return new Intl.DateTimeFormat(i18n.language.startsWith("en") ? "en-US" : "vi-VN", { timeZone, dateStyle: "long", timeStyle: "short" }).format(new Date(targetMs));
     } catch { return ""; }
   })();
   const complete = now !== null && now >= targetMs;
@@ -249,21 +252,21 @@ function Countdown({ target, timeZoneId, variant, showSeconds, completedMessage 
     } catch { return new Date(value).toISOString().slice(0, 10); }
   };
   const sameDay = now !== null && localDay(targetMs) === localDay(now);
-  const completeText = completedMessage.trim() || (sameDay ? "Hôm nay là ngày vui của chúng mình!" : "Ngày vui đã diễn ra. Cảm ơn bạn đã cùng chúng mình tạo nên kỷ niệm.");
+  const completeText = completedMessage.trim() || (sameDay ? t("storyBuilder.todayWeddingMessage") : t("storyBuilder.pastWeddingMessage"));
   if (complete) return <div className={`story-countdown__panel story-countdown__panel--complete story-countdown__panel--${variant} relative mt-6 overflow-hidden rounded-[1.5rem] border border-[var(--site-rule)] bg-[var(--site-primary)]/10 px-5 py-7 text-center sm:px-8`}>
     <span aria-hidden="true" className="story-countdown__ornament">✦</span>
-    <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--site-accent)]">{sameDay ? "NGÀY VUI ĐÃ ĐẾN" : "MỘT NGÀY ĐÁNG NHỚ"}</p>
+    <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--site-accent)]">{sameDay ? t("storyBuilder.weddingDayArrived") : t("storyBuilder.memorableDay")}</p>
     <p className="mt-3 font-serif text-xl leading-8 text-[var(--site-text)] sm:text-2xl" style={{ fontFamily: "var(--site-heading)" }}>{completeText}</p>
     {targetDateLabel && <p className="mt-3 text-xs tracking-wide text-[var(--site-text)] opacity-65"><CalendarDays className="mr-1.5 inline size-3.5 align-[-2px]" aria-hidden="true" />{targetDateLabel}</p>}
   </div>;
 
   const units = [
-    { key: "days", value: now === null ? "–" : String(days), label: "Ngày" },
-    { key: "hours", value: now === null ? "–" : String(hours).padStart(2, "0"), label: "Giờ" },
-    { key: "minutes", value: now === null ? "–" : String(minutes).padStart(2, "0"), label: "Phút" },
-    ...(showSeconds ? [{ key: "seconds", value: now === null ? "–" : String(seconds).padStart(2, "0"), label: "Giây" }] : []),
+    { key: "days", value: now === null ? "–" : String(days), label: t("storyBuilder.days") },
+    { key: "hours", value: now === null ? "–" : String(hours).padStart(2, "0"), label: t("storyBuilder.hours") },
+    { key: "minutes", value: now === null ? "–" : String(minutes).padStart(2, "0"), label: t("storyBuilder.minutes") },
+    ...(showSeconds ? [{ key: "seconds", value: now === null ? "–" : String(seconds).padStart(2, "0"), label: t("storyBuilder.seconds") }] : []),
   ];
-  const accessibleCountdown = now === null ? "Đang tải đồng hồ đếm ngược" : `Còn ${days} ngày, ${hours} giờ, ${minutes} phút${showSeconds ? `, ${seconds} giây` : ""}`;
+  const accessibleCountdown = now === null ? t("storyBuilder.countdownLoading") : t("storyBuilder.countdownRemaining", { days, hours, minutes, secondsPart: showSeconds ? t("storyBuilder.secondsPart", { count: seconds }) : "" });
   const unitClass = variant === "banner"
     ? "story-countdown__unit rounded-xl border border-[var(--site-rule)]/70 bg-[var(--site-background)]/80 px-3 py-3.5 shadow-sm sm:px-4 sm:py-4"
     : variant === "inline"
@@ -278,7 +281,7 @@ function Countdown({ target, timeZoneId, variant, showSeconds, completedMessage 
   </div>;
   if (variant === "banner") return <div className="story-countdown__panel story-countdown__panel--banner relative mt-6 overflow-hidden rounded-[1.5rem] border border-[var(--site-rule)] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--site-primary)_38%,var(--site-background)),var(--site-background)_75%)] px-4 py-5 sm:px-7 sm:py-7">
     <span aria-hidden="true" className="story-countdown__ornament">✦</span>
-    <p className="mb-4 text-center text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--site-accent)]">NGÀY VUI ĐANG ĐẾN GẦN</p>
+    <p className="mb-4 text-center text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--site-accent)]">{t("storyBuilder.countdownHeading")}</p>
     {unitList}
     {targetDateLabel && <p className="mt-4 text-center text-xs tracking-wide text-[var(--site-text)] opacity-70"><CalendarDays className="mr-1.5 inline size-3.5 align-[-2px]" aria-hidden="true" />{targetDateLabel}</p>}
   </div>;
@@ -293,9 +296,10 @@ function Countdown({ target, timeZoneId, variant, showSeconds, completedMessage 
 function InlineText({ value, editable, onSave, className, tag = "p", style, presencePath }: {
   value: string; editable: boolean; onSave?: (value: string) => void; className?: string; tag?: "h1" | "h2" | "h3" | "p"; style?: CSSProperties; presencePath?: string;
 }) {
+  const { t } = useTranslation("public");
   const [editing, setEditing] = useState(false); const [draft, setDraft] = useState(value);
   const cancelEdit = useRef(false);
-  if (editing) return <input autoFocus aria-label="Chỉnh sửa nội dung trên website" data-builder-field-path={presencePath} className={`${className ?? ""} w-full rounded-md border border-primary bg-background/90 px-2 py-1 text-inherit outline-none focus-visible:ring-2 focus-visible:ring-primary`} style={style} value={draft} onChange={event => setDraft(event.target.value)} onBlur={() => { if (cancelEdit.current) { cancelEdit.current = false; setDraft(value); } else onSave?.(draft); setEditing(false); }} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } if (event.key === "Escape") { event.preventDefault(); cancelEdit.current = true; event.currentTarget.blur(); } }} />;
+  if (editing) return <input autoFocus aria-label={t("storyBuilder.editWebsiteText")} data-builder-field-path={presencePath} className={`${className ?? ""} w-full rounded-md border border-primary bg-background/90 px-2 py-1 text-inherit outline-none focus-visible:ring-2 focus-visible:ring-primary`} style={style} value={draft} onChange={event => setDraft(event.target.value)} onBlur={() => { if (cancelEdit.current) { cancelEdit.current = false; setDraft(value); } else onSave?.(draft); setEditing(false); }} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } if (event.key === "Escape") { event.preventDefault(); cancelEdit.current = true; event.currentTarget.blur(); } }} />;
   return createElement(tag, {
     className: `${className ?? ""} ${editable ? "cursor-text rounded-sm outline-none hover:outline hover:outline-1 hover:outline-primary/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" : ""}`,
     "data-builder-field-path": presencePath,
@@ -303,8 +307,8 @@ function InlineText({ value, editable, onSave, className, tag = "p", style, pres
     tabIndex: editable ? 0 : undefined,
     onDoubleClick: editable ? () => { setDraft(value); setEditing(true); } : undefined,
     onKeyDown: editable ? (event: React.KeyboardEvent<HTMLElement>) => { if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); setDraft(value); setEditing(true); } } : undefined,
-    title: editable ? "Nhấp đúp hoặc nhấn Enter để sửa nhanh" : undefined,
-    "aria-label": editable ? `${value || "Nội dung"}. Nhấp đúp hoặc nhấn Enter để chỉnh sửa` : undefined,
+    title: editable ? t("storyBuilder.quickEditTitle") : undefined,
+    "aria-label": editable ? t("storyBuilder.quickEditLabel", { value: value || t("storyBuilder.editWebsiteText") }) : undefined,
   }, value);
 }
 
@@ -312,6 +316,7 @@ function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget
   section: StoryBuilderV4Section; family: string; sectionIndex: number; slug?: string; weddingId?: string; ctaTarget?: string; ctaLabel?: string; showHidden: boolean; gift?: StoryBuilderV4Document["content"]["gift"]; giftAccounts?: GiftBankAccount[];
   editable: boolean; selected: boolean; onInlineEdit?: InlineEdit; onSelectSection?: (id: string) => void;
 }) {
+  const { t, i18n } = useTranslation("public");
   const [copiedRole, setCopiedRole] = useState<string | null>(null);
   const [copyError, setCopyError] = useState("");
   const [activeGiftRole, setActiveGiftRole] = useState<"groom" | "bride" | null>(null);
@@ -387,25 +392,25 @@ function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget
         : section.variant === "dark" ? 0.65 : section.variant === "ceremonial" ? 0.08 : 0;
       const legacyImageOpacity = overlayConfigured ? 1 : section.variant === "ceremonial" ? 0.15
         : section.variant === "dark" || section.variant === "split" || section.variant === "editorial" || family === "garden" ? 1 : 0.3;
-      const controls = heroSlides.length > 1 && <div className="absolute inset-x-0 bottom-3 z-20 flex items-center justify-center gap-2 px-3" role="group" aria-label="Chuyển ảnh bìa" onMouseEnter={() => setHeroPointerPaused(true)} onMouseLeave={() => setHeroPointerPaused(false)} onFocusCapture={() => setHeroPointerPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHeroPointerPaused(false); }}>
-        <button type="button" aria-label={heroPausedByUser ? "Tiếp tục trình chiếu ảnh" : "Tạm dừng trình chiếu ảnh"} aria-pressed={heroPausedByUser} className="grid size-9 shrink-0 place-items-center rounded-full border border-white/60 bg-black/35 text-white shadow-sm backdrop-blur transition hover:bg-black/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={() => setHeroPlayback({ key: heroSlideSignature, paused: !heroPausedByUser })}>{heroPausedByUser ? <Play className="size-3.5" aria-hidden="true" /> : <Pause className="size-3.5" aria-hidden="true" />}</button>
-        <button type="button" aria-label="Xem ảnh bìa trước" className="grid size-9 shrink-0 place-items-center rounded-full border border-white/60 bg-black/35 text-white shadow-sm backdrop-blur transition hover:bg-black/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={() => setHeroSlideSelection({ key: heroSlideSignature, index: (activeSlideIndex - 1 + heroSlides.length) % heroSlides.length })}><ChevronLeft className="size-4" aria-hidden="true" /></button>
-        <div className="flex min-h-9 items-center gap-1.5 rounded-full border border-white/60 bg-black/35 px-2.5 shadow-sm backdrop-blur" aria-label={`Ảnh ${activeSlideIndex + 1} trên ${heroSlides.length}`}>
-          {heroSlides.map((slide, index) => <button key={slide.id} type="button" aria-label={`Hiện ảnh bìa ${index + 1}`} aria-pressed={index === activeSlideIndex} className={`size-2.5 rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${index === activeSlideIndex ? "scale-110 bg-white" : "bg-white/55 hover:bg-white/80"}`} onClick={() => setHeroSlideSelection({ key: heroSlideSignature, index })} />)}
+      const controls = heroSlides.length > 1 && <div className="absolute inset-x-0 bottom-3 z-20 flex items-center justify-center gap-2 px-3" role="group" aria-label={t("storyBuilder.heroSlideshow")} onMouseEnter={() => setHeroPointerPaused(true)} onMouseLeave={() => setHeroPointerPaused(false)} onFocusCapture={() => setHeroPointerPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHeroPointerPaused(false); }}>
+        <button type="button" aria-label={heroPausedByUser ? t("storyBuilder.resumeSlideshow") : t("storyBuilder.pauseSlideshow")} aria-pressed={heroPausedByUser} className="grid size-9 shrink-0 place-items-center rounded-full border border-white/60 bg-black/35 text-white shadow-sm backdrop-blur transition hover:bg-black/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={() => setHeroPlayback({ key: heroSlideSignature, paused: !heroPausedByUser })}>{heroPausedByUser ? <Play className="size-3.5" aria-hidden="true" /> : <Pause className="size-3.5" aria-hidden="true" />}</button>
+        <button type="button" aria-label={t("storyBuilder.previousCover")} className="grid size-9 shrink-0 place-items-center rounded-full border border-white/60 bg-black/35 text-white shadow-sm backdrop-blur transition hover:bg-black/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={() => setHeroSlideSelection({ key: heroSlideSignature, index: (activeSlideIndex - 1 + heroSlides.length) % heroSlides.length })}><ChevronLeft className="size-4" aria-hidden="true" /></button>
+        <div className="flex min-h-9 items-center gap-1.5 rounded-full border border-white/60 bg-black/35 px-2.5 shadow-sm backdrop-blur" aria-label={t("storyBuilder.coverSlide", { current: activeSlideIndex + 1, total: heroSlides.length })}>
+          {heroSlides.map((slide, index) => <button key={slide.id} type="button" aria-label={t("storyBuilder.showCover", { number: index + 1 })} aria-pressed={index === activeSlideIndex} className={`size-2.5 rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${index === activeSlideIndex ? "scale-110 bg-white" : "bg-white/55 hover:bg-white/80"}`} onClick={() => setHeroSlideSelection({ key: heroSlideSignature, index })} />)}
         </div>
-        <button type="button" aria-label="Xem ảnh bìa tiếp theo" className="grid size-9 shrink-0 place-items-center rounded-full border border-white/60 bg-black/35 text-white shadow-sm backdrop-blur transition hover:bg-black/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={() => setHeroSlideSelection({ key: heroSlideSignature, index: (activeSlideIndex + 1) % heroSlides.length })}><ChevronRight className="size-4" aria-hidden="true" /></button>
+        <button type="button" aria-label={t("storyBuilder.nextCover")} className="grid size-9 shrink-0 place-items-center rounded-full border border-white/60 bg-black/35 text-white shadow-sm backdrop-blur transition hover:bg-black/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={() => setHeroSlideSelection({ key: heroSlideSignature, index: (activeSlideIndex + 1) % heroSlides.length })}><ChevronRight className="size-4" aria-hidden="true" /></button>
       </div>;
       const copy = <div className="story-hero__copy relative z-10 max-w-3xl">
         {text(content.eyebrow) && <p className="mb-5 text-xs uppercase tracking-[0.24em] opacity-75">{text(content.eyebrow)}</p>}
-        <InlineText tag="h1" editable={editable} value={text(content.title) || "Ngày vui của chúng mình"} onSave={value => onInlineEdit?.(section.id, "title", value)} presencePath={builderFieldPath(section.id, "hero", "title")} className="font-serif text-4xl leading-[1.06] sm:text-6xl" style={{ fontFamily: "var(--site-heading)" }} />
+        <InlineText tag="h1" editable={editable} value={text(content.title) || t("storyBuilder.defaultHeroTitle")} onSave={value => onInlineEdit?.(section.id, "title", value)} presencePath={builderFieldPath(section.id, "hero", "title")} className="font-serif text-4xl leading-[1.06] sm:text-6xl" style={{ fontFamily: "var(--site-heading)" }} />
         {text(content.subtitle) && <InlineText tag="p" editable={editable} value={text(content.subtitle)} onSave={value => onInlineEdit?.(section.id, "subtitle", value)} presencePath={builderFieldPath(section.id, "hero", "subtitle")} className="mt-5 max-w-2xl text-base leading-7 opacity-80 sm:text-lg" />}
-        {ctaTarget && <a href={`#${ctaTarget}`} className="mt-8 inline-flex min-h-11 items-center rounded-full bg-[var(--site-text)] px-6 text-sm font-medium text-[var(--site-background)] transition hover:opacity-85">{text(content.ctaLabel) || ctaLabel || "Xem ngày vui"}</a>}
+        {ctaTarget && <a href={`#${ctaTarget}`} className="mt-8 inline-flex min-h-11 items-center rounded-full bg-[var(--site-text)] px-6 text-sm font-medium text-[var(--site-background)] transition hover:opacity-85">{text(content.ctaLabel) || ctaLabel || t("storyBuilder.seeCelebration")}</a>}
       </div>;
       const hasHeroImages = heroSlides.length > 0;
-      const image = <div className="relative size-full" role={activeSlide ? "group" : undefined} aria-roledescription={activeSlide ? "slide" : undefined} aria-label={activeSlide ? `Ảnh ${activeSlideIndex + 1} trên ${heroSlides.length}` : undefined} onMouseEnter={() => setHeroPointerPaused(true)} onMouseLeave={() => setHeroPointerPaused(false)} onFocusCapture={() => setHeroPointerPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHeroPointerPaused(false); }}>
+      const image = <div className="relative size-full" role={activeSlide ? "group" : undefined} aria-roledescription={activeSlide ? "slide" : undefined} aria-label={activeSlide ? t("storyBuilder.coverSlide", { current: activeSlideIndex + 1, total: heroSlides.length }) : undefined} onMouseEnter={() => setHeroPointerPaused(true)} onMouseLeave={() => setHeroPointerPaused(false)} onFocusCapture={() => setHeroPointerPaused(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHeroPointerPaused(false); }}>
         {imageUrl && !failedHeroImages[imageUrl]
-          ? <img src={resolveMediaUrl(imageUrl) ?? imageUrl} alt={activeSlide?.alt || "Ảnh cưới của hai bạn"} decoding="async" className="story-hero__image size-full object-cover" style={{ objectPosition: `${focusX}% ${focusY}%`, opacity: legacyImageOpacity }} onError={() => setFailedHeroImages(current => ({ ...current, [imageUrl]: true }))} />
-          : <div role={imageUrl ? "img" : undefined} aria-label={imageUrl ? "Không tải được ảnh bìa" : undefined} aria-hidden={imageUrl ? undefined : true} className="story-hero__image grid size-full min-h-64 place-items-center bg-[var(--site-primary)]/30"><span className="size-24 rounded-full border border-[var(--site-accent)]/40" /></div>}
+          ? <img src={resolveMediaUrl(imageUrl) ?? imageUrl} alt={activeSlide?.alt || t("storyBuilder.coupleWeddingPhoto")} decoding="async" className="story-hero__image size-full object-cover" style={{ objectPosition: `${focusX}% ${focusY}%`, opacity: legacyImageOpacity }} onError={() => setFailedHeroImages(current => ({ ...current, [imageUrl]: true }))} />
+          : <div role={imageUrl ? "img" : undefined} aria-label={imageUrl ? t("storyBuilder.coverUnavailable") : undefined} aria-hidden={imageUrl ? undefined : true} className="story-hero__image grid size-full min-h-64 place-items-center bg-[var(--site-primary)]/30"><span className="size-24 rounded-full border border-[var(--site-accent)]/40" /></div>}
         {overlayAlpha > 0 && hasHeroImages && <div aria-hidden="true" className="story-hero__veil pointer-events-none absolute inset-0" style={{ backgroundColor: "var(--site-background)", opacity: overlayAlpha }} />}
         {section.variant !== "dark" && controls}
       </div>;
@@ -483,45 +488,69 @@ function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget
               : `grid min-w-0 grid-cols-1 items-center gap-5 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:gap-8 ${index === 1 ? "sm:mt-12" : ""}`}`}>
             <div className={`story-couple__portrait relative mx-auto w-full overflow-hidden bg-[var(--site-primary)]/20 ${isTwoColumns ? "aspect-[4/5] max-w-[340px] rounded-[1.1rem]" : isEditorial ? "aspect-[4/5] max-w-[560px] rounded-sm" : "aspect-[4/5] max-w-[460px] rounded-[1.4rem]"} ${reverseOnDesktop ? "sm:order-2" : ""}`}>
               {photoUrl && !photoFailed
-                ? <img loading="lazy" decoding="async" className="story-couple__image absolute inset-0 size-full object-cover" src={photoUrl} alt={`Chân dung ${name}`} onError={() => setFailedProfilePhotos(current => ({ ...current, [key]: photoUrl }))} />
-                : <div role="img" aria-label={`${photoFailed ? "Không tải được ảnh" : "Chưa có ảnh chân dung"} ${name}`} className="story-couple__fallback grid size-full place-items-center border border-[var(--site-accent)]/20">
+                ? <img loading="lazy" decoding="async" className="story-couple__image absolute inset-0 size-full object-cover" src={photoUrl} alt={t("storyBuilder.portraitAlt", { name })} onError={() => setFailedProfilePhotos(current => ({ ...current, [key]: photoUrl }))} />
+                : <div role="img" aria-label={`${photoFailed ? t("storyBuilder.profileUnavailable") : t("storyBuilder.profileMissing")} ${name}`} className="story-couple__fallback grid size-full place-items-center border border-[var(--site-accent)]/20">
                   <span aria-hidden="true" className="font-serif text-6xl tracking-wide text-[var(--site-accent)]/75 sm:text-7xl" style={{ fontFamily: "var(--site-heading)" }}>{personInitials(name)}</span>
                 </div>}
-              {isEditorial && <span aria-hidden="true" className="absolute bottom-3 left-3 border border-white/70 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-white">{key === "groom" ? "Chú rể" : "Cô dâu"}</span>}
+              {isEditorial && <span aria-hidden="true" className="absolute bottom-3 left-3 border border-white/70 bg-black/20 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-white">{key === "groom" ? t("storyBuilder.groom") : t("storyBuilder.bride")}</span>}
             </div>
             <div className={`min-w-0 ${isTwoColumns ? "w-full pt-5" : "py-2 sm:py-5"} ${reverseOnDesktop ? "sm:order-1" : ""}`}>
-              {!isEditorial && <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--site-accent)]">{key === "groom" ? "Chú rể" : "Cô dâu"}</p>}
+              {!isEditorial && <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--site-accent)]">{key === "groom" ? t("storyBuilder.groom") : t("storyBuilder.bride")}</p>}
               <InlineText tag="h3" editable={editable} value={name} onSave={value => onInlineEdit?.(section.id, key, { ...person, displayName: value })} presencePath={builderFieldPath(section.id, "couple", key, "displayName")} className={`mt-2 break-words font-serif ${isTwoColumns ? "text-3xl sm:text-4xl" : "text-3xl sm:text-4xl md:text-5xl"}`} style={{ fontFamily: "var(--site-heading)" }} />
               {text(person.bio) && <p className={`mt-3 whitespace-pre-line leading-7 opacity-80 ${isTwoColumns ? "mx-auto max-w-prose" : "max-w-prose"}`}>{text(person.bio)}</p>}
-              {(text(person.fatherName) || text(person.motherName)) && <p className="mt-4 border-t border-[var(--site-rule)] pt-3 text-sm leading-6 opacity-70">{text(person.fatherName) && <>Cha: {text(person.fatherName)}</>}{text(person.fatherName) && text(person.motherName) ? " · " : ""}{text(person.motherName) && <>Mẹ: {text(person.motherName)}</>}</p>}
-              {(facebook || instagram) && <div className={`mt-4 flex flex-wrap gap-2 ${isTwoColumns ? "justify-center" : ""}`} aria-label={`Liên kết mạng xã hội của ${name}`}>
-                {facebook && <a href={facebook} target="_blank" rel="noopener noreferrer" aria-label={`Facebook của ${name}`} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--site-rule)] px-3 text-xs transition-colors hover:bg-[var(--site-primary)]/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--site-accent)]"><Facebook className="size-4" aria-hidden="true" />Facebook</a>}
-                {instagram && <a href={instagram} target="_blank" rel="noopener noreferrer" aria-label={`Instagram của ${name}`} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--site-rule)] px-3 text-xs transition-colors hover:bg-[var(--site-primary)]/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--site-accent)]"><Instagram className="size-4" aria-hidden="true" />Instagram</a>}
+              {(text(person.fatherName) || text(person.motherName)) && <p className="mt-4 border-t border-[var(--site-rule)] pt-3 text-sm leading-6 opacity-70">{text(person.fatherName) && <>{t("storyBuilder.father")}: {text(person.fatherName)}</>}{text(person.fatherName) && text(person.motherName) ? " · " : ""}{text(person.motherName) && <>{t("storyBuilder.mother")}: {text(person.motherName)}</>}</p>}
+              {(facebook || instagram) && <div className={`mt-4 flex flex-wrap gap-2 ${isTwoColumns ? "justify-center" : ""}`} aria-label={t("storyBuilder.socialLinksFor", { name })}>
+                {facebook && <a href={facebook} target="_blank" rel="noopener noreferrer" aria-label={t("storyBuilder.facebookFor", { name })} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--site-rule)] px-3 text-xs transition-colors hover:bg-[var(--site-primary)]/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--site-accent)]"><Facebook className="size-4" aria-hidden="true" />Facebook</a>}
+                {instagram && <a href={instagram} target="_blank" rel="noopener noreferrer" aria-label={t("storyBuilder.instagramFor", { name })} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--site-rule)] px-3 text-xs transition-colors hover:bg-[var(--site-primary)]/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:ring-[var(--site-accent)]"><Instagram className="size-4" aria-hidden="true" />Instagram</a>}
               </div>}
             </div>
           </article>;
         })}
         {section.variant === "two-columns" && couple.length === 2 && <span aria-hidden="true" className="pointer-events-none absolute left-1/2 top-[46%] z-[1] hidden size-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)] font-serif text-xl text-[var(--site-accent)] sm:grid">&amp;</span>}
-        {!couple.length && <p className="text-sm opacity-65">Thêm tên và thông tin hai bạn trong phần chỉnh sửa.</p>}
+        {!couple.length && <p className="text-sm opacity-65">{t("storyBuilder.coupleInfoEmpty")}</p>}
       </div>;
       break;
     }
     case "countdown":
       body = <div className={`story-countdown story-countdown--${section.variant}`}>
-        {content.targetDate ? <Countdown target={text(content.targetDate)} timeZoneId={text(content.timeZoneId)} variant={section.variant} showSeconds={content.showSeconds === true} completedMessage={text(content.completedMessage)} /> : <p className="mt-4 rounded-xl border border-dashed border-[var(--site-rule)] px-4 py-5 text-center text-sm opacity-65">Chưa có ngày tổ chức.</p>}
+        {content.targetDate ? <Countdown target={text(content.targetDate)} timeZoneId={text(content.timeZoneId)} variant={section.variant} showSeconds={content.showSeconds === true} completedMessage={text(content.completedMessage)} /> : <p className="mt-4 rounded-xl border border-dashed border-[var(--site-rule)] px-4 py-5 text-center text-sm opacity-65">{t("storyBuilder.weddingDateEmpty")}</p>}
       </div>;
       break;
     case "loveStory": {
       const moments = array(content.items);
       const photoJournal = section.variant === "photo-journal";
-      body = <ol aria-label="Các dấu mốc chuyện tình" className={`story-timeline story-timeline--${section.variant} relative grid ${photoJournal ? "gap-8 sm:gap-12" : `gap-5 ${section.variant === "editorial" ? "md:grid-cols-2 md:gap-8" : "pl-6 sm:pl-9"}`}`}>
+      const listClassName = [
+        "story-timeline",
+        `story-timeline--${section.variant}`,
+        "relative grid",
+        photoJournal
+          ? "gap-8 sm:gap-12"
+          : `gap-5 ${section.variant === "editorial" ? "md:grid-cols-2 md:gap-8" : "pl-6 sm:pl-9"}`,
+      ].join(" ");
+      body = <ol aria-label={t("storyBuilder.storyTimeline")} className={listClassName}>
         {section.variant === "timeline" && <span aria-hidden="true" className="absolute bottom-4 left-[7px] top-2 w-px bg-[var(--site-accent)]/35 sm:left-[11px]" />}
         {moments.map((item, index) => {
           const momentId = text(item.id) || String(index);
           const title = text(item.title);
           const imageUrl = text(item.imageUrl);
-          const image = imageUrl ? <img loading="lazy" decoding="async" src={imageUrl} alt={title} className={`w-full object-cover ${photoJournal ? `aspect-[4/3] ${index === 0 ? "md:aspect-[5/4]" : ""}` : section.variant === "editorial" ? "mb-5 aspect-[4/3]" : "aspect-square max-h-56 rounded-xl sm:max-h-none"}`} /> : null;
-          return <li id={`story-moment-${section.id}-${momentId}`} key={momentId} tabIndex={editable ? -1 : undefined} data-story-moment-index={index} className={`story-moment relative min-w-0 ${photoJournal ? `grid gap-5 border-b border-[var(--site-rule)]/80 pb-8 sm:gap-8 md:items-center md:gap-12 ${imageUrl ? "md:grid-cols-2" : ""}` : section.variant === "editorial" ? "overflow-hidden border-t border-[var(--site-rule)] pt-5" : "grid gap-4 border-t border-[var(--site-rule)] py-5 sm:grid-cols-[120px_1fr]"}`}>
+          const imageClassName = [
+            "w-full object-cover",
+            photoJournal
+              ? `aspect-[4/3] ${index === 0 ? "md:aspect-[5/4]" : ""}`
+              : section.variant === "editorial"
+                ? "mb-5 aspect-[4/3]"
+                : "aspect-square max-h-56 rounded-xl sm:max-h-none",
+          ].join(" ");
+          const image = imageUrl ? <img loading="lazy" decoding="async" src={imageUrl} alt={title} className={imageClassName} /> : null;
+          const momentClassName = [
+            "story-moment relative min-w-0",
+            photoJournal
+              ? `grid gap-5 border-b border-[var(--site-rule)]/80 pb-8 sm:gap-8 md:items-center md:gap-12 ${imageUrl ? "md:grid-cols-2" : ""}`
+              : section.variant === "editorial"
+                ? "overflow-hidden border-t border-[var(--site-rule)] pt-5"
+                : "grid gap-4 border-t border-[var(--site-rule)] py-5 sm:grid-cols-[120px_1fr]",
+          ].join(" ");
+          return <li id={`story-moment-${section.id}-${momentId}`} key={momentId} tabIndex={editable ? -1 : undefined} data-story-moment-index={index} className={momentClassName}>
             {section.variant === "timeline" && <span aria-hidden="true" className="absolute -left-[25px] top-7 size-3 rounded-full border-2 border-[var(--site-background)] bg-[var(--site-accent)] sm:-left-[35px]" />}
             {image && <div className={`story-moment__image min-w-0 overflow-hidden ${photoJournal && index % 2 === 1 ? "md:order-2" : ""} ${photoJournal ? "bg-[var(--site-primary)]/10" : ""}`}>{image}</div>}
             <div className={`story-moment__copy min-w-0 ${section.variant === "editorial" ? "pb-4" : ""} ${photoJournal && index % 2 === 1 ? "md:order-1" : ""} ${photoJournal && index === 0 ? "md:py-8" : ""}`}>
@@ -531,33 +560,33 @@ function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget
             </div>
           </li>;
         })}
-        {!moments.length && <li className="text-sm opacity-65">Thêm những dấu mốc hai bạn muốn chia sẻ.</li>}
+        {!moments.length && <li className="text-sm opacity-65">{t("storyBuilder.storyMilestonesEmpty")}</li>}
       </ol>;
       break;
     }
     case "events":
       body = <div className={`story-events story-events--${section.variant} grid gap-5 ${section.variant === "minimal" ? "" : "sm:grid-cols-2"}`}>
         {array(content.events).map((event, index) => { const links = calendarLinks(event); return <article key={text(event.id) || index} className={`story-event ${section.variant === "minimal" ? "border-t border-[var(--site-rule)] py-5" : "rounded-2xl border border-[var(--site-rule)] bg-[var(--site-background)]/80 p-5 sm:p-6"}`}>
-          <p className="text-xs uppercase tracking-[0.16em] text-[var(--site-accent)]">{dateLabel(text(event.startsAt), "vi-VN", text(event.timeZoneId) || undefined)}</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-[var(--site-accent)]">{dateLabel(text(event.startsAt), i18n.language.startsWith("en") ? "en-US" : "vi-VN", text(event.timeZoneId) || undefined)}</p>
           <InlineText tag="h3" editable={editable && !Array.isArray(content.eventIds)} value={text(event.title)} onSave={value => onInlineEdit?.(section.id, "events", array(content.events).map((entry, eventIndex) => eventIndex === index ? { ...entry, title: value } : entry))} presencePath={builderFieldPath(section.id, "events", "events", text(event.id) || index, "title")} className="mt-2 font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }} />
           {text(event.venueName) && <p className="mt-2 font-medium">{text(event.venueName)}</p>}
           {text(event.address) && <p className="mt-1 opacity-75">{text(event.address)}</p>}
-          {text(event.mapUrl).startsWith("https://") && <a className="mt-3 inline-block text-sm text-[var(--site-accent)] underline" href={text(event.mapUrl)} target="_blank" rel="noreferrer">Mở bản đồ</a>}
-          {links && <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-[var(--site-rule)] pt-3 text-sm"><a className="text-[var(--site-accent)] underline underline-offset-4" href={links.google} target="_blank" rel="noreferrer">Google Calendar</a><a className="text-[var(--site-accent)] underline underline-offset-4" href={links.ics} download="inviteme-event.ics">Tải lịch (.ics)</a></div>}
+          {text(event.mapUrl).startsWith("https://") && <a className="mt-3 inline-block text-sm text-[var(--site-accent)] underline" href={text(event.mapUrl)} target="_blank" rel="noreferrer">{t("storyBuilder.openMap")}</a>}
+          {links && <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-[var(--site-rule)] pt-3 text-sm"><a className="text-[var(--site-accent)] underline underline-offset-4" href={links.google} target="_blank" rel="noreferrer">Google Calendar</a><a className="text-[var(--site-accent)] underline underline-offset-4" href={links.ics} download="wedding-event.ics">{t("storyBuilder.downloadCalendar")}</a></div>}
         </article>; })}
-        {!array(content.events).length && <p className="text-sm opacity-65">Chưa có thông tin sự kiện.</p>}
+        {!array(content.events).length && <p className="text-sm opacity-65">{t("storyBuilder.addEventEmpty")}</p>}
       </div>;
       break;
     case "weddingParty":
       body = <div className={`story-wedding-party grid gap-10 ${section.variant === "editorial" ? "md:grid-cols-2 md:gap-14" : "sm:grid-cols-2"}`}>
-        {([ ["groom", "Phù rể"], ["bride", "Phù dâu"] ] as const).map(([side, label]) => <section key={side} aria-label={label}>
+        {([ ["groom", t("storyBuilder.weddingPartyGroom")], ["bride", t("storyBuilder.weddingPartyBride")] ] as const).map(([side, label]) => <section key={side} aria-label={label}>
           <h3 className="mb-5 border-b border-[var(--site-rule)] pb-3 font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }}>{label}</h3>
           <div className={`grid gap-4 ${section.variant === "editorial" ? "sm:grid-cols-2" : ""}`}>
             {array(content[side]).map((member, index) => <article key={text(member.id) || index} className={`flex items-center gap-4 ${section.variant === "classic" ? "border-b border-[var(--site-rule)] pb-4" : "flex-col items-start"}`}>
               {text(member.photoUrl) ? <img loading="lazy" decoding="async" src={text(member.photoUrl)} alt={text(member.name)} className={`shrink-0 object-cover ${section.variant === "editorial" ? "aspect-[4/3] w-full rounded-xl" : "size-16 rounded-full"}`} /> : <span aria-hidden="true" className="grid size-16 shrink-0 place-items-center rounded-full bg-[var(--site-primary)]/25 font-serif text-xl text-[var(--site-accent)]">{text(member.name).slice(0, 1)}</span>}
-              <div><p className="font-medium">{text(member.name) || "Tên thành viên"}</p>{text(member.role) && <p className="mt-1 text-sm text-[var(--site-accent)]">{text(member.role)}</p>}{text(member.bio) && <p className="mt-2 text-sm leading-6 opacity-75">{text(member.bio)}</p>}</div>
+              <div><p className="font-medium">{text(member.name) || t("storyBuilder.memberName")}</p>{text(member.role) && <p className="mt-1 text-sm text-[var(--site-accent)]">{text(member.role)}</p>}{text(member.bio) && <p className="mt-2 text-sm leading-6 opacity-75">{text(member.bio)}</p>}</div>
             </article>)}
-            {!array(content[side]).length && <p className="text-sm opacity-65">Chưa thêm thành viên.</p>}
+            {!array(content[side]).length && <p className="text-sm opacity-65">{t("storyBuilder.partyEmpty")}</p>}
           </div>
         </section>)}
       </div>;
@@ -576,7 +605,7 @@ function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget
       body = <StoryRsvp label={text(content.submitLabel) || undefined} />;
       break;
     case "wishes":
-      body = <StoryWishes slug={slug} weddingId={weddingId} canModerate={editable && selected} variant={section.variant === "fountain" ? "fountain" : "default"} displayLimit={typeof content.displayLimit === "number" ? content.displayLimit : 3} allowLikes={content.allowLikes === true} allowComments={content.allowComments === true} />;
+      body = <StoryWishes key={`${section.id}:${section.variant}:${typeof content.displayLimit === "number" ? content.displayLimit : 3}`} slug={slug} weddingId={weddingId} canModerate={editable && selected} variant={section.variant === "fountain" ? "fountain" : "default"} displayLimit={typeof content.displayLimit === "number" ? content.displayLimit : 3} allowLikes={content.allowLikes === true} allowComments={content.allowComments === true} />;
       break;
     case "gift": {
       const giftData = record(gift);
@@ -588,21 +617,21 @@ function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget
         const account = giftAccounts?.find(item => item.id === accountId);
         const published = publishedAccounts.find(item => item.role === role);
         return account
-          ? { ...account, role, displayLabel: text(giftData[`${role}Label`]) || account.label || (role === "bride" ? "Cô dâu" : "Chú rể") }
+          ? { ...account, role, displayLabel: text(giftData[`${role}Label`]) || account.label || (role === "bride" ? t("storyBuilder.bride") : t("storyBuilder.groom")) }
           : published
             ? { ...published, role, displayLabel: text(giftData[`${role}Label`]) || published.displayLabel }
-            : { role, displayLabel: text(giftData[`${role}Label`]) || (role === "bride" ? "Cô dâu" : "Chú rể") } as GiftAccountCard;
+            : { role, displayLabel: text(giftData[`${role}Label`]) || (role === "bride" ? t("storyBuilder.bride") : t("storyBuilder.groom")) } as GiftAccountCard;
       });
       const cards: GiftAccountCard[] = selectedAccounts.length > 0 ? managedAccounts : giftData.accountsManaged === true ? publishedAccounts : publishedAccounts.length > 0 ? publishedAccounts : (["groom", "bride"] as const).map(role => ({
         role,
-        displayLabel: text(giftData[`${role}Label`]) || (role === "bride" ? "Cô dâu" : "Chú rể"),
+        displayLabel: text(giftData[`${role}Label`]) || (role === "bride" ? t("storyBuilder.bride") : t("storyBuilder.groom")),
         bankName: text(giftData[`${role}Bank`]), accountName: text(giftData[`${role}Holder`]), accountNumber: text(giftData[`${role}Account`]), label: null,
       })).filter(account => account.bankName || account.accountName || account.accountNumber);
       async function copyAccount(accountNumber: string, role: string) {
         if (!accountNumber) return;
         setCopyError("");
         try { await navigator.clipboard.writeText(accountNumber); setCopiedRole(role); }
-        catch { setCopyError("Không thể sao chép tự động. Bạn có thể bôi đen số tài khoản để sao chép."); }
+        catch { setCopyError(t("storyBuilder.copyFailed")); }
       }
       const activeGiftAccount = activeGiftRole ? cards.find(account => account.role === activeGiftRole) : undefined;
       const qrImageUrl = activeGiftAccount ? vietQrAccountImageUrl(activeGiftAccount) : null;
@@ -611,24 +640,24 @@ function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget
         {giftData.enabled ? cards.length > 0 ? <div className={`grid gap-4 ${cards.length === 1 ? "mx-auto max-w-xl" : "sm:grid-cols-2"}`}>
           {cards.map((account, index) => {
             const role = account.role ?? (index === 1 ? "bride" : "groom");
-            const roleName = role === "bride" ? "Cô dâu" : "Chú rể";
-            return <button type="button" key={`${role}-${index}`} onClick={() => { setActiveGiftRole(role); setGiftQrFailed(false); setCopyError(""); }} aria-label={`Mở mã QR mừng cưới ${roleName.toLocaleLowerCase()}`} className={`group relative isolate flex min-h-44 w-full items-center gap-5 overflow-hidden rounded-[1.6rem] border border-[var(--site-accent)]/20 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--site-primary)_30%,var(--site-background)),var(--site-background)_72%)] p-5 text-left shadow-[0_12px_35px_color-mix(in_srgb,var(--site-accent)_8%,transparent)] transition duration-300 hover:-translate-y-1 hover:border-[var(--site-accent)]/45 hover:shadow-[0_18px_42px_color-mix(in_srgb,var(--site-accent)_14%,transparent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--site-accent)] motion-reduce:transform-none sm:p-7`}>
+            const roleName = role === "bride" ? t("storyBuilder.bride") : t("storyBuilder.groom");
+            return <button type="button" key={`${role}-${index}`} onClick={() => { setActiveGiftRole(role); setGiftQrFailed(false); setCopyError(""); }} aria-label={t("storyBuilder.openGiftQrForRole", { role: roleName })} className={`group relative isolate flex min-h-44 w-full items-center gap-5 overflow-hidden rounded-[1.6rem] border border-[var(--site-accent)]/20 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--site-primary)_30%,var(--site-background)),var(--site-background)_72%)] p-5 text-left shadow-[0_12px_35px_color-mix(in_srgb,var(--site-accent)_8%,transparent)] transition duration-300 hover:-translate-y-1 hover:border-[var(--site-accent)]/45 hover:shadow-[0_18px_42px_color-mix(in_srgb,var(--site-accent)_14%,transparent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--site-accent)] motion-reduce:transform-none sm:p-7`}>
               <span aria-hidden="true" className="relative grid size-[4.5rem] shrink-0 place-items-center rounded-[1.3rem] border border-[var(--site-accent)]/20 bg-[var(--site-background)]/85 text-[var(--site-accent)] shadow-sm transition-transform duration-300 group-hover:rotate-[-4deg] group-hover:scale-105 motion-reduce:transform-none sm:size-20"><Gift className="size-8 sm:size-9" /><span className="absolute -right-1 -top-1 size-3 rounded-full bg-[var(--site-primary)] ring-2 ring-[var(--site-background)]" /></span>
-              <span className="min-w-0 flex-1"><span className="block text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--site-accent)]">Hộp quà · {roleName}</span><span className="mt-1 block truncate font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }}>{account.displayLabel || roleName}</span>{account.bankName && <span className="mt-1 block truncate text-sm opacity-70">{account.bankName}{account.accountName ? ` · ${account.accountName}` : ""}</span>}<span className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-full border border-[var(--site-accent)]/25 bg-[var(--site-background)]/80 px-3 text-xs font-medium text-[var(--site-accent)] transition group-hover:bg-[var(--site-primary)]/20">Mở hộp xem QR <span aria-hidden="true">→</span></span></span>
+              <span className="min-w-0 flex-1"><span className="block text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--site-accent)]">{t("storyBuilder.giftBoxHeading", { role: roleName })}</span><span className="mt-1 block truncate font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }}>{account.displayLabel || roleName}</span>{account.bankName && <span className="mt-1 block truncate text-sm opacity-70">{account.bankName}{account.accountName ? ` · ${account.accountName}` : ""}</span>}<span className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-full border border-[var(--site-accent)]/25 bg-[var(--site-background)]/80 px-3 text-xs font-medium text-[var(--site-accent)] transition group-hover:bg-[var(--site-primary)]/20">{t("storyBuilder.openGiftQr")} <span aria-hidden="true">→</span></span></span>
               <span aria-hidden="true" className="pointer-events-none absolute -bottom-10 -right-6 -z-10 size-32 rounded-full border border-[var(--site-accent)]/10" />
             </button>;
           })}
-        </div> : <p className="rounded-xl border border-dashed border-[var(--site-rule)] p-5 text-sm opacity-70">Thông tin tài khoản mừng cưới chưa được cấu hình hoặc tài khoản đã bị gỡ.</p> : <p className="text-sm opacity-65">Thông tin mừng cưới chưa được bật.</p>}
+        </div> : <p className="rounded-xl border border-dashed border-[var(--site-rule)] p-5 text-sm opacity-70">{t("storyBuilder.giftAccountUnavailable")}</p> : <p className="text-sm opacity-65">{t("storyBuilder.giftDisabled")}</p>}
         </div>
         {activeGiftAccount && typeof document !== "undefined" && createPortal(<div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setActiveGiftRole(null); }}>
           <section role="dialog" aria-modal="true" aria-labelledby={`gift-qr-title-${section.id}`} className="relative max-h-[94dvh] w-full overflow-y-auto rounded-t-[1.7rem] border border-[var(--site-rule)] bg-[var(--site-background)] px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-6 text-[var(--site-text)] shadow-2xl sm:max-h-[90dvh] sm:max-w-md sm:rounded-[1.7rem] sm:p-7" onMouseDown={event => event.stopPropagation()}>
-            <button type="button" aria-label="Đóng mã QR" className="absolute right-4 top-4 grid size-10 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)]/80 transition hover:bg-[var(--site-primary)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--site-accent)]" onClick={() => setActiveGiftRole(null)}><X className="size-4" /></button>
-            <div className="pr-12"><p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--site-accent)]">Mừng cưới · {activeGiftAccount.role === "bride" ? "Cô dâu" : "Chú rể"}</p><h3 id={`gift-qr-title-${section.id}`} className="mt-2 font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }}>{activeGiftAccount.displayLabel || (activeGiftAccount.role === "bride" ? "Cô dâu" : "Chú rể")}</h3></div>
-            {qrImageUrl && !giftQrFailed ? <div className="mx-auto mt-5 grid w-full max-w-[280px] place-items-center rounded-2xl border border-[var(--site-rule)] bg-white p-3 shadow-sm"><img src={qrImageUrl} alt={`Mã QR chuyển khoản ${activeGiftAccount.displayLabel || "mừng cưới"}`} className="aspect-square w-full object-contain" onError={() => setGiftQrFailed(true)} /></div> : <div role="status" className="mt-5 rounded-xl border border-dashed border-[var(--site-rule)] bg-[var(--site-primary)]/10 p-5 text-center text-sm leading-6 opacity-80">{giftQrFailed ? "Chưa tải được mã QR. Bạn vẫn có thể sao chép thông tin tài khoản bên dưới." : "Tài khoản cũ chưa có mã ngân hàng để tạo QR. Hãy chọn tài khoản trong mục Quà mừng để bật mã QR."}</div>}
-            <div className="mt-5 space-y-1 text-center"><p className="font-medium">{activeGiftAccount.bankName || "Tài khoản ngân hàng"}</p><p className="text-sm opacity-75">{activeGiftAccount.accountName}</p><p className="break-all font-mono text-sm tracking-wide">{activeGiftAccount.accountNumber}</p></div>
-            <button type="button" className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[var(--site-accent)] px-4 text-sm font-medium text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--site-accent)]" onClick={() => void copyAccount(activeGiftAccount.accountNumber, activeGiftAccount.role ?? "gift") }><Copy className="size-4" />{copiedRole === (activeGiftAccount.role ?? "gift") ? "Đã sao chép số tài khoản" : "Sao chép số tài khoản"}</button>
+            <button type="button" aria-label={t("storyBuilder.closeQr")} className="absolute right-4 top-4 grid size-10 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)]/80 transition hover:bg-[var(--site-primary)]/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--site-accent)]" onClick={() => setActiveGiftRole(null)}><X className="size-4" /></button>
+            <div className="pr-12"><p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--site-accent)]">{t("storyBuilder.qrPaymentTitle", { role: activeGiftAccount.role === "bride" ? t("storyBuilder.bride") : t("storyBuilder.groom") })}</p><h3 id={`gift-qr-title-${section.id}`} className="mt-2 font-serif text-2xl" style={{ fontFamily: "var(--site-heading)" }}>{activeGiftAccount.displayLabel || (activeGiftAccount.role === "bride" ? t("storyBuilder.bride") : t("storyBuilder.groom"))}</h3></div>
+            {qrImageUrl && !giftQrFailed ? <div className="mx-auto mt-5 grid w-full max-w-[280px] place-items-center rounded-2xl border border-[var(--site-rule)] bg-white p-3 shadow-sm"><img src={qrImageUrl} alt={t("storyBuilder.accountQrAlt", { name: activeGiftAccount.displayLabel || t("storyBuilder.giftBox", { role: activeGiftAccount.role === "bride" ? t("storyBuilder.bride") : t("storyBuilder.groom") }) })} className="aspect-square w-full object-contain" onError={() => setGiftQrFailed(true)} /></div> : <div role="status" className="mt-5 rounded-xl border border-dashed border-[var(--site-rule)] bg-[var(--site-primary)]/10 p-5 text-center text-sm leading-6 opacity-80">{giftQrFailed ? t("storyBuilder.qrFailed") : t("storyBuilder.legacyQrUnavailable")}</div>}
+            <div className="mt-5 space-y-1 text-center"><p className="font-medium">{activeGiftAccount.bankName || t("storyBuilder.bankAccount")}</p><p className="text-sm opacity-75">{activeGiftAccount.accountName}</p><p className="break-all font-mono text-sm tracking-wide">{activeGiftAccount.accountNumber}</p></div>
+            <button type="button" className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[var(--site-accent)] px-4 text-sm font-medium text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--site-accent)]" onClick={() => void copyAccount(activeGiftAccount.accountNumber, activeGiftAccount.role ?? "gift") }><Copy className="size-4" />{copiedRole === (activeGiftAccount.role ?? "gift") ? t("storyBuilder.copiedAccount") : t("storyBuilder.copyAccount")}</button>
             {copyError && <p role="status" className="mt-2 text-center text-sm text-[var(--site-accent)]">{copyError}</p>}
-            <p className="mt-4 text-center text-xs leading-5 opacity-65">Mã QR dùng để chuyển khoản. Website công khai không tự ghi nhận trạng thái giao dịch.</p>
+            <p className="mt-4 text-center text-xs leading-5 opacity-65">{t("storyBuilder.qrDisclaimer")}</p>
           </section>
         </div>, document.body)}
       </>;
@@ -638,8 +667,8 @@ function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget
   const spacing = section.style?.spacing === "compact" ? "py-10 sm:py-14" : section.style?.spacing === "spacious" ? "py-24 sm:py-32" : "";
   const surface = section.style?.background === "soft" ? "bg-[var(--site-primary)]/10" : section.style?.background === "accent" ? "bg-[var(--site-accent)]/5" : "";
   const sectionHeaderClass = `story-section__header ${section.variant === "editorial" ? "mx-auto mb-10 max-w-3xl text-center" : "mb-8 max-w-2xl"}`;
-  return <section id={section.id} data-section-type={section.type} data-variant={section.variant} data-section-number={String(sectionIndex + 1).padStart(2, "0")} data-reveal-effect={revealEffect} tabIndex={editable ? 0 : undefined} aria-label={editable ? `${title || section.type}, chọn để chỉnh sửa` : undefined} onClick={editable ? event => { if (event.target instanceof Element && event.target.closest("a, button, input, textarea, select, [contenteditable='true']")) return; onSelectSection?.(section.id); } : undefined} onKeyDown={editable ? event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectSection?.(section.id); } } : undefined} className={`${classes} ${spacing} ${surface} ${editable ? "cursor-pointer outline-offset-[-1px] hover:outline hover:outline-1 hover:outline-primary/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" : ""} ${editable && selected ? "outline outline-2 outline-primary" : ""}`}>
-    {hidden && <span className="absolute right-5 top-4 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">Đang ẩn</span>}
+  return <section id={section.id} data-section-type={section.type} data-variant={section.variant} data-section-number={String(sectionIndex + 1).padStart(2, "0")} data-reveal-effect={revealEffect} tabIndex={editable ? 0 : undefined} aria-label={editable ? t("storyBuilder.sectionEditLabel", { title: title || t(`storyBuilder.sectionTypes.${section.type}`) }) : undefined} onClick={editable ? event => { if (event.target instanceof Element && event.target.closest("a, button, input, textarea, select, [contenteditable='true']")) return; onSelectSection?.(section.id); } : undefined} onKeyDown={editable ? event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectSection?.(section.id); } } : undefined} className={`${classes} ${spacing} ${surface} ${editable ? "cursor-pointer outline-offset-[-1px] hover:outline hover:outline-1 hover:outline-primary/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" : ""} ${editable && selected ? "outline outline-2 outline-primary" : ""}`}>
+    {hidden && <span className="absolute right-5 top-4 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{t("storyBuilder.hidden")}</span>}
     {section.type !== "hero" && <header className={sectionHeaderClass}>
       {family === "editorial" && <span className="story-section__number mb-2 block text-xs font-semibold tracking-[0.24em] text-[var(--site-accent)]">{String(sectionIndex + 1).padStart(2, "0")}</span>}
       {title && <InlineText tag="h2" editable={editable} value={title} onSave={value => onInlineEdit?.(section.id, "title", value)} presencePath={builderFieldPath(section.id, section.type, "title")} className="story-section__title font-serif text-3xl sm:text-4xl" style={{ fontFamily: "var(--site-heading)" }} />}
@@ -650,6 +679,7 @@ function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget
 }
 
 export function StoryBuilderV4Renderer({ document, slug, weddingId, pagePath, showHidden = false, editable = false, showGuestExperiencePreview = false, giftAccounts, selectedSectionId, onInlineEdit, onSelectSection, onNavigatePage }: Props) {
+  const { t } = useTranslation("public");
   const motionRoot = useRef<HTMLDivElement>(null);
   const mobilePagesId = useId();
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -701,33 +731,33 @@ export function StoryBuilderV4Renderer({ document, slug, weddingId, pagePath, sh
   }, [editable, slug]);
   const mobilePagesOpen = mobilePagesFor === page?.id;
   async function shareWebsite() {
-    const title = document.seo?.title || "Website cưới";
+    const title = document.seo?.title || t("storyBuilder.websiteTitle");
     const url = new URL(window.location.href);
     url.searchParams.delete("inviteToken");
     try {
       if (navigator.share) {
         await navigator.share({ title, url: url.toString() });
-        setShareStatus("Đã mở chia sẻ.");
+        setShareStatus(t("storyBuilder.shared"));
       } else {
         await navigator.clipboard.writeText(url.toString());
-        setShareStatus("Đã sao chép liên kết website.");
+        setShareStatus(t("storyBuilder.copiedLink"));
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       try {
         await navigator.clipboard.writeText(url.toString());
-        setShareStatus("Đã sao chép liên kết website.");
+        setShareStatus(t("storyBuilder.copiedLink"));
       } catch {
-        setShareStatus("Không thể chia sẻ liên kết trên thiết bị này.");
+        setShareStatus(t("storyBuilder.shareFailed"));
       }
     }
     window.setTimeout(() => setShareStatus(""), 2500);
   }
-  if (!page) return <main className="mx-auto max-w-xl px-6 py-24 text-center"><h1 className="font-serif text-3xl">Không tìm thấy trang</h1><p className="mt-3 opacity-70">Trang này có thể chưa được xuất bản.</p></main>;
+  if (!page) return <main className="mx-auto max-w-xl px-6 py-24 text-center"><h1 className="font-serif text-3xl">{t("storyBuilder.notFound")}</h1><p className="mt-3 opacity-70">{t("storyBuilder.notPublished")}</p></main>;
   const eventsTarget = page.sections.find(section => section.type === "events" && section.visible !== false)?.id;
   const rsvpTarget = page.sections.find(section => section.type === "rsvp" && section.visible !== false)?.id;
   const ctaTarget = eventsTarget ?? rsvpTarget;
-  const ctaLabel = eventsTarget ? "Xem ngày vui" : "Xác nhận tham dự";
+  const ctaLabel = eventsTarget ? t("storyBuilder.seeCelebration") : t("storyBuilder.tools.rsvp.label");
   const visibleSections = document.pages.filter(item => item.visible !== false)
     .flatMap(item => item.sections.filter(section => section.visible !== false).map(section => ({ section, pageSlug: item.slug })));
   const findTarget = (type: "rsvp" | "gift" | "wishes") => {
@@ -761,7 +791,7 @@ export function StoryBuilderV4Renderer({ document, slug, weddingId, pagePath, sh
   const visiblePages = document.pages.filter(item => item.visible !== false);
   const groomName = document.content.groom?.displayName || document.content.groom?.fullName || "";
   const brideName = document.content.bride?.displayName || document.content.bride?.fullName || "";
-  const coupleName = [groomName, brideName].filter(Boolean).join(" & ") || "Ngày vui";
+  const coupleName = [groomName, brideName].filter(Boolean).join(" & ") || t("storyBuilder.weddingDay");
   const coupleMonogram = groomName && brideName ? `${personInitials(groomName)}·${personInitials(brideName)}` : "♡";
   const renderPageItem = (item: typeof visiblePages[number], mobile = false) => {
     const active = item.id === page.id;
@@ -774,13 +804,13 @@ export function StoryBuilderV4Renderer({ document, slug, weddingId, pagePath, sh
       setMobilePagesFor(null);
       onNavigatePage?.(item.slug);
     };
-    if (onNavigatePage) return <button key={item.id} type="button" className={className} aria-current={active ? "page" : undefined} onClick={onSelect}>{label}{mobile && active ? <span className="text-xs">Đang xem</span> : null}</button>;
-    if (slug) return <Link key={item.id} href={href} className={className} aria-current={active ? "page" : undefined} onClick={() => setMobilePagesFor(null)}>{label}{mobile && active ? <span className="text-xs">Đang xem</span> : null}</Link>;
-    return <span key={item.id} className={mobile ? `${className} cursor-default` : className} aria-current={active ? "page" : undefined}>{label}{mobile && active ? <span className="text-xs">Đang xem</span> : null}</span>;
+    if (onNavigatePage) return <button key={item.id} type="button" className={className} aria-current={active ? "page" : undefined} onClick={onSelect}>{label}{mobile && active ? <span className="text-xs">{t("storyBuilder.viewing")}</span> : null}</button>;
+    if (slug) return <Link key={item.id} href={href} className={className} aria-current={active ? "page" : undefined} onClick={() => setMobilePagesFor(null)}>{label}{mobile && active ? <span className="text-xs">{t("storyBuilder.viewing")}</span> : null}</Link>;
+    return <span key={item.id} className={mobile ? `${className} cursor-default` : className} aria-current={active ? "page" : undefined}>{label}{mobile && active ? <span className="text-xs">{t("storyBuilder.viewing")}</span> : null}</span>;
   };
   return <div ref={motionRoot} style={style} data-design-family={family} data-motion-mode={document.appearance.motion ?? "template"} className={`template-canvas relative min-h-full ${showGuestTools ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:pb-0" : ""}`}>
     {showDecoration && <GuestDecoration effect={guestExperience.decoration} intensity={guestExperience.intensity} fixed={Boolean(slug)} />}
-    {visiblePages.length > 1 && <nav aria-label="Các trang website cưới" className="sticky top-0 z-10 border-b border-[var(--site-rule)] bg-[var(--site-background)]/95 backdrop-blur-md">
+    {visiblePages.length > 1 && <nav aria-label={t("storyBuilder.pagesNavigation")} className="sticky top-0 z-10 border-b border-[var(--site-rule)] bg-[var(--site-background)]/95 backdrop-blur-md">
       <div className="mx-auto flex min-h-14 max-w-[1440px] items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-10">
         <div className="hidden min-w-0 flex-1 items-center gap-2.5 md:flex">
           <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-primary)]/15 font-serif text-xs text-[var(--site-accent)]">{coupleMonogram}</span>
@@ -798,7 +828,7 @@ export function StoryBuilderV4Renderer({ document, slug, weddingId, pagePath, sh
             <span className="max-w-[42vw] truncate text-xs font-medium">{coupleName}</span>
           </div>
           <button type="button" aria-expanded={mobilePagesOpen} aria-controls={mobilePagesId} onClick={() => setMobilePagesFor(open => open === page.id ? null : page.id)} className="inline-flex min-h-10 max-w-[58%] shrink-0 items-center gap-2 rounded-full border border-[var(--site-rule)] bg-[var(--site-background)]/70 px-3.5 text-sm font-medium text-[var(--site-accent)] transition-colors hover:bg-[var(--site-primary)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]">
-            <span className="truncate">{page?.navigationLabel || page?.title || "Chọn trang"}</span>
+            <span className="truncate">{page?.navigationLabel || page?.title || t("storyBuilder.pageName")}</span>
             <ChevronDown className={`size-4 shrink-0 transition-transform ${mobilePagesOpen ? "rotate-180" : ""}`} aria-hidden="true" />
           </button>
         </div>
@@ -814,12 +844,12 @@ export function StoryBuilderV4Renderer({ document, slug, weddingId, pagePath, sh
     </main>
     <footer className="relative z-[1] border-t border-[var(--site-rule)] px-5 py-8 text-center">
       {showLegacyFooterShare && <div className="mb-5 flex flex-col items-center gap-2">
-        <button type="button" onClick={() => void shareWebsite()} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--site-rule)] px-4 text-sm transition hover:bg-[var(--site-primary)]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]"><Share2 className="size-4" />Chia sẻ website</button>
+        <button type="button" onClick={() => void shareWebsite()} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--site-rule)] px-4 text-sm transition hover:bg-[var(--site-primary)]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]"><Share2 className="size-4" />{t("storyBuilder.shareWebsite")}</button>
         {shareStatus && <p role="status" aria-live="polite" className="text-xs opacity-70">{shareStatus}</p>}
       </div>}
-      <p className="text-xs tracking-wide opacity-65">Được tạo cùng InviteMe</p>
+      <p className="text-xs tracking-wide opacity-65">{t("storyBuilder.madeWith")}</p>
     </footer>
     {showGuestTools && <GuestUtilityBar tools={guestTools} targets={toolTargets} events={eventList} slug={slug} onNavigatePage={onNavigatePage} />}
-    {showBackToTop && !editable && <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className={`fixed ${backToTopPosition} z-20 grid size-11 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)] text-[var(--site-text)] shadow-lg transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]`} aria-label="Lên đầu trang"><ArrowUp className="size-5" /></button>}
+    {showBackToTop && !editable && <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })} className={`fixed ${backToTopPosition} z-20 grid size-11 place-items-center rounded-full border border-[var(--site-rule)] bg-[var(--site-background)] text-[var(--site-text)] shadow-lg transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-accent)]`} aria-label={t("storyBuilder.backToTop")}><ArrowUp className="size-5" /></button>}
   </div>;
 }
