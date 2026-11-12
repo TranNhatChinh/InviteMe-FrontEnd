@@ -91,6 +91,7 @@ export const storyWishCommentPageSchema = z.object({
 export const storyWishLikeSchema = z.object({ wishId: z.string(), likeCount: z.number().int().nonnegative(), liked: z.boolean() });
 export type StoryWish = z.infer<typeof storyWishSchema>;
 export type StoryWishComment = z.infer<typeof storyWishCommentSchema>;
+export type StoryWishCommentPage = z.infer<typeof storyWishCommentPageSchema>;
 export const weddingEventSchema = z.object({
   id: z.string(), title: z.string(), description: z.string().nullable().optional(), startsAt: z.string().nullable().optional(),
   endsAt: z.string().nullable().optional(), timeZoneId: z.string(), venueName: z.string().nullable().optional(),
@@ -311,6 +312,18 @@ export const sendStoryWishComment = (api: ApiClient, slug: string, wishId: strin
     method: "POST",
     body: { name, message },
     schema: storyWishCommentSchema,
+  });
+
+export const deleteStoryWishComment = (api: ApiClient, weddingId: string, wishId: string, commentId: string) =>
+  api.request(`/weddings/${encodeURIComponent(weddingId)}/website/wishes/${encodeURIComponent(wishId)}/comments/${encodeURIComponent(commentId)}`, {
+    method: "DELETE",
+    schema: z.undefined(),
+  });
+
+export const deleteStoryWish = (api: ApiClient, weddingId: string, wishId: string) =>
+  api.request(`/weddings/${encodeURIComponent(weddingId)}/website/wishes/${encodeURIComponent(wishId)}`, {
+    method: "DELETE",
+    schema: z.undefined(),
   });
 
 export const setStoryWishLiked = (api: ApiClient, slug: string, wishId: string, visitorKey: string, liked: boolean) =>
