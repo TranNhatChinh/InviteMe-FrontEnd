@@ -1598,6 +1598,8 @@ function V4Studio({ weddingId, initialSite, initialDirty, setup, onChooseOtherTe
           <div className="mx-auto min-h-full overflow-hidden rounded-xl border border-border bg-background shadow-sm transition-[width]" style={{ width: viewportWidth, maxWidth: "100%" }}>
             <StoryBuilderV4Renderer
               document={renderedDocument}
+              slug={status === "PUBLISHED" ? setup.slug : undefined}
+              weddingId={weddingId}
               giftAccounts={giftAccountsQuery.data ?? []}
               pagePath={currentPage?.slug}
               showHidden={!preview}

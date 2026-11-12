@@ -16,7 +16,7 @@ import type { GiftBankAccount } from "@/features/gifts";
 
 type InlineEdit = (sectionId: string, key: string, value: unknown) => void;
 type GiftAccountCard = Pick<GiftBankAccount, "bankName" | "accountNumber" | "accountName" | "label"> & { id?: string; bankBin?: string; role?: "groom" | "bride"; displayLabel?: string };
-type Props = { document: StoryBuilderV4Document; slug?: string; pagePath?: string; showHidden?: boolean; editable?: boolean; showGuestExperiencePreview?: boolean; giftAccounts?: GiftBankAccount[]; selectedSectionId?: string; onInlineEdit?: InlineEdit; onSelectSection?: (sectionId: string) => void; onNavigatePage?: (pagePath: string) => void };
+type Props = { document: StoryBuilderV4Document; slug?: string; weddingId?: string; pagePath?: string; showHidden?: boolean; editable?: boolean; showGuestExperiencePreview?: boolean; giftAccounts?: GiftBankAccount[]; selectedSectionId?: string; onInlineEdit?: InlineEdit; onSelectSection?: (sectionId: string) => void; onNavigatePage?: (pagePath: string) => void };
 type Colors = { primary: string; background: string; accent: string; text: string };
 type GuestTool = "rsvp" | "calendar" | "gift" | "wishes" | "share";
 type GuestDecoration = "none" | "petals" | "sparkles" | "hearts" | "fireflies";
@@ -308,8 +308,8 @@ function InlineText({ value, editable, onSave, className, tag = "p", style, pres
   }, value);
 }
 
-function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel, showHidden, gift, giftAccounts, editable, selected, onInlineEdit, onSelectSection }: {
-  section: StoryBuilderV4Section; family: string; sectionIndex: number; slug?: string; ctaTarget?: string; ctaLabel?: string; showHidden: boolean; gift?: StoryBuilderV4Document["content"]["gift"]; giftAccounts?: GiftBankAccount[];
+function SectionView({ section, family, sectionIndex, slug, weddingId, ctaTarget, ctaLabel, showHidden, gift, giftAccounts, editable, selected, onInlineEdit, onSelectSection }: {
+  section: StoryBuilderV4Section; family: string; sectionIndex: number; slug?: string; weddingId?: string; ctaTarget?: string; ctaLabel?: string; showHidden: boolean; gift?: StoryBuilderV4Document["content"]["gift"]; giftAccounts?: GiftBankAccount[];
   editable: boolean; selected: boolean; onInlineEdit?: InlineEdit; onSelectSection?: (id: string) => void;
 }) {
   const [copiedRole, setCopiedRole] = useState<string | null>(null);
@@ -576,7 +576,7 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
       body = <StoryRsvp label={text(content.submitLabel) || undefined} />;
       break;
     case "wishes":
-      body = <StoryWishes slug={slug} variant={section.variant === "fountain" ? "fountain" : "default"} displayLimit={typeof content.displayLimit === "number" ? content.displayLimit : 3} allowLikes={content.allowLikes === true} allowComments={content.allowComments === true} />;
+      body = <StoryWishes slug={slug} weddingId={weddingId} canModerate={editable && selected} variant={section.variant === "fountain" ? "fountain" : "default"} displayLimit={typeof content.displayLimit === "number" ? content.displayLimit : 3} allowLikes={content.allowLikes === true} allowComments={content.allowComments === true} />;
       break;
     case "gift": {
       const giftData = record(gift);
@@ -649,7 +649,7 @@ function SectionView({ section, family, sectionIndex, slug, ctaTarget, ctaLabel,
   </section>;
 }
 
-export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = false, editable = false, showGuestExperiencePreview = false, giftAccounts, selectedSectionId, onInlineEdit, onSelectSection, onNavigatePage }: Props) {
+export function StoryBuilderV4Renderer({ document, slug, weddingId, pagePath, showHidden = false, editable = false, showGuestExperiencePreview = false, giftAccounts, selectedSectionId, onInlineEdit, onSelectSection, onNavigatePage }: Props) {
   const motionRoot = useRef<HTMLDivElement>(null);
   const mobilePagesId = useId();
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -810,7 +810,7 @@ export function StoryBuilderV4Renderer({ document, slug, pagePath, showHidden = 
       </div>}
     </nav>}
     <main className="relative z-[1]">
-      {page.sections.map((section, index) => <SectionView key={section.id} section={section} family={family} sectionIndex={index} slug={slug} ctaTarget={ctaTarget} ctaLabel={ctaLabel} showHidden={showHidden} gift={document.content.gift} giftAccounts={giftAccounts} editable={editable} selected={selectedSectionId === section.id} onInlineEdit={onInlineEdit} onSelectSection={onSelectSection} />)}
+      {page.sections.map((section, index) => <SectionView key={section.id} section={section} family={family} sectionIndex={index} slug={slug} weddingId={weddingId} ctaTarget={ctaTarget} ctaLabel={ctaLabel} showHidden={showHidden} gift={document.content.gift} giftAccounts={giftAccounts} editable={editable} selected={selectedSectionId === section.id} onInlineEdit={onInlineEdit} onSelectSection={onSelectSection} />)}
     </main>
     <footer className="relative z-[1] border-t border-[var(--site-rule)] px-5 py-8 text-center">
       {showLegacyFooterShare && <div className="mb-5 flex flex-col items-center gap-2">

@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Heart, MessageCircle, PenLine, RotateCcw } from "lucide-react";
+import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { ChevronDown, ChevronUp, Heart, MessageCircle, PenLine, RotateCcw, Trash2 } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
+import { ConfirmDialog } from "@/shared/feedback/confirm-dialog";
 import {
+  deleteStoryWish,
+  deleteStoryWishComment,
   listStoryWishComments,
   listStoryWishes,
   sendStoryWish,
   sendStoryWishComment,
   setStoryWishLiked,
   type StoryWish,
+  type StoryWishCommentPage,
 } from "../api/website.api";
 
 const visitorKeyStorage = "inviteme:public-wishes:visitor:v1";
@@ -44,12 +48,16 @@ function wishBubbleStyle(index: number): CSSProperties {
 
 export function StoryWishes({
   slug,
+  weddingId,
+  canModerate = false,
   variant = "default",
   displayLimit = 3,
   allowLikes = false,
   allowComments = false,
 }: {
   slug?: string;
+  weddingId?: string;
+  canModerate?: boolean;
   variant?: "default" | "fountain";
   displayLimit?: number;
   allowLikes?: boolean;
@@ -68,6 +76,9 @@ export function StoryWishes({
   const [fountainReplay, setFountainReplay] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [moderationMessage, setModerationMessage] = useState("");
+  const [moderationError, setModerationError] = useState("");
+  const [deletingWishId, setDeletingWishId] = useState<string | null>(null);
   const wishListKey = ["story-wishes", slug, visitorKey] as const;
   const wishes = useQuery({
     queryKey: wishListKey,
@@ -82,6 +93,24 @@ export function StoryWishes({
   useEffect(() => setVisitorKey(getVisitorKey()), []);
   useEffect(() => setVisibleWishCount(displayLimit === 0 ? Number.MAX_SAFE_INTEGER : displayLimit), [displayLimit]);
   useEffect(() => setWishArchiveOpen(false), [variant]);
+
+  async function removeWish(wishId: string) {
+    if (!weddingId || deletingWishId) return;
+    setDeletingWishId(wishId);
+    setModerationError("");
+    setModerationMessage("");
+    try {
+      await deleteStoryWish(api, weddingId, wishId);
+      cache.setQueryData<StoryWish[]>(wishListKey, current => current?.filter(wish => wish.id !== wishId));
+      cache.removeQueries({ queryKey: ["story-wish-comments", slug, wishId] });
+      setModerationMessage("Đã xóa lời chúc khỏi website.");
+      void cache.invalidateQueries({ queryKey: ["story-wishes", slug] });
+    } catch (cause) {
+      setModerationError(cause instanceof Error ? cause.message : "Không xóa được lời chúc.");
+    } finally {
+      setDeletingWishId(null);
+    }
+  }
 
   if (!slug) {
     return (
@@ -140,6 +169,11 @@ export function StoryWishes({
 
   return (
     <div className={`story-wishes mx-auto max-w-2xl space-y-5 ${variant === "fountain" ? "story-wishes--fountain" : ""}`} style={wishesStyle}>
+      {canModerate && weddingId && <>
+        <p className="rounded-xl border border-[var(--wishes-rule)] bg-white/60 px-3 py-2 text-xs leading-5 opacity-75">Chế độ quản lý: dùng biểu tượng thùng rác để xóa lời chúc hoặc bình luận khỏi website.</p>
+        {moderationMessage && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{moderationMessage}</p>}
+        {moderationError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{moderationError}</p>}
+      </>}
       <div className="overflow-hidden rounded-2xl border border-[var(--wishes-rule)] bg-white/70">
         <button type="button" aria-expanded={composerOpen} onClick={() => { setComposerOpen(open => !open); setError(""); }} className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--wishes-accent)]">
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--wishes-accent)]/10 text-[var(--wishes-accent)]"><PenLine className="size-4" /></span>
@@ -176,7 +210,7 @@ export function StoryWishes({
         </div>}
         {variant === "fountain" && wishes.data && wishes.data.length > 0 && <button type="button" aria-expanded={wishArchiveOpen} onClick={() => setWishArchiveOpen(open => !open)} className="min-h-11 w-full rounded-xl border border-[var(--wishes-rule)] bg-white/70 px-4 text-sm font-medium text-[var(--wishes-accent)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wishes-accent)]">{wishArchiveOpen ? "Thu gọn danh sách" : `Đọc lời chúc và xem tương tác · ${wishes.data.length}`}</button>}
         {(variant !== "fountain" || wishArchiveOpen) && <div data-wish-list className="space-y-3">
-          {wishes.data?.slice(0, visibleWishCount).map(wish => <StoryWishCard key={wish.id} slug={publicSlug} wish={wish} visitorKey={visitorKey} allowLikes={allowLikes} allowComments={allowComments} wishListKey={wishListKey} />)}
+          {wishes.data?.slice(0, visibleWishCount).map(wish => <StoryWishCard key={wish.id} slug={publicSlug} weddingId={weddingId} canModerate={canModerate} deletingWish={deletingWishId === wish.id} anyWishDeleting={deletingWishId !== null} onDeleteWish={() => void removeWish(wish.id)} wish={wish} visitorKey={visitorKey} allowLikes={allowLikes} allowComments={allowComments} wishListKey={wishListKey} />)}
         </div>}
         {(variant !== "fountain" || wishArchiveOpen) && displayLimit > 0 && wishes.data && wishes.data.length > visibleWishCount && <button type="button" onClick={() => setVisibleWishCount(count => Math.min(wishes.data?.length ?? count, count + displayLimit))} className="min-h-10 w-full rounded-xl border border-[var(--wishes-rule)] bg-white/65 px-4 text-sm font-medium text-[var(--wishes-accent)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wishes-accent)]">Xem thêm {Math.min(displayLimit, wishes.data.length - visibleWishCount)} lời chúc</button>}
         {(variant !== "fountain" || wishArchiveOpen) && displayLimit > 0 && visibleWishCount > displayLimit && <button type="button" onClick={() => setVisibleWishCount(displayLimit)} className="mx-auto block min-h-9 px-4 text-xs opacity-65 underline underline-offset-4 hover:opacity-100">Thu gọn danh sách</button>}
@@ -186,9 +220,9 @@ export function StoryWishes({
 }
 
 function StoryWishCard({
-  slug, wish, visitorKey, allowLikes, allowComments, wishListKey,
+  slug, weddingId, canModerate, deletingWish, anyWishDeleting, onDeleteWish, wish, visitorKey, allowLikes, allowComments, wishListKey,
 }: {
-  slug: string; wish: StoryWish; visitorKey: string; allowLikes: boolean; allowComments: boolean;
+  slug: string; weddingId?: string; canModerate: boolean; deletingWish: boolean; anyWishDeleting: boolean; onDeleteWish: () => void; wish: StoryWish; visitorKey: string; allowLikes: boolean; allowComments: boolean;
   wishListKey: readonly ["story-wishes", string | undefined, string];
 }) {
   const { api } = useRuntime();
@@ -204,6 +238,8 @@ function StoryWishCard({
   const [commentBusy, setCommentBusy] = useState(false);
   const [commentError, setCommentError] = useState("");
   const [commentSuccess, setCommentSuccess] = useState("");
+  const [commentDeleteError, setCommentDeleteError] = useState("");
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const commentsKey = ["story-wish-comments", slug, wish.id] as const;
   const comments = useInfiniteQuery({
     queryKey: commentsKey,
@@ -264,6 +300,34 @@ function StoryWishCard({
     }
   }
 
+  async function removeComment(commentId: string) {
+    if (!weddingId || deletingCommentId) return;
+    setDeletingCommentId(commentId);
+    setCommentDeleteError("");
+    setCommentSuccess("");
+    try {
+      await deleteStoryWishComment(api, weddingId, wish.id, commentId);
+      cache.setQueryData<InfiniteData<StoryWishCommentPage>>(commentsKey, current => current ? {
+        ...current,
+        pages: current.pages.map(page => ({
+          ...page,
+          items: page.items.filter(comment => comment.id !== commentId),
+          totalCount: Math.max(0, page.totalCount - 1),
+        })),
+      } : current);
+      cache.setQueryData<StoryWish[]>(wishListKey, current => current?.map(item => item.id === wish.id
+        ? { ...item, commentCount: Math.max(0, item.commentCount - 1) }
+        : item));
+      setCommentSuccess("Đã xóa bình luận khỏi website.");
+      void cache.invalidateQueries({ queryKey: commentsKey });
+      void cache.invalidateQueries({ queryKey: wishListKey });
+    } catch (cause) {
+      setCommentDeleteError(cause instanceof Error ? cause.message : "Không xóa được bình luận.");
+    } finally {
+      setDeletingCommentId(null);
+    }
+  }
+
   async function showMoreComments() {
     if (visibleCommentCount >= allComments.length && comments.hasNextPage) await comments.fetchNextPage();
     setVisibleCommentCount(count => Math.min(commentCount, count + 3));
@@ -273,7 +337,16 @@ function StoryWishCard({
     <article className="rounded-xl border border-[var(--wishes-rule)] bg-white/75 px-4 py-3">
       <header className="flex min-w-0 items-center gap-2.5">
         <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--wishes-accent)]/10 text-xs font-semibold text-[var(--wishes-accent)]">{wish.name.trim().charAt(0).toLocaleUpperCase("vi-VN") || "•"}</span>
-        <div className="flex min-w-0 flex-1 items-baseline justify-between gap-2"><p className="truncate text-sm font-semibold text-[var(--wishes-accent)]">{wish.name}</p><time dateTime={wish.createdAt} className="shrink-0 text-[11px] opacity-55">{displayDate(wish.createdAt)}</time></div>
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-2"><div className="flex min-w-0 items-baseline justify-between gap-2"><p className="truncate text-sm font-semibold text-[var(--wishes-accent)]">{wish.name}</p><time dateTime={wish.createdAt} className="shrink-0 text-[11px] opacity-55">{displayDate(wish.createdAt)}</time></div>
+          {canModerate && weddingId && <ConfirmDialog
+            trigger={<button type="button" disabled={anyWishDeleting} aria-label={`Xóa lời chúc của ${wish.name}`} title="Xóa lời chúc" className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--wishes-accent)] transition hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wishes-accent)] disabled:opacity-50">{deletingWish ? <span className="size-4 animate-spin rounded-full border-2 border-current border-r-transparent" /> : <Trash2 className="size-4" />}</button>}
+            title="Xóa lời chúc này?"
+            description={`Lời chúc của ${wish.name} cùng các lượt tim và bình luận bên dưới sẽ bị xóa vĩnh viễn.`}
+            confirmLabel="Xóa lời chúc"
+            confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onConfirm={onDeleteWish}
+          />}
+        </div>
       </header>
       <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{wish.message}</p>
       {(allowLikes || allowComments) && <div className="mt-2 flex flex-wrap items-center gap-4 border-t border-[var(--wishes-rule)]/70 pt-2">
@@ -285,9 +358,19 @@ function StoryWishCard({
         {comments.isPending && <p className="text-sm opacity-65">Đang tải bình luận…</p>}
         {comments.isError && <div role="alert" className="text-sm"><p>Chưa tải được bình luận.</p><button type="button" className="mt-1 underline underline-offset-4" onClick={() => void comments.refetch()}>Thử lại</button></div>}
         <div className="space-y-2">{visibleComments.map(comment => <div key={comment.id} className="border-l-2 border-[var(--wishes-rule)] pl-3">
-          <div className="flex items-baseline justify-between gap-2"><span className="text-xs font-semibold">{comment.name}</span><time dateTime={comment.createdAt} className="text-[10px] opacity-55">{displayDate(comment.createdAt)}</time></div>
+          <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-baseline gap-2"><span className="truncate text-xs font-semibold">{comment.name}</span><time dateTime={comment.createdAt} className="shrink-0 text-[10px] opacity-55">{displayDate(comment.createdAt)}</time></div>
+            {canModerate && weddingId && <ConfirmDialog
+              trigger={<button type="button" disabled={deletingCommentId !== null} aria-label={`Xóa bình luận của ${comment.name}`} title="Xóa bình luận" className="grid size-8 shrink-0 place-items-center rounded-full text-[var(--wishes-accent)] transition hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wishes-accent)] disabled:opacity-50"><Trash2 className="size-4" /></button>}
+              title="Xóa bình luận này?"
+              description={`Bình luận của ${comment.name} sẽ bị xóa vĩnh viễn khỏi website.`}
+              confirmLabel="Xóa bình luận"
+              confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onConfirm={() => void removeComment(comment.id)}
+            />}
+          </div>
           <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-5 opacity-85">{comment.message}</p>
         </div>)}</div>
+        {commentDeleteError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{commentDeleteError}</p>}
         {comments.data?.pages[0]?.totalCount === 0 && <p className="text-sm opacity-65">Chưa có bình luận. Hãy viết lời đầu tiên nhé.</p>}
         {comments.data && visibleCommentCount < commentCount && <button type="button" disabled={comments.isFetchingNextPage} onClick={() => void showMoreComments()} className="min-h-8 text-xs font-medium text-[var(--wishes-accent)] underline underline-offset-4 disabled:opacity-50">{comments.isFetchingNextPage ? "Đang tải…" : "Xem thêm bình luận"}</button>}
         {commentSuccess && <p role="status" className="text-xs text-emerald-700">{commentSuccess}</p>}
