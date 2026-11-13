@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { CheckCheck, ChevronLeft, ChevronRight, LoaderCircle, Search, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
@@ -16,6 +17,9 @@ export function MessageRecipientPicker({
   failed = false,
   onRetry,
   disabled = false,
+  totalRecipientCount,
+  selectionHint,
+  renderRecipientMeta,
 }: {
   recipients: MessageRecipient[];
   selectedIds: string[];
@@ -24,6 +28,9 @@ export function MessageRecipientPicker({
   failed?: boolean;
   onRetry?: () => void;
   disabled?: boolean;
+  totalRecipientCount?: number;
+  selectionHint?: string;
+  renderRecipientMeta?: (recipient: MessageRecipient) => ReactNode;
 }) {
   const { t } = useTranslation("common", { keyPrefix: "messageRecipients" });
   const [search, setSearch] = useState("");
@@ -43,7 +50,7 @@ export function MessageRecipientPicker({
   const currentPage = Math.min(page, pages);
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const pageSelected = visible.filter((guest) => selected.has(guest.id)).length;
-  const allSelected = recipients.length > 0 && recipients.every((guest) => selected.has(guest.id));
+  const allSelected = filtered.length > 0 && filtered.every((guest) => selected.has(guest.id));
   const unavailable = disabled || loading || failed;
 
   return (
@@ -51,7 +58,10 @@ export function MessageRecipientPicker({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span aria-live="polite" className="inline-flex items-center gap-2 text-sm font-medium">
           <Users className="size-4 text-primary-hover" aria-hidden="true" />
-          {t("selected", { count: selectedIds.length, total: recipients.length })}
+          {t("selected", {
+            count: selectedIds.length,
+            total: totalRecipientCount ?? recipients.length,
+          })}
         </span>
         {selectedIds.length > 0 && (
           <button
@@ -68,15 +78,25 @@ export function MessageRecipientPicker({
         type="button"
         variant={allSelected ? "default" : "outline"}
         className="w-full justify-center"
-        disabled={unavailable || !recipients.length}
-        onClick={() => onChange(recipients.map((guest) => guest.id))}
+        disabled={unavailable || !filtered.length}
+        onClick={() =>
+          onChange(
+            toggleRecipientPage(
+              selectedIds,
+              filtered.map((guest) => guest.id),
+              !allSelected,
+            ),
+          )
+        }
       >
         {loading ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}
         {allSelected
-          ? t("allSelected", { count: recipients.length })
-          : t("selectAll", { count: recipients.length })}
+          ? t("deselectAllMatching", { count: filtered.length })
+          : t("selectAll", { count: filtered.length })}
       </Button>
-      <p className="text-xs leading-relaxed text-muted-foreground">{t("allPagesHint")}</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        {selectionHint ?? t("allPagesHint")}
+      </p>
       <label className="relative block">
         <Search
           aria-hidden="true"
@@ -153,11 +173,15 @@ export function MessageRecipientPicker({
                     <span className="block truncate text-sm font-medium">
                       {guest.recipientName}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {[guest.groupName, guest.email || guest.phone || t("noContact")]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
+                    {renderRecipientMeta ? (
+                      <span className="mt-1 block">{renderRecipientMeta(guest)}</span>
+                    ) : (
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {[guest.groupName, guest.email || guest.phone || t("noContact")]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    )}
                   </span>
                 </label>
               </li>

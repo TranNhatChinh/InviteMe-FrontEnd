@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ApiClient } from "@/core/api/api-client";
 import {
+  generateInvitationSmsDraft,
   getInvitationDraft,
   invitationDraftSchema,
   queueInvitationBatch,
@@ -19,6 +20,36 @@ test("email redesign draft response is readable without the retired tone field",
   });
   assert.equal(draft.tone, undefined);
   assert.equal(draft.smsContent, "Chúng mình mong được đón bạn.");
+});
+
+test("SMS-only generation sends the expected draft version to its dedicated endpoint", async () => {
+  let captured: { path: string; options: Record<string, unknown> } | undefined;
+  const api = {
+    request: async (path: string, options: Record<string, unknown>) => {
+      captured = { path, options };
+      return {
+        weddingId: "wedding-1",
+        subject: "Lời mời",
+        content: "Email được giữ nguyên",
+        version: 5,
+        usedFallback: false,
+        smsContent: "Trân trọng kính mời",
+        smsUsedFallback: false,
+      };
+    },
+  } as unknown as ApiClient;
+
+  const draft = await generateInvitationSmsDraft(api, "wedding-1", {
+    expectedVersion: 4,
+    additionalInstructions: "warm and concise",
+  });
+  assert.equal(draft.smsContent, "Trân trọng kính mời");
+  assert.equal(captured?.path, "/weddings/wedding-1/invitation-messages/draft/generate-sms");
+  assert.equal(captured?.options.method, "POST");
+  assert.deepEqual(captured?.options.body, {
+    expectedVersion: 4,
+    additionalInstructions: "warm and concise",
+  });
 });
 
 test("invitation draft reads the API-owned draft or null", async () => {

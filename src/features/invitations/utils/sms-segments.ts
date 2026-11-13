@@ -9,7 +9,7 @@ export function countSmsSegments(content: string) {
     else if (GSM_EXTENSION.has(character)) gsmUnits += 2;
     else {
       const units = content.length; // UTF-16 units, as used by Unicode SMS encoding.
-      return { encoding: "Unicode", units, segments: units <= 70 ? 1 : Math.ceil(units / 67), unitsPerSegment: units <= 70 ? 70 : 67 };
+      return { encoding: "UCS-2", units, segments: units <= 70 ? 1 : Math.ceil(units / 67), unitsPerSegment: units <= 70 ? 70 : 67 };
     }
   }
   return { encoding: "GSM-7", units: gsmUnits, segments: gsmUnits <= 160 ? 1 : Math.ceil(gsmUnits / 153), unitsPerSegment: gsmUnits <= 160 ? 160 : 153 };

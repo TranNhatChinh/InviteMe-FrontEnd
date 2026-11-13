@@ -2,25 +2,18 @@
 
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  Check,
-  LoaderCircle,
-  Mail,
-  MessageSquareText,
-  RefreshCw,
-  Send,
-  Sparkles,
-} from "lucide-react";
+import { Check, Clock3, History, LoaderCircle, RefreshCw } from "lucide-react";
 import { ApiError } from "@/core/api/api-error";
 import { useRuntime } from "@/core/config/runtime";
 import { Button } from "@/shared/ui/button";
 import { usePermission } from "@/shared/components/permission-guard";
 import {
   generateInvitationDraft,
+  generateInvitationSmsDraft,
   getInvitationBatch,
   getInvitationDraft,
   previewInvitation,
+  preflightInvitationSms,
   queueInvitationBatch,
   retryInvitationBatch,
   saveInvitationDraft,
@@ -29,7 +22,6 @@ import {
   type InvitationDraft,
   type InvitationSendBody,
 } from "../api/invitation-messaging.api";
-import { MessageRecipientPicker } from "@/shared/components/message-recipient-picker";
 import {
   loadAllMessageRecipients,
   MAX_MESSAGE_RECIPIENTS,
@@ -37,12 +29,11 @@ import {
 } from "@/shared/lib/message-recipients";
 import { z } from "zod";
 import { useTranslation } from "react-i18next";
-import { countSmsSegments } from "../utils/sms-segments";
 // eslint-disable-next-line architecture/boundaries -- Invitation batch controls use the wedding plan's email and SMS quotas.
-import { FeatureLimitNotice, useWeddingPlan } from "@/features/plans";
+import { useWeddingPlan } from "@/features/plans";
 import { useLocale } from "@/i18n/language-context";
-import { formatNumber } from "@/i18n/format";
 import { groupKind, groupLabels } from "@/shared/lib/planning-groups";
+import { InvitationWorkspaceView } from "./invitation-workspace-view";
 
 const recipientSchema = z.object({
   id: z.string(),
@@ -87,6 +78,11 @@ function persistBatchId(weddingId: string, id: string) {
 
 function friendlyError(error: unknown, t: (key: string) => string): string {
   if (!(error instanceof ApiError)) return t("errors.generic");
+  if (error.backendCode === "INVITATION_DRAFT_NOT_FOUND") return t("errors.draftNotFound");
+  if (error.backendCode === "GUEST_NOT_FOUND") return t("errors.guestNotFound");
+  if (error.backendCode === "WEDDING_NOT_FOUND") return t("errors.weddingNotFound");
+  if (error.backendCode === "INVITATION_BATCH_NOT_FOUND") return t("errors.batchNotFound");
+  if (error.backendCode === "NO_INVITATION_RECIPIENTS") return t("errors.noRecipients");
   if (error.status === 503 || error.backendCode === "INVITATION_CHANNEL_NOT_CONFIGURED")
     return t("errors.channelNotConfigured");
   if (
@@ -105,6 +101,12 @@ function friendlyError(error: unknown, t: (key: string) => string): string {
   )
     return t("errors.providerNotConfigured");
   if (error.backendCode === "SMS_CONTENT_TOO_LONG") return t("errors.smsTooLong");
+  if (error.backendCode === "SMS_COPY_WILL_BE_SHORTENED") return t("errors.smsCopyRequiresEdit");
+  if (error.backendCode === "SMS_RECIPIENT_DETAILS_TOO_LONG") return t("errors.smsRecipientDetailsTooLong");
+  if (error.backendCode === "SMS_COPY_BUDGET_TOO_SMALL") return t("errors.smsCopyBudgetTooSmall");
+  if (error.backendCode === "AI_SMS_COPY_INVALID") return t("errors.smsAiInvalidOutput");
+  if (error.backendCode === "AI_SMS_COPY_TOO_LONG") return t("errors.smsAiTooLong");
+  if (error.backendCode === "INVITATION_LINK_INVALID") return t("errors.invalidInvitationLink");
   if (error.backendCode === "CONCURRENCY_CONFLICT" || error.status === 409)
     return t("errors.conflict");
   if (error.status === 422) return t("errors.invalidRequest");
@@ -164,7 +166,6 @@ export function InvitationMessaging({
   isPublished: boolean;
 }) {
   const { t } = useTranslation("invitations");
-  const { t: tPlans } = useTranslation("plans");
   const { api } = useRuntime();
   const { can, isOwner } = usePermission();
   const { language } = useLocale();
@@ -181,15 +182,23 @@ export function InvitationMessaging({
     smsContent: string;
     version: number;
   } | null>(null);
-  const [instructions, setInstructions] = useState("");
+  const [emailInstructions, setEmailInstructions] = useState("");
+  const [smsInstructions, setSmsInstructions] = useState("");
   const [conflictDraft, setConflictDraft] = useState<InvitationDraft | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
   const [previewGuestId, setPreviewGuestId] = useState("");
-  const [previewTab, setPreviewTab] = useState<"EMAIL" | "SMS">("EMAIL");
+  const [composeChannel, setComposeChannel] = useState<InvitationChannel>("EMAIL");
   const [recipientMode, setRecipientMode] = useState<"GUESTS" | "GROUP">("GUESTS");
   const [groupId, setGroupId] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [channels, setChannels] = useState<InvitationChannel[]>(["EMAIL"]);
+  const [workspaceTab, setWorkspaceTab] = useState<"COMPOSE" | "HISTORY">("COMPOSE");
+  const [recipientGroupFilter, setRecipientGroupFilter] = useState("ALL");
+  const [recipientStatusFilter, setRecipientStatusFilter] = useState("ALL");
+  const [reviewedPreview, setReviewedPreview] = useState<{
+    guestId: string;
+    version: number;
+  } | null>(null);
   const activeBatchId = useStoredBatchId(weddingId);
   const [showRecipients, setShowRecipients] = useState(false);
   const [visibleJobs, setVisibleJobs] = useState(50);
@@ -209,6 +218,7 @@ export function InvitationMessaging({
       smsUsedFallback: false,
     };
   const dirty = edits !== null;
+  const selectedRecipientIds = useMemo(() => [...selectedIds].sort(), [selectedIds]);
 
   const recipientsQuery = useQuery({
     queryKey: ["invitation-messaging", weddingId, "all-recipients"],
@@ -226,10 +236,24 @@ export function InvitationMessaging({
     () =>
       (recipientsQuery.data ?? []).map((guest) => ({
         ...guest,
+        groupId: guest.group?.id,
         groupName: guest.group?.name,
       })),
     [recipientsQuery.data],
   );
+  const smsPreflightQuery = useQuery({
+    queryKey: ["invitation-messaging", weddingId, "sms-preflight", selectedRecipientIds, form.version],
+    queryFn: ({ signal }) => preflightInvitationSms(api, weddingId, selectedRecipientIds, signal),
+    enabled: Boolean(
+      channels.includes("SMS") &&
+        selectedRecipientIds.length > 0 &&
+        selectedRecipientIds.length <= MAX_MESSAGE_RECIPIENTS &&
+        draftQuery.data &&
+        !dirty &&
+        recipientsQuery.isSuccess,
+    ),
+    retry: false,
+  });
   const groups = useMemo(() => {
     const unique = new Map<string, string>();
     for (const guest of recipientsQuery.data ?? [])
@@ -246,13 +270,49 @@ export function InvitationMessaging({
   const generateMutation = useMutation({
     mutationFn: () =>
       generateInvitationDraft(api, weddingId, {
-        ...(instructions.trim() ? { additionalInstructions: instructions.trim() } : {}),
+        ...(emailInstructions.trim() ? { additionalInstructions: emailInstructions.trim() } : {}),
       }),
     onSuccess: (next) => {
       queryClient.setQueryData(draftKey(weddingId), next);
       setEdits(null);
       setConflictDraft(null);
-      setSaveMessage(t("aiDraftSaved"));
+      setSaveMessage(t("emailGeneratedSmsUnchanged"));
+      setReviewedPreview(null);
+    },
+  });
+  const generateSmsMutation = useMutation({
+    mutationFn: () =>
+      generateInvitationSmsDraft(api, weddingId, {
+        expectedVersion: form.version,
+        ...(selectedRecipientIds.length ? { guestIds: selectedRecipientIds } : {}),
+        ...(smsInstructions.trim() ? { additionalInstructions: smsInstructions.trim() } : {}),
+      }),
+    onSuccess: (next) => {
+      queryClient.setQueryData(draftKey(weddingId), next);
+      setEdits((current) =>
+        current ? { ...current, smsContent: next.smsContent, version: next.version } : null,
+      );
+      setConflictDraft(null);
+      setComposeChannel("SMS");
+      setReviewedPreview(null);
+      setSaveMessage(
+        next.smsCopyWasShortened
+          ? t("smsGeneratedShortened", { limit: next.smsCopyLimit ?? 60 })
+          : t("smsGeneratedEmailUnchanged"),
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["invitation-messaging", weddingId, "preview"],
+      });
+    },
+    onError: async (error) => {
+      setSaveMessage(friendlyError(error, t));
+      if (error instanceof ApiError && error.status === 409) {
+        const latest = await queryClient.fetchQuery({
+          queryKey: draftKey(weddingId),
+          queryFn: ({ signal }) => getInvitationDraft(api, weddingId, signal),
+        });
+        if (latest) setConflictDraft(latest);
+      }
     },
   });
   const saveMutation = useMutation({
@@ -273,6 +333,10 @@ export function InvitationMessaging({
       setEdits(null);
       setConflictDraft(null);
       setSaveMessage(t("draftSaved"));
+      setReviewedPreview(null);
+      void queryClient.invalidateQueries({
+        queryKey: ["invitation-messaging", weddingId, "preview"],
+      });
     },
     onError: async (error) => {
       setSaveMessage(friendlyError(error, t));
@@ -297,12 +361,24 @@ export function InvitationMessaging({
       setVisibleJobs(50);
       void queryClient.invalidateQueries({ queryKey: batchQueryKey(weddingId, batch.id) });
     },
-    onError: (error) => {
+    onError: async (error) => {
       if (!(error instanceof ApiError) || error.code === "network") {
         setSaveMessage(t("uncertainSend"));
       } else {
         setUncertainSend(null);
         setSaveMessage(friendlyError(error, t));
+        if (error.backendCode === "GUEST_NOT_FOUND" || error.backendCode === "NO_INVITATION_RECIPIENTS") {
+          const refreshedRecipients = await recipientsQuery.refetch();
+          if (refreshedRecipients.data) {
+            const availableIds = new Set(refreshedRecipients.data.map((recipient) => recipient.id));
+            setSelectedIds((current) => current.filter((id) => availableIds.has(id)));
+            setPreviewGuestId((current) =>
+              availableIds.has(current) ? current : (refreshedRecipients.data[0]?.id ?? ""),
+            );
+          }
+        } else if (error.backendCode === "INVITATION_DRAFT_NOT_FOUND") {
+          await draftQuery.refetch();
+        }
       }
     },
   });
@@ -318,14 +394,37 @@ export function InvitationMessaging({
     onSuccess: () => void batchQuery.refetch(),
   });
 
+  const latestStatusesByGuest = useMemo(() => {
+    const statuses = new Map<string, Set<string>>();
+    for (const job of batchQuery.data?.jobs ?? []) {
+      const guestStatuses = statuses.get(job.guestId) ?? new Set<string>();
+      guestStatuses.add(job.status);
+      statuses.set(job.guestId, guestStatuses);
+    }
+    return statuses;
+  }, [batchQuery.data?.jobs]);
+  const filteredRecipients = useMemo(
+    () =>
+      allRecipients.filter((guest) => {
+        if (recipientGroupFilter !== "ALL" && guest.groupId !== recipientGroupFilter) return false;
+        if (recipientStatusFilter === "ALL") return true;
+        const statuses = latestStatusesByGuest.get(guest.id);
+        if (recipientStatusFilter === "NOT_IN_BATCH") return !statuses?.size;
+        if (!statuses?.size) return false;
+        if (recipientStatusFilter === "PENDING")
+          return statuses.has("PENDING") || statuses.has("SENDING");
+        if (recipientStatusFilter === "ACCEPTED")
+          return statuses.has("ACCEPTED") || statuses.has("SENT");
+        if (recipientStatusFilter === "DELIVERED") return statuses.has("DELIVERED");
+        if (recipientStatusFilter === "FAILED") return statuses.has("FAILED");
+        return true;
+      }),
+    [allRecipients, latestStatusesByGuest, recipientGroupFilter, recipientStatusFilter],
+  );
+
   const { subject, content, smsContent } = form;
   const templateErrors = validateTemplate(subject, content, smsContent, t);
-  const recipientIds =
-    recipientMode === "GROUP"
-      ? (recipientsQuery.data ?? [])
-          .filter((guest) => guest.group?.id === groupId)
-          .map((guest) => guest.id)
-      : selectedIds;
+  const recipientIds = selectedIds;
   const missingContacts = missingRecipientContacts(allRecipients, recipientIds, channels);
   const selectionCount = recipientIds.length;
   const quotaFor = (channel: InvitationChannel) => {
@@ -365,6 +464,13 @@ export function InvitationMessaging({
     !saveMutation.isPending &&
     !conflictDraft &&
     !missingContacts.length &&
+    (!channels.includes("SMS") ||
+      (smsPreflightQuery.isSuccess &&
+        !smsPreflightQuery.isFetching &&
+        smsPreflightQuery.data.unsendableCount === 0 &&
+        smsPreflightQuery.data.shortenedCount === 0)) &&
+    reviewedPreview?.guestId === previewGuestId &&
+    reviewedPreview?.version === form.version &&
     !uncertainSend &&
     !sendMutation.isPending,
   );
@@ -381,20 +487,61 @@ export function InvitationMessaging({
       [key]: value,
     }));
     setSaveMessage("");
+    setReviewedPreview(null);
   }
-  function beginSend() {
+
+  async function saveAndRefreshPreview() {
+    if (!previewGuestId) return;
+    let previewVersion = form.version;
+    if (dirty) {
+      try {
+        const saved = await saveMutation.mutateAsync({
+          subject,
+          content,
+          smsContent,
+          version: form.version,
+        });
+        previewVersion = saved.version;
+      } catch {
+        return;
+      }
+    }
+    const queryKey = ["invitation-messaging", weddingId, "preview", previewGuestId] as const;
+    try {
+      const nextPreview = await queryClient.fetchQuery({
+        queryKey,
+        queryFn: () => previewInvitation(api, weddingId, previewGuestId),
+        staleTime: 0,
+      });
+      queryClient.setQueryData(queryKey, nextPreview);
+      setReviewedPreview({ guestId: previewGuestId, version: previewVersion });
+      setSaveMessage("");
+    } catch {
+      await previewQuery.refetch();
+    }
+  }
+
+  function formatBatchDate(value: string) {
+    return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Asia/Ho_Chi_Minh",
+    }).format(new Date(value));
+  }
+  function confirmSend() {
     if (!canSend) return;
-    const details =
-      recipientMode === "GROUP"
-        ? t("selectedGroup", {
-            name: groups.find((group) => group.id === groupId)?.name ?? t("selected"),
-          })
-        : t("selectedGuestCount", { count: selectedIds.length });
-    if (!window.confirm(t("confirmSend", { channels: channels.join(" + "), details }))) return;
-    const body: InvitationSendBody =
-      recipientMode === "GROUP"
-        ? { groupId, channels: [...channels] }
-        : { guestIds: [...selectedIds], channels: [...channels] };
+    const groupGuestIds = allRecipients
+      .filter((guest) => guest.groupId === groupId)
+      .map((guest) => guest.id);
+    const selectedSet = new Set(selectedIds);
+    const isCompleteSingleGroupSelection =
+      recipientMode === "GROUP" &&
+      Boolean(groupId) &&
+      groupGuestIds.length === selectedIds.length &&
+      groupGuestIds.every((id) => selectedSet.has(id));
+    const body: InvitationSendBody = isCompleteSingleGroupSelection
+      ? { groupId, channels: [...channels] }
+      : { guestIds: [...selectedIds], channels: [...channels] };
     const attempt = { body, key: window.crypto.randomUUID() };
     setUncertainSend(attempt);
     sendMutation.mutate(attempt);
@@ -432,144 +579,46 @@ export function InvitationMessaging({
     );
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-7">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="mt-2 font-display text-2xl">{t("composeTitle")}</h2>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              {t("composeDescription")}
-            </p>
-          </div>
-          {draftQuery.data && (
-            <span className="rounded-full bg-muted px-3 py-1 text-xs">
-              {t("version", { version: draftQuery.data.version })}
-            </span>
-          )}
-        </div>
-        {!draftQuery.data && (
-          <div className="mt-5 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-            {t("noDraft")}
-          </div>
-        )}
-        {!canViewGuests && (
-          <p
-            role="note"
-            className="mt-4 rounded-xl border border-amber-500/40 bg-amber-50 p-4 text-sm text-amber-950"
-          >
-            {t("guestViewRequired")}
+    <div className="space-y-5">
+      <header className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="font-display text-2xl font-semibold">{t("workspaceTitle")}</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            {t("workspaceDescription")}
           </p>
-        )}
-        <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <label className="block space-y-2 text-sm font-medium">
-              {t("aiInstructions")}{" "}
-              <span className="font-normal text-muted-foreground">({instructions.length}/500)</span>
-              <textarea
-                className="min-h-20 w-full rounded-lg border bg-background p-3 font-normal"
-                maxLength={500}
-                value={instructions}
-                onChange={(event) => setInstructions(event.target.value)}
-                placeholder={t("aiInstructionsPlaceholder")}
-              />
-            </label>
-            <Button
-              onClick={() => {
-                if (dirty && !window.confirm(t("replaceDraftConfirm"))) return;
-                generateMutation.mutate();
-              }}
-              disabled={generateMutation.isPending || instructions.length > 500}
-            >
-              {generateMutation.isPending ? (
-                <LoaderCircle className="animate-spin" />
-              ) : (
-                <Sparkles />
-              )}{" "}
-              {t("generateWithAi")}
-            </Button>
-            {generateMutation.isError && (
-              <p role="alert" className="text-sm text-destructive">
-                {friendlyError(generateMutation.error, t)}
-              </p>
-            )}
-            {draftQuery.data?.usedFallback && (
-              <p className="rounded-lg bg-muted p-3 text-sm">{t("emailFallback")}</p>
-            )}
-            {draftQuery.data?.smsUsedFallback && (
-              <p className="rounded-lg bg-muted p-3 text-sm">{t("smsFallback")}</p>
-            )}
-          </div>
-          <div className="space-y-4">
-            <label className="block space-y-2 text-sm font-medium">
-              {t("emailSubject")}
-              <input
-                className="h-11 w-full rounded-lg border bg-background px-3 font-normal"
-                maxLength={200}
-                value={subject}
-                onChange={(event) => updateField("subject", event.target.value)}
-                placeholder={t("emailSubjectPlaceholder")}
-              />
-            </label>
-            <label className="block space-y-2 text-sm font-medium">
-              {t("emailContent")}{" "}
-              <span className="font-normal text-muted-foreground">({content.length}/10.000)</span>
-              <textarea
-                className="min-h-36 w-full rounded-lg border bg-background p-3 font-normal"
-                maxLength={10000}
-                value={content}
-                onChange={(event) => updateField("content", event.target.value)}
-                placeholder={t("emailContentPlaceholder")}
-              />
-            </label>
-            <label className="block space-y-2 text-sm font-medium">
-              {t("smsContent")}{" "}
-              <span className="font-normal text-muted-foreground">
-                ({smsContent.length}/10.000)
-              </span>
-              <textarea
-                className="min-h-28 w-full rounded-lg border bg-background p-3 font-normal"
-                maxLength={10000}
-                value={smsContent}
-                onChange={(event) => updateField("smsContent", event.target.value)}
-                placeholder={t("smsContentPlaceholder")}
-                aria-describedby={`invitation-sms-help-${weddingId}`}
-              />
-              <p
-                id={`invitation-sms-help-${weddingId}`}
-                className="text-xs font-normal leading-relaxed text-muted-foreground"
-              >
-                {t("smsContentHelp")}
-              </p>
-            </label>
-          </div>
         </div>
-        <div className="mt-5 flex flex-col gap-3 border-t pt-4">
-          {templateErrors.length > 0 && (
-            <ul className="list-inside list-disc text-sm text-muted-foreground">
-              {templateErrors.map((error) => (
-                <li key={error}>{error}</li>
-              ))}
-            </ul>
-          )}
-          {conflictDraft && (
-            <div
-              role="alert"
-              className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-50 p-4 text-sm text-amber-950"
-            >
-              <p className="flex gap-2">
-                <AlertTriangle className="size-5 shrink-0" />{" "}
-                {t("serverHasVersion", { version: conflictDraft.version })}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={restoreLatest}>
-                  {t("loadLatestDiscardEdits")}
-                </Button>
-                <Button onClick={retryOnLatest}>{t("keepEditsUseLatest")}</Button>
-              </div>
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span
+            role="status"
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs ${dirty ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"}`}
+          >
+            {dirty ? t("unsavedChanges") : draftQuery.data ? t("draftSaved") : t("noDraft")}
+          </span>
+          {workspaceTab === "COMPOSE" && (
             <Button
+              type="button"
+              variant="outline"
+              className="min-h-10"
+              onClick={() => setWorkspaceTab("HISTORY")}
+            >
+              <History className="size-4" />
+              {t("historyTab")}
+            </Button>
+          )}
+          {workspaceTab === "HISTORY" && (
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-10"
+              onClick={() => setWorkspaceTab("COMPOSE")}
+            >
+              {t("startCompose")}
+            </Button>
+          )}
+          {workspaceTab === "COMPOSE" && (
+            <Button
+              type="button"
+              className="min-h-10"
               disabled={
                 !dirty ||
                 templateErrors.length > 0 ||
@@ -580,388 +629,177 @@ export function InvitationMessaging({
                 saveMutation.mutate({ subject, content, smsContent, version: form.version })
               }
             >
-              {saveMutation.isPending ? <LoaderCircle className="animate-spin" /> : <Check />}{" "}
-              {t("saveDraft")}
+              {saveMutation.isPending ? <LoaderCircle className="animate-spin" /> : <Check />}
+              {saveMutation.isPending ? t("savingDraft") : t("saveDraft")}
             </Button>
-            {saveMessage && (
-              <p role="status" className="text-sm text-muted-foreground">
-                {saveMessage}
-              </p>
-            )}
-            {dirty && <span className="text-sm text-muted-foreground">{t("unsavedChanges")}</span>}
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
-        <div className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-          <div className="flex items-center gap-2">
-            <Mail className="size-5" />
-            <h2 className="font-display text-xl">{t("previewAndTest")}</h2>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">{t("previewDescription")}</p>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <select
-              className="h-11 min-w-0 flex-1 rounded-lg border bg-background px-3"
-              value={previewGuestId}
-              onChange={(event) => setPreviewGuestId(event.target.value)}
-            >
-              <option value="">{t("selectGuest")}</option>
-              {(recipientsQuery.data ?? []).map((guest) => (
-                <option key={guest.id} value={guest.id}>
-                  {guest.recipientName}
-                </option>
-              ))}
-            </select>
-            <Button
-              variant="outline"
-              disabled={!previewGuestId || !draftQuery.data || dirty || previewQuery.isFetching}
-              onClick={() => void previewQuery.refetch()}
-            >
-              <RefreshCw className={previewQuery.isFetching ? "animate-spin" : ""} /> {t("preview")}
-            </Button>
-          </div>
-          {dirty && <p className="mt-2 text-xs text-muted-foreground">{t("saveBeforePreview")}</p>}
-          {previewQuery.isError && (
-            <p role="alert" className="mt-3 text-sm text-destructive">
-              {friendlyError(previewQuery.error, t)}
-            </p>
-          )}
-          {previewQuery.data && (
-            <div className="mt-4 space-y-4 rounded-xl border p-4">
-              <div role="tablist" aria-label={t("previewChannel")} className="flex gap-2">
-                {(["EMAIL", "SMS"] as const).map((channel) => (
-                  <button
-                    key={channel}
-                    role="tab"
-                    aria-selected={previewTab === channel}
-                    className={`rounded-lg px-3 py-2 text-sm ${previewTab === channel ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-                    onClick={() => setPreviewTab(channel)}
-                  >
-                    {channel}
-                  </button>
-                ))}
-              </div>
-              {previewTab === "EMAIL" ? (
-                <div className="space-y-3">
-                  <p className="font-semibold">{previewQuery.data.subject}</p>
-                  <iframe
-                    className="h-[680px] w-full rounded-xl border bg-white"
-                    srcDoc={previewQuery.data.emailHtml}
-                    title={t("emailPreviewTitle")}
-                    sandbox=""
-                    loading="lazy"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <pre className="whitespace-pre-wrap break-words rounded-lg bg-background p-3 text-sm">
-                    {previewQuery.data.smsContent}
-                  </pre>
-                  {(() => {
-                    const smsLength = countSmsSegments(previewQuery.data.smsContent);
-                    return (
-                      <p
-                        className={
-                          smsLength.segments > 3
-                            ? "text-sm text-destructive"
-                            : "text-xs text-muted-foreground"
-                        }
-                      >
-                        {t("smsSegmentCount", {
-                          encoding: smsLength.encoding,
-                          units: smsLength.units,
-                          segments: smsLength.segments,
-                        })}
-                        {smsLength.segments > 3 && ` ${t("smsOverLimit")}`}
-                      </p>
-                    );
-                  })()}
-                </div>
-              )}
-              <Button
-                variant="outline"
-                disabled={testMutation.isPending || dirty || !isPublished}
-                onClick={() => {
-                  if (window.confirm(t("testEmailConfirm"))) testMutation.mutate();
-                }}
-              >
-                {testMutation.isPending ? <LoaderCircle className="animate-spin" /> : <Send />}{" "}
-                {t("sendTestToMyEmail")}
-              </Button>
-              {dirty && <p className="text-xs text-muted-foreground">{t("saveBeforeTest")}</p>}
-              {testMutation.isSuccess && (
-                <p role="status" className="text-sm text-green-700">
-                  {t("testAccepted")}
-                </p>
-              )}
-              {testMutation.isError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {friendlyError(testMutation.error, t)}
-                </p>
-              )}
-            </div>
           )}
         </div>
-
-        <div className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-          <div className="flex items-center gap-2">
-            <Send className="size-5" />
-            <h2 className="font-display text-xl">{t("sendInvitations")}</h2>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">{t("sendDescription")}</p>
-          {plan.isPending && (
-            <p role="status" className="mt-3 text-xs text-muted-foreground">
-              {t("plan.checking")}
-            </p>
-          )}
-          {planUnavailable && (
-            <div className="mt-3">
-              <FeatureLimitNotice
-                status="unavailable"
-                title={tPlans("gate.unknownTitle")}
-                description={tPlans("gate.unknownDescription")}
-                retryLabel={tPlans("gate.retry")}
-                onRetry={() => void plan.refetch()}
-              />
-            </div>
-          )}
-          {quotaIssue?.quota && plan.data && !plan.isError && (
-            <div className="mt-3">
-              <FeatureLimitNotice
-                title={t(
-                  quotaIssue.quota.limit === 0
-                    ? "plan.channelNotIncludedTitle"
-                    : "plan.quotaInsufficientTitle",
-                  { channel: quotaIssue.channel },
-                )}
-                description={
-                  quotaIssue.quota.limit === 0
-                    ? isOwner
-                      ? tPlans("gate.notIncludedOwnerDescription", {
-                          feature: tPlans(`gate.features.${quotaIssue.quota.feature}`),
-                          planName: plan.data.planName,
-                        })
-                      : tPlans("gate.contactOwner", {
-                          feature: tPlans(`gate.features.${quotaIssue.quota.feature}`),
-                          planName: plan.data.planName,
-                        })
-                    : t("plan.quotaInsufficientDescription", {
-                        remaining:
-                          quotaIssue.quota.remaining === null
-                            ? t("plan.unlimited")
-                            : formatNumber(quotaIssue.quota.remaining, language),
-                        requested: formatNumber(selectionCount, language),
-                      })
-                }
-                usage={t("plan.quotaUsage", {
-                  used: formatNumber(quotaIssue.quota.used, language),
-                  limit:
-                    quotaIssue.quota.limit === null
-                      ? t("plan.unlimited")
-                      : formatNumber(quotaIssue.quota.limit, language),
-                })}
-                variant="compact"
-                upgradeHref={
-                  isOwner ? `/weddings/${encodeURIComponent(weddingId)}/plan` : undefined
-                }
-                upgradeLabel={isOwner ? tPlans("gate.viewPlans") : undefined}
-              />
-            </div>
-          )}
-          <div className="mt-4 flex gap-2">
-            {(["GUESTS", "GROUP"] as const).map((mode) => (
-              <button
-                key={mode}
-                disabled={sendMutation.isPending || Boolean(uncertainSend)}
-                className={`rounded-lg px-3 py-2 text-sm ${recipientMode === mode ? "bg-primary text-primary-foreground" : "bg-muted"}`}
-                onClick={() => {
-                  setRecipientMode(mode);
-                  setSelectedIds([]);
-                }}
-              >
-                {mode === "GUESTS" ? t("chooseGuests") : t("chooseGroup")}
-              </button>
-            ))}
-          </div>
-          {recipientMode === "GROUP" && recipientsQuery.isError && (
-            <div role="alert" className="mt-3 text-sm text-destructive">
-              <p>{t("groupListFailed", { error: friendlyError(recipientsQuery.error, t) })}</p>
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-2"
-                onClick={() => void recipientsQuery.refetch()}
-              >
-                {t("reload")}
-              </Button>
-            </div>
-          )}
-          {recipientMode === "GROUP" ? (
-            <label className="mt-3 block space-y-2 text-sm">
-              {t("guestGroup")}
-              <select
-                className="h-11 w-full rounded-lg border bg-background px-3"
-                value={groupId}
-                disabled={
-                  recipientsQuery.isPending || sendMutation.isPending || Boolean(uncertainSend)
-                }
-                onChange={(event) => {
-                  setGroupId(event.target.value);
-                }}
-              >
-                <option value="">{t("selectGroup")}</option>
-                {groups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <div className="mt-4">
-              <MessageRecipientPicker
-                recipients={allRecipients}
-                selectedIds={selectedIds}
-                onChange={setSelectedIds}
-                loading={recipientsQuery.isPending}
-                failed={recipientsQuery.isError}
-                onRetry={() => void recipientsQuery.refetch()}
-                disabled={sendMutation.isPending || Boolean(uncertainSend)}
-              />
-            </div>
-          )}
-          <fieldset className="mt-4">
-            <legend className="text-sm font-medium">{t("deliveryChannels")}</legend>
-            <div className="mt-2 flex flex-wrap gap-4">
-              {(["EMAIL", "SMS"] as const).map((channel) => (
-                <label key={channel} className="flex min-h-11 items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={channels.includes(channel)}
-                    disabled={
-                      sendMutation.isPending ||
-                      Boolean(uncertainSend) ||
-                      plan.isPending ||
-                      Boolean(quotaFor(channel)?.remaining === 0 && !channels.includes(channel))
-                    }
-                    onChange={(event) =>
-                      setChannels((current) =>
-                        event.target.checked
-                          ? [...current, channel]
-                          : current.filter((item) => item !== channel),
-                      )
-                    }
-                  />
-                  {channel === "EMAIL" ? (
-                    <Mail className="size-4" />
-                  ) : (
-                    <MessageSquareText className="size-4" />
-                  )}
-                  <span>
-                    <span className="flex items-center gap-2">{channel}</span>
-                    {quotaFor(channel) && (
-                      <span className="block text-xs font-normal text-muted-foreground">
-                        {t("plan.channelQuota", {
-                          remaining:
-                            quotaFor(channel)?.remaining === null
-                              ? t("plan.unlimited")
-                              : formatNumber(quotaFor(channel)?.remaining ?? 0, language),
-                          limit:
-                            quotaFor(channel)?.limit === null
-                              ? t("plan.unlimited")
-                              : formatNumber(quotaFor(channel)?.limit ?? 0, language),
-                        })}
-                      </span>
-                    )}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          {missingContacts.length > 0 && (
-            <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">
-              {t("missingContacts", { count: missingContacts.length })}
-              <button
-                type="button"
-                disabled={sendMutation.isPending || Boolean(uncertainSend)}
-                className="mt-2 block text-xs font-medium underline underline-offset-4"
-                onClick={() => {
-                  const missing = new Set(missingContacts);
-                  setSelectedIds(recipientIds.filter((id) => !missing.has(id)));
-                  setRecipientMode("GUESTS");
-                }}
-              >
-                {t("removeMissingContacts", { count: missingContacts.length })}
-              </button>
-            </div>
-          )}
-          {selectionCount > MAX_MESSAGE_RECIPIENTS && (
-            <p className="mt-3 text-sm text-destructive">{t("maxRecipients")}</p>
-          )}
-          <p className="mt-3 text-sm">
-            {t("recipientsSummary")}: <strong>{selectionCount}</strong> · {t("channelsSummary")}:{" "}
-            <strong>{channels.join(", ") || t("noneSelected")}</strong>
-          </p>
-          {uncertainSend && (
-            <div className="mt-3 space-y-2 rounded-lg border border-amber-500/40 bg-amber-50 p-3 text-sm">
-              <p>{t("uncertainSendDetails")}</p>
-              <Button
-                variant="outline"
-                disabled={sendMutation.isPending}
-                onClick={() => sendMutation.mutate(uncertainSend)}
-              >
-                {sendMutation.isPending ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}{" "}
-                {t("retrySameRequest")}
-              </Button>
-            </div>
-          )}
-          <Button className="mt-4 w-full" disabled={!canSend} onClick={beginSend}>
-            {sendMutation.isPending ? <LoaderCircle className="animate-spin" /> : <Send />}{" "}
-            {t("queueSend", { count: selectionCount })}
-          </Button>
-          {!isPublished && (
-            <p className="mt-2 text-sm text-muted-foreground">{t("publishBeforeSend")}</p>
-          )}
-          {dirty && <p className="mt-2 text-xs text-muted-foreground">{t("saveBeforeSend")}</p>}
-          {sendMutation.isError && !uncertainSend && (
-            <p role="alert" className="mt-3 text-sm text-destructive">
-              {friendlyError(sendMutation.error, t)}
-            </p>
-          )}
-          {sendMutation.isError &&
-            uncertainSend &&
-            sendMutation.error instanceof ApiError &&
-            sendMutation.error.code !== "network" && (
-              <p role="alert" className="mt-3 text-sm text-destructive">
-                {t("sendNotAccepted", { error: friendlyError(sendMutation.error, t) })}
-              </p>
-            )}
-        </div>
-      </section>
-
-      {activeBatchId && (
-        <section className="rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+      </header>
+      {workspaceTab === "COMPOSE" ? (
+        <InvitationWorkspaceView
+          weddingId={weddingId}
+          isPublished={isPublished}
+          canViewGuests={canViewGuests}
+          isOwner={isOwner}
+          plan={plan}
+          planUnavailable={planUnavailable}
+          quotaIssue={quotaIssue}
+          quotaFor={quotaFor}
+          draft={draftQuery.data}
+          subject={subject}
+          content={content}
+          smsContent={smsContent}
+          dirty={dirty}
+          emailFallback={draftQuery.data?.usedFallback ?? false}
+          smsFallback={draftQuery.data?.smsUsedFallback ?? false}
+          smsPreflight={smsPreflightQuery.data}
+          smsPreflightPending={smsPreflightQuery.isFetching}
+          smsPreflightError={
+            smsPreflightQuery.error ? friendlyError(smsPreflightQuery.error, t) : ""
+          }
+          emailInstructions={emailInstructions}
+          setEmailInstructions={setEmailInstructions}
+          smsInstructions={smsInstructions}
+          setSmsInstructions={setSmsInstructions}
+          saveMessage={saveMessage}
+          templateErrors={templateErrors}
+          conflictDraft={conflictDraft}
+          onRestoreLatest={restoreLatest}
+          onRetryOnLatest={retryOnLatest}
+          savePending={saveMutation.isPending}
+          generatePending={generateMutation.isPending}
+          generateSmsPending={generateSmsMutation.isPending}
+          testPending={testMutation.isPending}
+          generateError={generateMutation.error ? friendlyError(generateMutation.error, t) : ""}
+          generateSmsError={
+            generateSmsMutation.error ? friendlyError(generateSmsMutation.error, t) : ""
+          }
+          testError={testMutation.error ? friendlyError(testMutation.error, t) : ""}
+          onUpdateField={updateField}
+          onGenerateEmail={() => generateMutation.mutate()}
+          onGenerateSms={() => generateSmsMutation.mutate()}
+          onSendTest={() => testMutation.mutate()}
+          composeChannel={composeChannel}
+          onComposeChannelChange={setComposeChannel}
+          allRecipients={allRecipients}
+          groups={groups}
+          selectedIds={selectedIds}
+          onSelectedIdsChange={setSelectedIds}
+          recipientMode={recipientMode}
+          onRecipientModeChange={setRecipientMode}
+          groupId={groupId}
+          onGroupIdChange={setGroupId}
+          recipientGroupFilter={recipientGroupFilter}
+          onRecipientGroupFilterChange={setRecipientGroupFilter}
+          recipientStatusFilter={recipientStatusFilter}
+          onRecipientStatusFilterChange={setRecipientStatusFilter}
+          filteredRecipients={filteredRecipients}
+          recipientsPending={recipientsQuery.isPending}
+          recipientsError={recipientsQuery.isError}
+          recipientsErrorMessage={
+            recipientsQuery.error ? friendlyError(recipientsQuery.error, t) : ""
+          }
+          onReloadRecipients={() => void recipientsQuery.refetch()}
+          channels={channels}
+          onChannelsChange={setChannels}
+          missingContactCount={missingContacts.length}
+          selectionCount={selectionCount}
+          previewGuestId={previewGuestId}
+          onPreviewGuestIdChange={(id) => {
+            setPreviewGuestId(id);
+            setReviewedPreview(null);
+          }}
+          preview={previewQuery.data}
+          previewPending={previewQuery.isFetching}
+          previewError={previewQuery.error ? friendlyError(previewQuery.error, t) : ""}
+          previewReviewed={
+            reviewedPreview?.guestId === previewGuestId && reviewedPreview.version === form.version
+          }
+          onRefreshPreview={() => void saveAndRefreshPreview()}
+          canSend={canSend}
+          sendPending={sendMutation.isPending}
+          hasUncertainSend={Boolean(uncertainSend)}
+          sendError={sendMutation.error ? friendlyError(sendMutation.error, t) : ""}
+          sendErrorIsDefinitive={
+            sendMutation.error instanceof ApiError && sendMutation.error.code !== "network"
+          }
+          onConfirmSend={confirmSend}
+          onRetryUncertain={() => {
+            if (uncertainSend) sendMutation.mutate(uncertainSend);
+          }}
+          activeBatchId={activeBatchId}
+          batch={batchQuery.data}
+          batchStatusLabel={(status) => statusLabel(status, t)}
+          batchPending={batchQuery.isPending}
+          batchError={batchQuery.error ? friendlyError(batchQuery.error, t) : ""}
+          batchRefreshing={batchQuery.isFetching}
+          onRefreshBatch={() => void batchQuery.refetch()}
+          retryPending={retryMutation.isPending}
+          retryCount={retryMutation.data?.retried ?? null}
+          retryError={retryMutation.error ? friendlyError(retryMutation.error, t) : ""}
+          onRetryFailed={() => retryMutation.mutate()}
+          onOpenHistory={() => setWorkspaceTab("HISTORY")}
+          formatBatchDate={formatBatchDate}
+        />
+      ) : (
+        <section className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="font-display text-xl">{t("latestBatch")}</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-hover">
+                {t("historyTab")}
+              </p>
+              <h3 className="mt-1 font-display text-xl">{t("latestBatch")}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{t("historyScope")}</p>
             </div>
-            <Button variant="outline" onClick={() => void batchQuery.refetch()}>
-              <RefreshCw className={batchQuery.isFetching ? "animate-spin" : ""} /> {t("refresh")}
-            </Button>
+            {activeBatchId && (
+              <Button type="button" variant="outline" onClick={() => void batchQuery.refetch()}>
+                <RefreshCw className={batchQuery.isFetching ? "animate-spin" : ""} />
+                {t("refresh")}
+              </Button>
+            )}
           </div>
-          {batchQuery.isPending ? (
-            <p className="mt-4 text-sm text-muted-foreground">{t("loadingStatus")}</p>
+          {!activeBatchId ? (
+            <div className="py-12 text-center">
+              <Clock3 className="mx-auto size-8 text-muted-foreground" />
+              <p className="mt-3 font-medium">{t("noBatchHistory")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t("noBatchHistoryHelp")}</p>
+              <Button
+                type="button"
+                className="mt-4"
+                onClick={() => {
+                  setWorkspaceTab("COMPOSE");
+                }}
+              >
+                {t("startCompose")}
+              </Button>
+            </div>
+          ) : batchQuery.isPending ? (
+            <p role="status" className="py-8 text-sm text-muted-foreground">
+              {t("loadingStatus")}
+            </p>
           ) : batchQuery.isError ? (
-            <div role="alert" className="mt-4">
+            <div role="alert" className="py-6">
               <p className="text-sm">{friendlyError(batchQuery.error, t)}</p>
-              <Button className="mt-2" variant="outline" onClick={() => void batchQuery.refetch()}>
+              <Button
+                type="button"
+                className="mt-3"
+                variant="outline"
+                onClick={() => void batchQuery.refetch()}
+              >
                 {t("retry")}
               </Button>
             </div>
           ) : (
             <>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="mt-5 flex flex-col gap-3 rounded-xl bg-muted/50 p-4 sm:flex-row sm:items-center sm:justify-end">
+                <div className="shrink-0 text-sm sm:text-right">
+                  <p className="font-medium">{formatBatchDate(batchQuery.data.createdAt)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {[...new Set(batchQuery.data.jobs.map((job) => job.channel))].join(" + ")}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
                 {[
                   ["statusLabel", statusLabel(batchQuery.data.status, t)],
                   ["total", batchQuery.data.totalCount],
@@ -972,31 +810,39 @@ export function InvitationMessaging({
                   ["simulated", batchQuery.data.simulatedCount ?? 0],
                   [
                     "failedOrPending",
-                    `${batchQuery.data.failedCount} / ${batchQuery.data.pendingCount}`,
+                    batchQuery.data.failedCount + " / " + batchQuery.data.pendingCount,
                   ],
                 ].map(([label, value]) => (
-                  <div key={String(label)} className="rounded-xl bg-muted/60 p-3">
+                  <div key={String(label)} className="rounded-xl bg-muted/50 p-3">
                     <p className="text-xs text-muted-foreground">{t(String(label))}</p>
                     <p className="mt-1 font-semibold">{value}</p>
                   </div>
                 ))}
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Button variant="outline" onClick={() => setShowRecipients((value) => !value)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowRecipients((v) => !v)}
+                >
                   {showRecipients ? t("hideRecipients") : t("showRecipients")}
                 </Button>
                 {batchQuery.data.jobs.some((job) => job.status === "FAILED") && (
-                  <Button disabled={retryMutation.isPending} onClick={() => retryMutation.mutate()}>
+                  <Button
+                    type="button"
+                    disabled={retryMutation.isPending}
+                    onClick={() => retryMutation.mutate()}
+                  >
                     {retryMutation.isPending ? (
                       <LoaderCircle className="animate-spin" />
                     ) : (
                       <RefreshCw />
-                    )}{" "}
+                    )}
                     {t("retryFailed")}
                   </Button>
                 )}
                 {retryMutation.data && (
-                  <span className="text-sm text-muted-foreground">
+                  <span role="status" className="text-sm text-muted-foreground">
                     {t("retriedJobs", { count: retryMutation.data.retried })}
                   </span>
                 )}
@@ -1010,18 +856,22 @@ export function InvitationMessaging({
                 {batchQuery.data.jobs.slice(0, visibleJobs).map((job) => (
                   <div
                     key={job.id}
-                    className="grid gap-1 p-3 text-sm sm:grid-cols-[1fr_1fr_auto] sm:items-center"
+                    className="grid gap-1 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <span className="font-medium">{job.channel}</span>
-                      <span className="ml-2 text-muted-foreground">
+                      <span className="ml-2 break-all text-muted-foreground">
                         {showRecipients ? job.recipient : maskRecipient(job.recipient)}
                       </span>
                     </div>
                     <span className="text-muted-foreground">
                       {statusLabel(job.status, t)}
                       {job.errorCode
-                        ? ` · ${friendlyError(new ApiError(422, "business-rule", "", {}, job.errorCode), t)}`
+                        ? " · " +
+                          friendlyError(
+                            new ApiError(422, "business-rule", "", {}, job.errorCode),
+                            t,
+                          )
                         : ""}
                     </span>
                     <span className="text-xs text-muted-foreground">
@@ -1035,12 +885,14 @@ export function InvitationMessaging({
                   type="button"
                   variant="ghost"
                   className="mt-3"
-                  onClick={() => setVisibleJobs((count) => count + 50)}
+                  onClick={() => setVisibleJobs((n) => n + 50)}
                 >
                   {t("loadMore")}
                 </Button>
               )}
-              <p className="mt-3 text-xs text-muted-foreground">{t("deliveryDisclaimer")}</p>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                {t("deliveryDisclaimer")}
+              </p>
             </>
           )}
         </section>
