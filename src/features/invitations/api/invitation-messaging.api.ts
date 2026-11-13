@@ -10,6 +10,8 @@ export const invitationDraftSchema = z.object({
   usedFallback: z.boolean(),
   smsContent: z.string(),
   smsUsedFallback: z.boolean(),
+  smsCopyWasShortened: z.boolean().optional(),
+  smsCopyLimit: z.number().int().min(0).max(60).optional(),
 });
 export const invitationPreviewSchema = z.object({
   guestId: z.string(),
@@ -22,12 +24,27 @@ export const invitationPreviewSchema = z.object({
   emailHtml: z.string(),
   emailPlainText: z.string(),
   weddingImageUrl: z.string().nullable(),
+  smsEncoding: z.enum(["GSM-7", "UCS-2"]).nullable().optional(),
+  smsUnits: z.number().int().nonnegative().optional(),
+  smsSegments: z.number().int().nonnegative().optional(),
+  smsCopyWasShortened: z.boolean().optional(),
+});
+export const invitationSmsPreflightSchema = z.object({
+  recipientCount: z.number().int().nonnegative(),
+  recommendedCopyLimit: z.number().int().min(0).max(60),
+  maximumSegments: z.number().int().nonnegative(),
+  shortenedCount: z.number().int().nonnegative(),
+  unsendableCount: z.number().int().nonnegative(),
+  issues: z.array(z.object({ guestId: z.string(), recipientName: z.string(), code: z.string() })),
+  additionalIssueCount: z.number().int().nonnegative(),
 });
 export const invitationBatchSchema = z.object({
   id: z.string(),
   status: z.enum([
     "PENDING",
+    "ACCEPTED",
     "SENT",
+    "DELIVERED",
     "FAILED",
     "PARTIAL_FAILED",
     "NEEDS_REVIEW",
@@ -71,6 +88,7 @@ export const invitationBatchSchema = z.object({
 export type InvitationDraft = z.infer<typeof invitationDraftSchema>;
 export type InvitationPreview = z.infer<typeof invitationPreviewSchema>;
 export type InvitationBatch = z.infer<typeof invitationBatchSchema>;
+export type InvitationSmsPreflight = z.infer<typeof invitationSmsPreflightSchema>;
 export type InvitationChannel = "EMAIL" | "SMS";
 export type InvitationSendBody = {
   guestIds?: string[];
@@ -99,6 +117,30 @@ export function generateInvitationDraft(
     method: "POST",
     body: input,
     schema: invitationDraftSchema,
+  });
+}
+export function generateInvitationSmsDraft(
+  api: ApiClient,
+  weddingId: string,
+  input: { expectedVersion: number; guestIds?: string[]; additionalInstructions?: string },
+) {
+  return api.request(`${base(weddingId)}/draft/generate-sms`, {
+    method: "POST",
+    body: input,
+    schema: invitationDraftSchema,
+  });
+}
+export function preflightInvitationSms(
+  api: ApiClient,
+  weddingId: string,
+  guestIds: string[],
+  signal?: AbortSignal,
+) {
+  return api.request(`${base(weddingId)}/sms-preflight`, {
+    method: "POST",
+    body: { guestIds },
+    signal,
+    schema: invitationSmsPreflightSchema,
   });
 }
 export function saveInvitationDraft(

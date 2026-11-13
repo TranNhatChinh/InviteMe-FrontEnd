@@ -50,6 +50,7 @@
     "clear": "Clear selection",
     "selectAll": "Select all {{count}} guests",
     "allSelected": "All {{count}} guests selected",
+    "deselectAllMatching": "Deselect {{count}} matching guests",
     "allPagesHint": "Selects the full guest list, including guests on other pages.",
     "search": "Search name, group, email or phone",
     "loading": "Loading the complete guest list…",

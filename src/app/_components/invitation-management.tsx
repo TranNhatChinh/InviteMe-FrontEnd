@@ -10,6 +10,6 @@ export function InvitationManagement({ weddingId }: { weddingId: string }) {
     queryFn: ({ signal }) => getInvitationDesign(api, weddingId, signal) });
   return <>
     <SavedInvitation weddingId={weddingId} />
-    <InvitationMessaging weddingId={weddingId} isPublished={design.data?.status === "PUBLISHED"} />
+    <InvitationMessaging key={weddingId} weddingId={weddingId} isPublished={design.data?.status === "PUBLISHED"} />
   </>;
 }

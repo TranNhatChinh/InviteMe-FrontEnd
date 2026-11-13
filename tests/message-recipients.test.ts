@@ -42,6 +42,18 @@ test("select all includes every page and more than 180 guests", async () => {
   );
 });
 
+test("filter-scoped select all preserves selections outside the current search or filters", () => {
+  const initiallySelected = ["guest-outside-filter", "guest-a"];
+  assert.deepEqual(toggleRecipientPage(initiallySelected, ["guest-a", "guest-b"], true).sort(), [
+    "guest-a",
+    "guest-b",
+    "guest-outside-filter",
+  ]);
+  assert.deepEqual(toggleRecipientPage(initiallySelected, ["guest-a", "guest-b"], false), [
+    "guest-outside-filter",
+  ]);
+});
+
 test("all-recipient loading fails rather than returning a partial or duplicate selection", async () => {
   await assert.rejects(
     loadAllMessageRecipients(async (page) => ({

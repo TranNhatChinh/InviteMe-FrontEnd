@@ -50,6 +50,7 @@
     "clear": "Bỏ chọn",
     "selectAll": "Chọn tất cả {{count}} khách",
     "allSelected": "Đã chọn tất cả {{count}} khách",
+    "deselectAllMatching": "Bỏ chọn {{count}} khách đang khớp",
     "allPagesHint": "Chọn toàn bộ danh sách, bao gồm khách ở các trang khác.",
     "search": "Tìm theo tên, nhóm, email hoặc số điện thoại",
     "loading": "Đang tải đầy đủ danh sách khách…",

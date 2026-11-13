@@ -3,6 +3,7 @@ export const MAX_MESSAGE_RECIPIENTS = 5000;
 export type MessageRecipient = {
   id: string;
   recipientName: string;
+  groupId?: string | null;
   groupName?: string | null;
   email?: string | null;
   phone?: string | null;
