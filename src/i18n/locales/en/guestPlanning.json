@@ -107,6 +107,8 @@
       "capacity": "+{{count}} · {{remaining}} seats available after seating"
     },
     "legend": {
+      "declined": "Declined",
+      "waitlisted": "Waitlisted",
       "aria": "Seat status legend",
       "confirmed": "Attendance confirmed",
       "pending": "Not confirmed / no name yet",
@@ -584,6 +586,47 @@
       "catalog": "Groups in this import ({{count}})",
       "catalogHelp": "This checks whether names exist in the catalog; it can't verify actual guest membership. New groups haven't been saved to the system."
     }
+  },
+  "studio": {
+    "panHint": "Hold right mouse button + drag to pan",
+    "zoomHint": "Ctrl + scroll to zoom",
+    "dismissHint": "Dismiss instructions",
+    "exit": "Exit to wedding overview",
+    "exitDraft": "Exit and discard the unsaved seating draft?",
+    "splitZones": "Split by wedding side",
+    "swapZones": "Swap zones",
+    "resizeZone": "Resize {{name}}",
+    "dropInZone": "Drop to place in {{name}}",
+    "outsideZones": "Outside zones",
+    "placeOutside": "Place outside",
+
+    "brideArea": "Bride’s side",
+    "groomArea": "Groom’s side",
+    "centerAisle": "Center aisle",
+
+    "toggleSidebar": "Toggle sidebar",
+    "entertainment": "Audio and entertainment",
+    "eventTables": "Event tables",
+    "entrances": "Doors and entrances",
+
+    "addObjects": "Add tables and objects",
+    "closePalette": "Close object palette",
+    "guestTables": "Guest tables",
+    "roundTable": "Round table",
+    "roomObjects": "Room objects",
+    "danceFloor": "Dance floor",
+    "giftTable": "Gift table",
+    "entrance": "Entrance",
+    "objectsTemporary": "Objects are visible for this session.",
+    "removeObject": "Remove {{name}}",
+
+    "floorPlan": "Floor plan",
+    "grid": "Grid view",
+    "stage": "Stage",
+    "move": "Move {{name}}",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "fit": "Fit to view"
   },
   "generation": {
     "positionPriority": "Seating position priority",

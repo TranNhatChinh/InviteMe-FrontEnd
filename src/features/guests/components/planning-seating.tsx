@@ -29,7 +29,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import Image from "next/image";
-import { X } from "lucide-react";
+import { PanelLeft, Plus, X } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
 import { REALTIME_EVENTS } from "@/core/realtime/realtime-events";
@@ -55,6 +55,10 @@ import { previewSeatMove } from "../utils/planning-seat-move";
 import { moveSeatingWithRetry } from "../utils/seating-conflict-retry";
 import { ArrangeSeatingDialog } from "./arrange-seating-dialog";
 import { GenerateSeatingDialog } from "./generate-seating-dialog";
+import { SeatingObjectPalette, type SeatingCanvasObject } from "./seating-object-palette";
+import { SeatingSeatBadge } from "./seating-seat-badge";
+import { SeatingCanvas } from "./seating-canvas";
+import { sideSlots } from "../utils/seating-layout";
 import { SeatingBoard } from "./seating-board";
 import { wouldSplitParty } from "../utils/seating-layout";
 import {
@@ -143,6 +147,7 @@ function DragSource({
   return (
     <button
       ref={setNodeRef}
+      data-seating-canvas-interactive
       {...attributes}
       {...listeners}
       type="button"
@@ -208,6 +213,11 @@ function recipient(g: PlanningGuest) {
 }
 
 export function PlanningSeating({ weddingId }: { weddingId: string }) {
+  const [boardView, setBoardView] = useState<"canvas" | "grid">("canvas");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [objects, setObjects] = useState<SeatingCanvasObject[]>([]);
+  const Board = boardView === "canvas" ? SeatingCanvas : SeatingBoard;
   const { t } = useTranslation("guestPlanning");
   const { api, realtime } = useRuntime();
   const { can, scope, isWeddingWide } = usePermission();
@@ -694,15 +704,34 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           else collaboration.cancel(false);
         }}
       >
-        <section className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              {t("seating.title")}
-            </h1>
-            <Button variant="outline" asChild>
-              <Link href={`/weddings/${weddingId}/guests`}>{t("seating.guestList")}</Link>
+        <section data-seating-studio className="space-y-4">
+          <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-card px-2 py-2 sm:px-4">
+            <Button variant="ghost" size="icon" className="justify-self-start" asChild>
+              <Link
+                href={`/weddings/${weddingId}/overview`}
+                aria-label={t("studio.exit")}
+                title={t("studio.exit")}
+                onClick={(event) => {
+                  if (saving || (generationDraft && !window.confirm(t("studio.exitDraft"))))
+                    event.preventDefault();
+                }}
+              >
+                <X aria-hidden="true" className="size-5" />
+              </Link>
             </Button>
-          </div>
+            <h1 className="text-center text-base font-semibold sm:text-lg">{t("seating.title")}</h1>
+            <Button variant="ghost" size="sm" className="justify-self-end" asChild>
+              <Link
+                href={`/weddings/${weddingId}/guests`}
+                onClick={(event) => {
+                  if (saving || (generationDraft && !window.confirm(t("studio.exitDraft"))))
+                    event.preventDefault();
+                }}
+              >
+                {t("seating.guestList")}
+              </Link>
+            </Button>
+          </header>
           <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3 text-sm">
             <span>
               {publication.data?.published
@@ -781,7 +810,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           {generationDraft && (
             <div
               role="status"
-              className="sticky top-20 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950"
+              className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950"
             >
               <div>
                 <p className="font-semibold">{t("generation.draftTitle")}</p>
@@ -846,122 +875,201 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               </div>
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <SeatingLegend />
-            <div className="flex flex-wrap gap-2">
-              {!plan.tables.length &&
-                !generationDraft &&
-                editable &&
-                isWeddingWide("SEATING_EDIT") &&
-                isWeddingWide("SEATING_VIEW") && (
-                  <GenerateSeatingDialog
-                    plan={plan}
-                    disabled={saving}
-                    onPreview={(value, config) => {
-                      if (value.sourceVersion !== plan.version) return;
-                      setGenerationDraft({
-                        plan: generationDraftPlan(plan, value, config),
-                        input: {
-                          ...config,
-                          positionPriority: value.positionPriority ?? config.positionPriority,
-                          sourceFingerprint: value.sourceFingerprint,
-                          algorithmVersion: value.algorithmVersion,
-                        },
-                      });
-                      setSelection([]);
-                      closeDetails();
-                      setFailure(false);
-                      setMessage("");
+          <div
+            className={`overflow-hidden rounded-xl border bg-card lg:grid ${sidebarOpen ? "lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[390px_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}
+          >
+            {sidebarOpen && (
+              <aside className="min-w-0 border-b bg-card lg:border-b-0 lg:border-r">
+                {editable && boardView === "canvas" && paletteOpen ? (
+                  <SeatingObjectPalette
+                    tableDisabled={saving || plan.tables.length >= 100}
+                    onClose={() => setPaletteOpen(false)}
+                    onObject={(kind) => {
+                      const id = "object:" + crypto.randomUUID();
+                      setObjects([...objects, { id, kind }]);
                     }}
-                    saveError={failure ? message : undefined}
+                    onTable={() => {
+                      const slots = [
+                        ...sideSlots(plan.tables, "BRIDE", plan.brideTablesPerRow ?? 2),
+                        ...sideSlots(plan.tables, "GROOM", plan.groomTablesPerRow ?? 2),
+                      ]
+                        .filter((slot) => !slot.table)
+                        .sort((a, b) => a.row - b.row);
+                      if (slots[0]) setTableSlot(slots[0]);
+                    }}
                   />
+                ) : (
+                  <DropTarget
+                    id="unassigned"
+                    anchor="queue"
+                    target={{ tableId: null }}
+                    disabled={!editable || saving}
+                    className="space-y-3 p-4 lg:max-h-[76dvh] lg:overflow-auto"
+                    label={t("seating.filterGroup")}
+                  >
+                    <SeatingQueue
+                      plan={plan}
+                      disabled={!editable || saving || (!generationDraft && status !== "connected")}
+                      selection={selection}
+                      allowedGroupIds={allowedGroupIds}
+                      onSelect={(ids) => {
+                        closeDetails();
+                        setSelection(ids);
+                      }}
+                      onTable={(id) => {
+                        setSelection([]);
+                        setTableId(id);
+                        setSeat(null);
+                        setPlaceId(null);
+                        document
+                          .getElementById("seating-table-" + id)
+                          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }}
+                    />
+                    {selection.length > 0 && (
+                      <div
+                        className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs"
+                        role="status"
+                      >
+                        <p>{t("seating.selectionSummary", { count: selection.length })}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={saving || !editable}
+                            onClick={() => move(selection, null)}
+                          >
+                            {t("seating.unassign")}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setSelection([])}>
+                            {t("seating.clearSelection")}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">{t("seating.unassignDrop")}</p>
+                  </DropTarget>
                 )}
-              {plan.tables.length > 0 &&
-                !generationDraft &&
-                editable &&
-                isWeddingWide("SEATING_EDIT") &&
-                isWeddingWide("SEATING_VIEW") && (
-                  <ArrangeSeatingDialog
-                    plan={plan}
-                    disabled={saving}
-                    onApply={applyArrangement}
-                    saveError={failure ? message : undefined}
-                  />
-                )}
-              {editable && tableSlot && (
-                <AddSeatingTableDialog
-                  key={
-                    tableSlot ? `${tableSlot.side}:${tableSlot.row}:${tableSlot.column}` : "toolbar"
-                  }
-                  plan={plan}
-                  disabled={saving}
-                  slot={tableSlot}
-                  onCloseSlot={() => setTableSlot(null)}
-                  onChange={change}
-                  error={failure ? message : undefined}
-                />
-              )}
-            </div>
-          </div>
-          <div className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-            <DropTarget
-              id="unassigned"
-              anchor="queue"
-              target={{ tableId: null }}
-              disabled={!editable || saving}
-              className="space-y-3 rounded-xl border bg-card p-4"
-              label={t("seating.filterGroup")}
-            >
-              <SeatingQueue
-                plan={plan}
-                disabled={!editable || saving || (!generationDraft && status !== "connected")}
-                selection={selection}
-                allowedGroupIds={allowedGroupIds}
-                onSelect={(ids) => {
-                  closeDetails();
-                  setSelection(ids);
-                }}
-                onTable={(id) => {
-                  setSelection([]);
-                  setTableId(id);
-                  setSeat(null);
-                  setPlaceId(null);
-                  document
-                    .getElementById("seating-table-" + id)
-                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                }}
-              />
-              {selection.length > 0 && (
-                <div
-                  className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs"
-                  role="status"
-                >
-                  <p>{t("seating.selectionSummary", { count: selection.length })}</p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={saving || !editable}
-                      onClick={() => move(selection, null)}
-                    >
-                      {t("seating.unassign")}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setSelection([])}>
-                      {t("seating.clearSelection")}
-                    </Button>
-                  </div>
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">{t("seating.unassignDrop")}</p>
-            </DropTarget>
+              </aside>
+            )}
             <section
               data-seating-pointer-anchor="board"
-              className="min-w-0 rounded-xl border bg-[#F8F5EF] p-4"
+              className={
+                boardView === "canvas" ? "min-w-0" : "min-w-0 rounded-xl border bg-[#F8F5EF] p-4"
+              }
               aria-label={generationDraft ? t("generation.draftTitle") : t("seating.savedPlan")}
             >
-              <SeatingBoard
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-card px-3 py-3">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full bg-muted"
+                    aria-label={t("studio.toggleSidebar")}
+                    aria-expanded={sidebarOpen}
+                    onClick={() => setSidebarOpen((open) => !open)}
+                  >
+                    <PanelLeft className="size-4" />
+                  </Button>
+                  {editable && boardView === "canvas" && (
+                    <Button
+                      type="button"
+                      className="rounded-full bg-stone-950 text-white hover:bg-stone-800"
+                      aria-expanded={paletteOpen && sidebarOpen}
+                      onClick={() => {
+                        setPaletteOpen(!(paletteOpen && sidebarOpen));
+                        setSidebarOpen(true);
+                      }}
+                    >
+                      <Plus className="size-4" />
+                      {t("studio.addObjects")}
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {!plan.tables.length &&
+                    !generationDraft &&
+                    editable &&
+                    isWeddingWide("SEATING_EDIT") &&
+                    isWeddingWide("SEATING_VIEW") && (
+                      <GenerateSeatingDialog
+                        plan={plan}
+                        disabled={saving}
+                        onPreview={(value, config) => {
+                          if (value.sourceVersion !== plan.version) return;
+                          setGenerationDraft({
+                            plan: generationDraftPlan(plan, value, config),
+                            input: {
+                              ...config,
+                              positionPriority: value.positionPriority ?? config.positionPriority,
+                              sourceFingerprint: value.sourceFingerprint,
+                              algorithmVersion: value.algorithmVersion,
+                            },
+                          });
+                          setSelection([]);
+                          closeDetails();
+                          setFailure(false);
+                          setMessage("");
+                        }}
+                        saveError={failure ? message : undefined}
+                      />
+                    )}
+                  {plan.tables.length > 0 &&
+                    !generationDraft &&
+                    editable &&
+                    isWeddingWide("SEATING_EDIT") &&
+                    isWeddingWide("SEATING_VIEW") && (
+                      <ArrangeSeatingDialog
+                        plan={plan}
+                        disabled={saving}
+                        onApply={applyArrangement}
+                        saveError={failure ? message : undefined}
+                      />
+                    )}
+                  <div className="flex rounded-lg border bg-card p-0.5">
+                    <Button
+                      size="sm"
+                      variant={boardView === "canvas" ? "outline" : "ghost"}
+                      aria-pressed={boardView === "canvas"}
+                      onClick={() => setBoardView("canvas")}
+                    >
+                      {t("studio.floorPlan")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={boardView === "grid" ? "outline" : "ghost"}
+                      aria-pressed={boardView === "grid"}
+                      onClick={() => setBoardView("grid")}
+                    >
+                      {t("studio.grid")}
+                    </Button>
+                  </div>
+                  {editable && tableSlot && (
+                    <AddSeatingTableDialog
+                      key={
+                        tableSlot
+                          ? `${tableSlot.side}:${tableSlot.row}:${tableSlot.column}`
+                          : "toolbar"
+                      }
+                      plan={plan}
+                      disabled={saving}
+                      slot={tableSlot}
+                      onCloseSlot={() => setTableSlot(null)}
+                      onChange={change}
+                      error={failure ? message : undefined}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="border-b bg-card px-3 py-2">
+                <SeatingLegend canvas={boardView === "canvas"} />
+              </div>
+              <Board
                 key={generationDraft ? "draft" : "saved"}
                 plan={plan}
+                objects={objects}
+                onRemoveObject={(id) => setObjects(objects.filter((object) => object.id !== id))}
                 editable={
                   editable && isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")
                 }
@@ -996,7 +1104,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       id={`table:${table.id}`}
                       target={{ tableId: table.id }}
                       disabled={!editable || saving}
-                      className={`relative h-full w-full max-w-full rounded-xl border bg-white/50 p-3 transition-colors ${members.length === table.capacity ? "opacity-60" : ""} ${moving.length ? (shortage ? "border-red-300" : "border-primary/60") : ""}`}
+                      className={`relative h-full w-full max-w-full rounded-xl p-2 transition-colors ${boardView === "canvas" ? "border border-transparent hover:border-stone-200 hover:bg-white/60" : "border bg-white/50"} ${members.length === table.capacity ? "opacity-60" : ""} ${moving.length ? (shortage ? "border-red-300" : "border-primary/60") : ""}`}
                       highlighted={dragTarget?.tableId === table.id || remote.length > 0}
                       invalid={
                         dragTarget?.tableId === table.id
@@ -1025,22 +1133,40 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                         id={`seating-table-${table.id}`}
                         className="relative aspect-square scroll-mt-6"
                       >
-                        <Image
-                          src="/images/seating/round-table.svg"
-                          alt=""
-                          width={200}
-                          height={200}
-                          className="pointer-events-none absolute left-[16%] top-[16%] size-[68%]"
-                        />
+                        {boardView === "grid" && (
+                          <Image
+                            src="/images/seating/round-table.svg"
+                            alt=""
+                            width={200}
+                            height={200}
+                            className="pointer-events-none absolute left-[16%] top-[16%] size-[68%]"
+                          />
+                        )}
                         <button
-                          className={`absolute left-[25%] top-[25%] flex size-1/2 flex-col items-center justify-center rounded-full text-center text-sm ${tableId === table.id ? "ring-2 ring-primary" : ""}`}
+                          className={`absolute left-[21%] top-[21%] flex size-[58%] flex-col items-center justify-center rounded-full text-center text-sm ${boardView === "canvas" ? "bg-[#ffa895] text-stone-950" : ""} ${tableId === table.id ? "ring-2 ring-primary" : ""}`}
                           aria-pressed={tableId === table.id && seat === null}
                           aria-label={t("seating.viewTableGuests", { table: table.name })}
-                          onClick={() => {
+                          aria-haspopup="dialog"
+                          onClick={(event) => {
                             if (selection.length && editable) {
                               move(selection, table.id);
                               return;
                             }
+                            if (
+                              boardView === "canvas" &&
+                              event.detail !== 0 &&
+                              !(
+                                event.nativeEvent instanceof PointerEvent &&
+                                event.nativeEvent.pointerType === "touch"
+                              )
+                            )
+                              return;
+                            setTableId(table.id);
+                            setPlaceId(null);
+                            setSeat(null);
+                          }}
+                          onDoubleClick={() => {
+                            if (boardView !== "canvas" || selection.length) return;
                             setTableId(table.id);
                             setPlaceId(null);
                             setSeat(null);
@@ -1113,58 +1239,70 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                                 }}
                                 className={`relative size-full rounded focus-visible:outline-2 focus-visible:outline-primary ${p && seatsNeedingAttention.some((item) => item.id === p.id) ? "ring-2 ring-amber-500" : ""}`}
                               >
-                                <Image
-                                  src={`/images/seating/${!p ? "chair-empty.svg" : confirmed ? "chair-confirmed.svg" : "chair-pending.svg"}`}
-                                  alt=""
-                                  width={36}
-                                  height={40}
-                                  draggable={false}
-                                  className="pointer-events-none size-full"
-                                  style={{
-                                    transform: `rotate(${(angle * 180) / Math.PI + 90}deg)`,
-                                  }}
-                                />
-                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold">
-                                  {n}
-                                </span>
+                                {boardView === "canvas" ? (
+                                  <SeatingSeatBadge
+                                    name={p ? placeName(p.id) : undefined}
+                                    status={p?.person?.attendanceStatus}
+                                  />
+                                ) : (
+                                  <>
+                                    <Image
+                                      src={`/images/seating/${!p ? "chair-empty.svg" : confirmed ? "chair-confirmed.svg" : "chair-pending.svg"}`}
+                                      alt=""
+                                      width={36}
+                                      height={40}
+                                      draggable={false}
+                                      className="pointer-events-none size-full"
+                                      style={{
+                                        transform: `rotate(${(angle * 180) / Math.PI + 90}deg)`,
+                                      }}
+                                    />
+                                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold">
+                                      {n}
+                                    </span>
+                                  </>
+                                )}
                               </DragSource>
                             </DropTarget>
                           );
                         })}
                       </div>
-                      <div
-                        className="flex flex-wrap gap-1"
-                        aria-label={t("seating.guestsAtTable", { table: table.name })}
-                      >
-                        {members.slice(0, 4).map((a) => {
-                          const person = plan.places.find((p) => p.id === a.placeId);
-                          const guest = plan.guests.find((g) => g.id === person?.guestId);
-                          const name =
-                            person?.person?.fullName ||
-                            (person?.position === 1
-                              ? guest?.recipientName
-                              : t("seating.companion", { position: person?.position }));
-                          return (
-                            <button
-                              key={a.placeId}
-                              className="max-w-full truncate rounded-full bg-primary/10 px-2 py-1 text-[10px] focus-visible:outline-2 focus-visible:outline-primary"
-                              onClick={() => {
-                                setTableId(table.id);
-                                setPlaceId(a.placeId);
-                                setSeat(a.seatNumber);
-                              }}
-                              title={name}
-                            >
-                              {name}
-                            </button>
-                          );
-                        })}
-                        {members.length > 4 && (
-                          <span className="px-1 py-1 text-[10px] text-muted-foreground">
-                            +{members.length - 4}
-                          </span>
-                        )}
-                      </div>
+                      {boardView === "grid" && (
+                        <div
+                          className="flex flex-wrap gap-1"
+                          aria-label={t("seating.guestsAtTable", { table: table.name })}
+                        >
+                          {members.slice(0, 4).map((a) => {
+                            const person = plan.places.find((p) => p.id === a.placeId);
+                            const guest = plan.guests.find((g) => g.id === person?.guestId);
+                            const name =
+                              person?.person?.fullName ||
+                              (person?.position === 1
+                                ? guest?.recipientName
+                                : t("seating.companion", { position: person?.position }));
+                            return (
+                              <button
+                                key={a.placeId}
+                                data-seating-canvas-interactive
+                                className="max-w-full truncate rounded-full bg-primary/10 px-2 py-1 text-[10px] focus-visible:outline-2 focus-visible:outline-primary"
+                                onClick={() => {
+                                  setTableId(table.id);
+                                  setPlaceId(a.placeId);
+                                  setSeat(a.seatNumber);
+                                }}
+                                title={name}
+                              >
+                                {name}
+                              </button>
+                            );
+                          })}
+                          {members.length > 4 && (
+                            <span className="px-1 py-1 text-[10px] text-muted-foreground">
+                              +{members.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </DropTarget>
                   );
                 }}
@@ -1176,8 +1314,19 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               onClose={(event) => {
                 if (event.target === event.currentTarget) closeDetails();
               }}
+              onClick={(event) => {
+                if (event.target !== event.currentTarget) return;
+                const rect = event.currentTarget.getBoundingClientRect();
+                if (
+                  event.clientX < rect.left ||
+                  event.clientX > rect.right ||
+                  event.clientY < rect.top ||
+                  event.clientY > rect.bottom
+                )
+                  closeDetails();
+              }}
               aria-labelledby="seating-details-title"
-              className="seating-details-dialog fixed inset-x-0 bottom-0 top-auto m-0 h-[85dvh] max-h-[85dvh] w-full max-w-none overflow-hidden rounded-t-2xl border border-foreground/10 bg-white p-0 text-foreground shadow-2xl backdrop:bg-black/30 open:flex open:flex-col sm:inset-y-0 sm:left-auto sm:right-0 sm:h-dvh sm:max-h-none sm:max-w-lg sm:rounded-none"
+              className="seating-details-dialog fixed inset-x-0 bottom-0 top-auto m-0 h-[85dvh] max-h-[85dvh] w-full max-w-none overflow-hidden rounded-t-2xl border border-foreground/10 bg-white p-0 text-foreground shadow-2xl backdrop:bg-black/40 open:flex open:flex-col sm:inset-y-0 sm:left-auto sm:right-0 sm:h-dvh sm:max-h-none sm:max-w-lg sm:rounded-none"
             >
               {inspectedTable && seat === null && !inspectedPlace ? (
                 <SeatingTableDrawer

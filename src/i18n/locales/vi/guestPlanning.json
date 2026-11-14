@@ -92,6 +92,8 @@
       "capacity": "+{{count}} · còn {{remaining}} chỗ sau khi xếp"
     },
     "legend": {
+      "declined": "Đã từ chối",
+      "waitlisted": "Danh sách chờ",
       "aria": "Chú giải trạng thái ghế",
       "confirmed": "Đã xác nhận tham dự",
       "pending": "Chưa xác nhận / chưa có tên",
@@ -584,6 +586,47 @@
       "primaryRole": "Đây là chỗ của người đại diện. Hãy chọn chỗ khác để thêm người đi cùng.",
       "updateFailed": "Chưa cập nhật được thông tin."
     }
+  },
+  "studio": {
+    "panHint": "Giữ chuột phải + kéo để di chuyển",
+    "zoomHint": "Ctrl + cuộn để zoom",
+    "dismissHint": "Ẩn hướng dẫn",
+    "exit": "Thoát về tổng quan đám cưới",
+    "exitDraft": "Thoát và bỏ bản nháp xếp bàn chưa lưu?",
+    "splitZones": "Chia khu hai nhà",
+    "swapZones": "Hoán đổi hai khu",
+    "resizeZone": "Đổi kích thước {{name}}",
+    "dropInZone": "Thả để đặt vào {{name}}",
+    "outsideZones": "Ngoài khu",
+    "placeOutside": "Đặt ngoài khu",
+
+    "brideArea": "Khu Nhà gái",
+    "groomArea": "Khu Nhà trai",
+    "centerAisle": "Lối đi giữa",
+
+    "toggleSidebar": "Ẩn hoặc hiện thanh bên",
+    "entertainment": "Âm thanh và giải trí",
+    "eventTables": "Bàn sự kiện",
+    "entrances": "Cửa và lối vào",
+
+    "addObjects": "Thêm bàn và đối tượng",
+    "closePalette": "Đóng danh mục",
+    "guestTables": "Bàn khách",
+    "roundTable": "Bàn tròn",
+    "roomObjects": "Đối tượng trong sảnh",
+    "danceFloor": "Sàn nhảy",
+    "giftTable": "Bàn quà",
+    "entrance": "Lối vào",
+    "objectsTemporary": "Đối tượng chỉ hiển thị trong phiên hiện tại.",
+    "removeObject": "Xóa {{name}}",
+
+    "floorPlan": "Sơ đồ sảnh",
+    "grid": "Dạng lưới",
+    "stage": "Sân khấu",
+    "move": "Di chuyển {{name}}",
+    "zoomOut": "Thu nhỏ",
+    "zoomIn": "Phóng to",
+    "fit": "Vừa khung"
   },
   "generation": {
     "positionPriority": "Thứ tự ưu tiên vị trí",

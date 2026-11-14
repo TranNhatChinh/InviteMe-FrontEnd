@@ -252,6 +252,56 @@ export function SeatingTableDrawer({
           </details>
         )}
       </div>
+      {editable && (
+        <section
+          className="border-b border-foreground/10 bg-white px-5 py-4"
+          aria-labelledby={`${id}-edit`}
+        >
+          <h3 id={`${id}-edit`} className="mb-4 text-base font-semibold">
+            Chỉnh sửa bàn
+          </h3>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor={`${id}-name`} className="text-[11px] text-muted-foreground">
+                Tên bàn
+              </Label>
+              <Input
+                id={`${id}-name`}
+                name="name"
+                aria-label="Sửa tên bàn"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                required
+                maxLength={100}
+                disabled={saving}
+                className="h-[46px] border-foreground/15 bg-white shadow-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={`${id}-capacity`} className="text-[11px] text-muted-foreground">
+                Số ghế
+              </Label>
+              <NumberStepper
+                id={`${id}-capacity`}
+                label="Số ghế"
+                value={capacity}
+                onChange={setCapacity}
+                min={minimum}
+                max={20}
+                disabled={saving}
+                invalid={!!capacityError}
+                describedBy={capacityError ? `${id}-error` : undefined}
+              />
+            </div>
+          </div>
+          {capacityError && (
+            <p id={`${id}-error`} role="alert" className="mt-2 text-[11px] text-destructive">
+              {capacityError}
+            </p>
+          )}
+        </section>
+      )}
+
       <section
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary"
         aria-label="Danh sách ghế trong bàn"
@@ -378,56 +428,6 @@ export function SeatingTableDrawer({
           })}
         </ol>
       </section>
-
-      {editable && (
-        <section
-          className="shrink-0 border-t border-foreground/10 bg-white px-5 py-3"
-          aria-labelledby={`${id}-edit`}
-        >
-          <h3 id={`${id}-edit`} className="mb-3 text-xs font-semibold">
-            Chỉnh sửa bàn
-          </h3>
-          <div className="grid grid-cols-[minmax(0,1fr)_8rem] items-start gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor={`${id}-name`} className="text-[11px] text-muted-foreground">
-                Tên bàn
-              </Label>
-              <Input
-                id={`${id}-name`}
-                name="name"
-                aria-label="Sửa tên bàn"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-                maxLength={100}
-                disabled={saving}
-                className="h-[46px] border-foreground/15 bg-white shadow-none"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor={`${id}-capacity`} className="text-[11px] text-muted-foreground">
-                Số ghế
-              </Label>
-              <NumberStepper
-                id={`${id}-capacity`}
-                label="Số ghế"
-                value={capacity}
-                onChange={setCapacity}
-                min={minimum}
-                max={20}
-                disabled={saving}
-                invalid={!!capacityError}
-                describedBy={capacityError ? `${id}-error` : undefined}
-              />
-            </div>
-          </div>
-          {capacityError && (
-            <p id={`${id}-error`} role="alert" className="mt-2 text-[11px] text-destructive">
-              {capacityError}
-            </p>
-          )}
-        </section>
-      )}
 
       <footer className="shrink-0 border-t border-foreground/10 bg-white px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex gap-2">
