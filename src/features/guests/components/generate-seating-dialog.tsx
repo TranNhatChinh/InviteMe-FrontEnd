@@ -105,15 +105,7 @@ export function GenerateSeatingDialog({
       </Button>
       <Modal open={open} onClose={close} title={t("title")} description={t("description")}>
         <div className="space-y-5" aria-busy={busy}>
-          {!plan.places.length && (
-            <p role="status">
-              {t("noPlaces")}{" "}
-              <Link className="underline" href={`/weddings/${plan.weddingId}/guests`}>
-                {t("importGuests")}
-              </Link>
-            </p>
-          )}
-          <fieldset className="space-y-2">
+          <fieldset className="space-y-2 rounded-xl border p-3">
             <legend className="text-sm font-medium">{t("groupingMode")}</legend>
             <label className="flex items-center gap-2 text-sm">
               <input type="radio" name="seating-grouping" checked readOnly />
@@ -124,6 +116,14 @@ export function GenerateSeatingDialog({
               {t("sharedGroupingComingSoon")}
             </label>
           </fieldset>
+          {!plan.places.length && (
+            <p role="status">
+              {t("noPlaces")}{" "}
+              <Link className="underline" href={`/weddings/${plan.weddingId}/guests`}>
+                {t("importGuests")}
+              </Link>
+            </p>
+          )}
           <fieldset disabled={busy || disabled} className="space-y-4">
             <legend className="mb-2 text-sm font-medium">{t("capacity")}</legend>
             <div className="flex flex-wrap gap-5">

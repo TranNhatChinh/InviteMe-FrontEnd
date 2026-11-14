@@ -668,7 +668,7 @@
     "applyFailed": "Chưa áp dụng được phương án. Hãy xem thông báo và tạo lại preview trước khi thử tiếp.",
     "back": "Đổi cấu hình",
     "groupingMode": "Cách gợi ý xếp bàn",
-    "strictGrouping": "Chia theo nhà và nhóm khách",
+    "strictGrouping": "Chia theo hai nhà",
     "sharedGroupingComingSoon": "Xếp chung (Đang phát triển)",
     "sharedColumns": "Số bàn mỗi hàng, mỗi bên",
     "sharedColumnsHint": "Áp dụng cho cả nhà gái và nhà trai",
