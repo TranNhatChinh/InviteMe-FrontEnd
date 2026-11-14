@@ -365,15 +365,23 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   const roomObjects =
     objects ?? plan?.canvasLayout?.objects.map(({ id, type }) => ({ id, kind: type })) ?? [];
   const draftTableGroups = new Map<string, Map<keyof typeof groupLabels, number>>();
+  const draftTableSides = new Map<string, Set<PlanningGuest["side"]>>();
   if (generationDraft) {
     const groupsByGuest = new Map(
-      generationDraft.plan.guests.map((guest) => [guest.id, guest.group?.id]),
+      generationDraft.plan.guests.map((guest) => [
+        guest.id,
+        { group: guest.group?.id, side: guest.side },
+      ]),
     );
     const groupsByPlace = new Map(
       generationDraft.plan.places.map((place) => [place.id, groupsByGuest.get(place.guestId)]),
     );
     for (const seat of generationDraft.plan.assignments) {
-      const group = groupsByPlace.get(seat.placeId) ?? "OTHER";
+      const guest = groupsByPlace.get(seat.placeId);
+      const group = guest?.group ?? "OTHER";
+      const sides = draftTableSides.get(seat.tableId) ?? new Set<PlanningGuest["side"]>();
+      sides.add(guest?.side ?? "UNSPECIFIED");
+      draftTableSides.set(seat.tableId, sides);
       const counts = draftTableGroups.get(seat.tableId) ?? new Map();
       counts.set(group, (counts.get(group) ?? 0) + 1);
       draftTableGroups.set(seat.tableId, counts);
@@ -839,10 +847,17 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
                     {plan.tables.map((table) => {
                       const groups = [...(draftTableGroups.get(table.id) ?? [])];
+                      const sides = [...(draftTableSides.get(table.id) ?? [])];
                       const seats = groups.reduce((total, [, count]) => total + count, 0);
                       return (
                         <li key={table.id}>
                           <strong>{table.name}</strong> · {seats}/{table.capacity}
+                          {sides.length > 0 && (
+                            <>
+                              {" "}
+                              · {sides.map((side) => t(`seating.queue.side.${side}`)).join(", ")}
+                            </>
+                          )}
                           {groups.length > 1 && <> · {t("generation.mixedGroups")}</>}
                           {groups.length > 0 && (
                             <>

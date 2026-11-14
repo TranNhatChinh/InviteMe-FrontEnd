@@ -647,7 +647,7 @@
     "seats": "{{count}} seats",
     "noPlaces": "No guest places yet. Import guests before creating tables.",
     "importGuests": "Go to guest list",
-    "oversized": "These invitations need more than one {{capacity}}-seat table:",
+    "oversized": "These invitations exceed the {{capacity}}-seat capacity. Choose a larger table or edit the invitation size:",
     "estimate": "Initial estimate",
     "total": "Total tables",
     "lowerBound": "This is a lower bound based on places. Keeping invitations together may require more tables.",
@@ -667,6 +667,9 @@
     "applying": "Applying…",
     "applyFailed": "Could not apply the proposal. Review the notice and generate a fresh preview before trying again.",
     "back": "Change settings",
+    "groupingMode": "Seating suggestion mode",
+    "strictGrouping": "Group by side and relationship",
+    "sharedGroupingComingSoon": "Shared seating (In development)",
     "sharedColumns": "Tables per row, per side",
     "sharedColumnsHint": "Applied equally to bride and groom sides",
     "suggest": "Suggest seating"

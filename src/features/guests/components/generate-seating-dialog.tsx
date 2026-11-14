@@ -46,7 +46,7 @@ export function GenerateSeatingDialog({
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
   const issues = generationIssues(plan, capacity);
-  const invalid = !plan.places.length || plan.tables.length > 0;
+  const invalid = !plan.places.length || plan.tables.length > 0 || issues.oversized.length > 0;
   const config: SeatingGenerationConfig = {
     expectedVersion: plan.version,
     tableCapacity: capacity,
@@ -113,6 +113,17 @@ export function GenerateSeatingDialog({
               </Link>
             </p>
           )}
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">{t("groupingMode")}</legend>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="seating-grouping" checked readOnly />
+              {t("strictGrouping")}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="radio" name="seating-grouping" disabled />
+              {t("sharedGroupingComingSoon")}
+            </label>
+          </fieldset>
           <fieldset disabled={busy || disabled} className="space-y-4">
             <legend className="mb-2 text-sm font-medium">{t("capacity")}</legend>
             <div className="flex flex-wrap gap-5">

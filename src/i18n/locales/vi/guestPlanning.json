@@ -647,7 +647,7 @@
     "seats": "{{count}} ghế",
     "noPlaces": "Chưa có suất khách. Hãy nhập khách trước khi tạo bàn.",
     "importGuests": "Đến danh sách khách",
-    "oversized": "Các lời mời sau cần chia bàn vì vượt sức chứa {{capacity}} ghế:",
+    "oversized": "Các lời mời sau vượt sức chứa {{capacity}} ghế. Hãy chọn bàn lớn hơn hoặc chỉnh số suất:",
     "estimate": "Ước tính ban đầu",
     "total": "Tổng bàn",
     "lowerBound": "Đây là số bàn tối thiểu theo tổng suất. Thuật toán có thể cần thêm bàn để giữ nguyên lời mời.",
@@ -667,6 +667,9 @@
     "applying": "Đang áp dụng…",
     "applyFailed": "Chưa áp dụng được phương án. Hãy xem thông báo và tạo lại preview trước khi thử tiếp.",
     "back": "Đổi cấu hình",
+    "groupingMode": "Cách gợi ý xếp bàn",
+    "strictGrouping": "Chia theo nhà và nhóm khách",
+    "sharedGroupingComingSoon": "Xếp chung (Đang phát triển)",
     "sharedColumns": "Số bàn mỗi hàng, mỗi bên",
     "sharedColumnsHint": "Áp dụng cho cả nhà gái và nhà trai",
     "suggest": "Gợi ý sắp xếp"
