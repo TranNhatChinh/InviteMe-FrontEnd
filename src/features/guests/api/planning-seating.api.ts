@@ -3,11 +3,54 @@ import type { ApiClient } from "@/core/api/api-client";
 import { planningGuestSchema } from "./planning.api";
 import { groupKind } from "@/shared/lib/planning-groups";
 
+export const defaultPositionPriority = [
+  "FAMILY",
+  "VIP",
+  "RELATIVES",
+  "PARTNERS",
+  "COLLEAGUES",
+  "FRIENDS",
+  "NEIGHBORS",
+  "OTHER",
+] as const satisfies readonly z.infer<typeof groupKind>[];
+const positionPrioritySchema = z
+  .array(groupKind)
+  .length(groupKind.options.length)
+  .refine((groups) => new Set(groups).size === groupKind.options.length);
+export type PositionPriority = z.infer<typeof positionPrioritySchema>;
+
+const canvasPoint = z.object({ x: z.number(), y: z.number() });
+const canvasZone = canvasPoint.extend({
+  width: z.number().positive(),
+  height: z.number().positive(),
+});
+const canvasLayoutSchema = z.object({
+  splitZones: z.boolean(),
+  tables: z.record(
+    z.string(),
+    canvasPoint.extend({
+      outsideZone: z.boolean().optional(),
+      side: z.enum(["BRIDE", "GROOM"]).nullish(),
+    }),
+  ),
+  zones: z.object({ BRIDE: canvasZone.optional(), GROOM: canvasZone.optional() }),
+  stage: canvasPoint.nullable(),
+  objects: z.array(
+    canvasPoint.extend({
+      id: z.string(),
+      type: z.enum(["danceFloor", "giftTable", "entrance", "aisle", "stage"]),
+    }),
+  ),
+});
+export type CanvasLayout = z.infer<typeof canvasLayoutSchema>;
+
 export const seatingPlanSchema = z.object({
   weddingId: z.string(),
+  canvasLayout: canvasLayoutSchema.nullish(),
   version: z.number().int(),
   brideTablesPerRow: z.number().int().min(1).max(4).optional(),
   groomTablesPerRow: z.number().int().min(1).max(4).optional(),
+  positionPriority: positionPrioritySchema.optional(),
   tables: z.array(
     z
       .object({
@@ -43,6 +86,7 @@ export const seatingPlanSchema = z.object({
 });
 export type SeatingPlan = z.infer<typeof seatingPlanSchema>;
 export type SeatingChange =
+  | { action: "UPDATE_CANVAS_LAYOUT"; canvasLayout: CanvasLayout }
   | {
       action: "CREATE_TABLE";
       name: string;
@@ -121,12 +165,14 @@ export type SeatingSide = "BRIDE" | "GROOM";
 export type SeatingGenerationConfig = {
   expectedVersion: number;
   tableCapacity: SeatingCapacity;
+  positionPriority?: PositionPriority;
   tablesPerRow: { bride: number; groom: number };
 };
 export const seatingGenerationSchema = z.object({
   sourceVersion: z.number().int(),
   sourceFingerprint: z.string(),
   algorithmVersion: z.string(),
+  positionPriority: positionPrioritySchema.optional(),
   optimizationStatus: z.enum(["PROVEN_OPTIMAL", "FEASIBLE_NOT_PROVEN"]),
   summary: z.object({
     guests: z.number(),
@@ -152,6 +198,7 @@ export const seatingGenerationSchema = z.object({
 });
 export type SeatingGenerationPreview = z.infer<typeof seatingGenerationSchema>;
 export type SeatingGenerationApply = SeatingGenerationConfig & {
+  canvasLayout?: CanvasLayout;
   sourceFingerprint: string;
   algorithmVersion: string;
   draft?: {

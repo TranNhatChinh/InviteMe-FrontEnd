@@ -17,13 +17,6 @@ export function previewSeatMove(
   if (tableId === null) return { ...plan, assignments: remaining };
   const table = plan.tables.find((t) => t.id === tableId);
   if (!table) return null;
-  if (
-    table.side &&
-    plan.places.some(
-      (p) => ids.includes(p.id) && plan.guests.find((g) => g.id === p.guestId)?.side !== table.side,
-    )
-  )
-    return null;
   const occupied = new Set(remaining.filter((a) => a.tableId === tableId).map((a) => a.seatNumber));
   const free = Array.from({ length: table.capacity }, (_, i) => i + 1).filter(
     (n) => !occupied.has(n),

@@ -205,7 +205,10 @@ export function createPlanningGuestUpdateSchema(messages: PlanningGuestValidatio
     recipientName: z.string().trim().min(1, messages.nameRequired).max(150, messages.nameMax),
     honorific: z.string().trim().max(50, messages.honorificMax).nullable(),
     side: z.enum(["BRIDE", "GROOM", "MUTUAL", "UNSPECIFIED"]),
-    groupId: z.string().nullable(),
+    groupId: z
+      .string()
+      .refine((value) => groupKind.safeParse(value).success)
+      .nullable(),
     phone: createPhoneSchema(messages),
     note: z.string().trim().max(2000, messages.noteMax).nullable(),
     email: z.union([z.email({ error: messages.emailInvalid }), z.literal("")]).nullable(),
@@ -222,7 +225,10 @@ export function createPlanningGuestCreateSchema(messages: PlanningGuestValidatio
       .min(1, messages.expectedPeopleMin)
       .max(10, messages.expectedPeopleMax),
     side: z.enum(["BRIDE", "GROOM", "MUTUAL", "UNSPECIFIED"]),
-    groupId: z.string().nullable(),
+    groupId: z
+      .string()
+      .refine((value) => groupKind.safeParse(value).success)
+      .nullable(),
     phone: createPhoneSchema(messages),
     note: z.string().trim().max(2000, messages.noteMax).nullable(),
     email: z.union([z.email({ error: messages.emailInvalid }), z.literal("")]).nullable(),

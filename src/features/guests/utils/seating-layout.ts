@@ -76,16 +76,8 @@ export function generationIssues(plan: SeatingPlan, capacity: number) {
   const sizes = new Map<string, number>();
   for (const place of plan.places) sizes.set(place.guestId, (sizes.get(place.guestId) ?? 0) + 1);
   return {
-    missingSide: plan.guests.filter(
-      (g) => sizes.has(g.id) && g.side !== "BRIDE" && g.side !== "GROOM",
-    ),
     oversized: plan.guests.filter((g) => (sizes.get(g.id) ?? 0) > capacity),
-    lowerBounds: (["BRIDE", "GROOM"] as const).map((side) =>
-      Math.ceil(
-        plan.guests.filter((g) => g.side === side).reduce((n, g) => n + (sizes.get(g.id) ?? 0), 0) /
-          capacity,
-      ),
-    ),
+    lowerBound: Math.ceil(plan.places.length / capacity),
   };
 }
 export function wouldSplitParty(plan: SeatingPlan, ids: string[], target: string | null) {

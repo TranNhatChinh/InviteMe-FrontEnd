@@ -2,13 +2,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, Sparkles } from "lucide-react";
+import { arrayMove } from "@dnd-kit/sortable";
+import { groupLabels } from "@/shared/lib/planning-groups";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
 import {
+  defaultPositionPriority,
   generateSeatingPreview,
+  type PositionPriority,
   seatingCapacities,
   type SeatingCapacity,
   type SeatingGenerationConfig,
@@ -33,19 +37,20 @@ export function GenerateSeatingDialog({
   const [open, setOpen] = useState(false);
   const [capacity, setCapacity] = useState<SeatingCapacity>(10);
   const [columns, setColumns] = useState(plan.brideTablesPerRow ?? 2);
+  const [priority, setPriority] = useState<PositionPriority>([
+    ...(plan.positionPriority ?? defaultPositionPriority),
+  ]);
+  const draggedGroup = useRef<PositionPriority[number] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
   const issues = generationIssues(plan, capacity);
-  const invalid =
-    !plan.places.length ||
-    issues.missingSide.length > 0 ||
-    issues.oversized.length > 0 ||
-    plan.tables.length > 0;
+  const invalid = !plan.places.length || plan.tables.length > 0 || issues.oversized.length > 0;
   const config: SeatingGenerationConfig = {
     expectedVersion: plan.version,
     tableCapacity: capacity,
+    positionPriority: priority,
     tablesPerRow: { bride: columns, groom: columns },
   };
   function reset() {
@@ -91,6 +96,7 @@ export function GenerateSeatingDialog({
         disabled={disabled}
         onClick={() => {
           reset();
+          setPriority([...(plan.positionPriority ?? defaultPositionPriority)]);
           setOpen(true);
         }}
       >
@@ -99,6 +105,17 @@ export function GenerateSeatingDialog({
       </Button>
       <Modal open={open} onClose={close} title={t("title")} description={t("description")}>
         <div className="space-y-5" aria-busy={busy}>
+          <fieldset className="space-y-2 rounded-xl border p-3">
+            <legend className="text-sm font-medium">{t("groupingMode")}</legend>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="radio" name="seating-grouping" checked readOnly />
+              {t("strictGrouping")}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="radio" name="seating-grouping" disabled />
+              {t("sharedGroupingComingSoon")}
+            </label>
+          </fieldset>
           {!plan.places.length && (
             <p role="status">
               {t("noPlaces")}{" "}
@@ -148,18 +165,59 @@ export function GenerateSeatingDialog({
               </span>
             </label>
           </fieldset>
-          {issues.missingSide.length > 0 && (
-            <div role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">
-              <p>{t("missingSide", { count: issues.missingSide.length })}</p>
-              <ul className="mt-2 list-inside list-disc">
-                {issues.missingSide.map((g) => (
-                  <li key={g.id}>{g.recipientName}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <fieldset disabled={busy || disabled} className="space-y-2">
+            <legend className="mb-2 text-sm font-medium">{t("positionPriority")}</legend>
+            <ol className="space-y-1">
+              {priority.map((group, index) => (
+                <li
+                  key={group}
+                  draggable={!busy && !disabled}
+                  onDragStart={(event) => {
+                    draggedGroup.current = group;
+                    event.dataTransfer.setData("text/plain", group);
+                    event.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragEnd={() => {
+                    draggedGroup.current = null;
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const from = priority.findIndex((item) => item === draggedGroup.current);
+                    if (!busy && !disabled && from >= 0)
+                      setPriority(arrayMove(priority, from, index));
+                    draggedGroup.current = null;
+                  }}
+                  className="flex items-center gap-2 rounded-lg border px-3 py-1 text-sm"
+                >
+                  <GripVertical aria-hidden="true" className="size-4 cursor-grab" />
+                  <span className="flex-1">{groupLabels[group]}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={index === 0}
+                    aria-label={t("movePriorityUp", { group: groupLabels[group] })}
+                    onClick={() => setPriority(arrayMove(priority, index, index - 1))}
+                  >
+                    <ArrowUp className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={index === priority.length - 1}
+                    aria-label={t("movePriorityDown", { group: groupLabels[group] })}
+                    onClick={() => setPriority(arrayMove(priority, index, index + 1))}
+                  >
+                    <ArrowDown className="size-4" />
+                  </Button>
+                </li>
+              ))}
+            </ol>
+          </fieldset>
           {issues.oversized.length > 0 && (
-            <div role="alert" className="rounded-lg border border-amber-300 p-3 text-sm">
+            <div role="status" className="rounded-lg border border-amber-300 p-3 text-sm">
               <p>{t("oversized", { capacity })}</p>
               <ul className="mt-2 list-inside list-disc">
                 {issues.oversized.map((g) => (
@@ -173,18 +231,9 @@ export function GenerateSeatingDialog({
           {
             <div className="rounded-xl bg-muted/40 p-4 text-sm">
               <p className="font-medium">{t("estimate")}</p>
-              <div className="my-3 grid grid-cols-3 gap-2 text-center">
-                {["bride", "groom", "total"].map((label, i) => (
-                  <div key={label}>
-                    <strong className="block text-xl">
-                      {i < 2
-                        ? issues.lowerBounds[i]
-                        : issues.lowerBounds.reduce((a, b) => a + b, 0)}
-                    </strong>
-                    {t(label)}
-                  </div>
-                ))}
-              </div>
+              <p className="my-3 text-sm">
+                {t("total")} <strong>{issues.lowerBound}</strong>
+              </p>
               <p className="text-xs text-muted-foreground">{t("lowerBound")}</p>
             </div>
           }

@@ -14,8 +14,10 @@ import {
   recommendedTableCount,
 } from "../src/features/guests/utils/seating-demo";
 
-test("only six fixed groups are selectable", () => {
+test("all eight fixed groups are selectable", () => {
   assert.deepEqual(defaultGroups, [
+    "Gia đình",
+    "Khách quan trọng",
     "Họ hàng",
     "Bạn bè",
     "Đồng nghiệp",
@@ -24,6 +26,7 @@ test("only six fixed groups are selectable", () => {
     "Khác",
   ]);
   assert.equal(findGroup("  HỌ   HÀNG ", defaultGroups), "Họ hàng");
+  assert.equal(findGroup("vip", defaultGroups), "Khách quan trọng");
   assert.equal(findGroup("Bạn bè cũ", defaultGroups), undefined);
 });
 test("invalid sides fail validation; blank stays unknown; editing side clears only its validation error", () => {

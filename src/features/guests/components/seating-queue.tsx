@@ -115,7 +115,7 @@ function TableChip({ table, onTable }: { table?: Table; onTable: QueueProps["onT
       type="button"
       onClick={() => onTable(table.id)}
       aria-label={t("goToTable", { table: table.name })}
-      className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-foreground hover:bg-primary/20 focus-visible:outline-2 focus-visible:outline-primary"
+      className="shrink-0 rounded px-2 py-1 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary"
     >
       {table.name}
     </button>
@@ -149,7 +149,7 @@ function GuestRow({
   return (
     <div
       className={cn(
-        "flex min-w-0 items-center gap-1 rounded-xl border bg-white p-1",
+        "flex min-w-0 items-center gap-1 border-x-0 border-t-0 border-b bg-card px-1 hover:bg-sky-50",
         placeholder && "border-dashed",
         table && !selected && "bg-muted/30 text-muted-foreground",
         outOfScope && "opacity-75 bg-muted/20",
@@ -388,7 +388,7 @@ export function SeatingQueue({
   onTable,
 }: QueueProps) {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"unassigned" | "assigned" | "all">("unassigned");
+  const [filter, setFilter] = useState<"unassigned" | "assigned" | "all">("all");
   const [side, setSide] = useState<PlanningGuest["side"] | "all">("all");
   const { t } = useTranslation("guestPlanning", { keyPrefix: "seating.queue" });
   const { language } = useLanguage();
@@ -459,12 +459,16 @@ export function SeatingQueue({
         placeholder={t("searchPlaceholder")}
         className="w-full rounded-lg border bg-white p-2 text-sm"
       />
-      <div className="flex flex-wrap gap-1" role="group" aria-label={t("filterAria")}>
+      <div
+        className="flex flex-wrap gap-1 rounded-full bg-muted p-1"
+        role="group"
+        aria-label={t("filterAria")}
+      >
         {(
           [
+            ["all", t("all")],
             ["unassigned", t("unassigned")],
             ["assigned", t("assigned")],
-            ["all", t("all")],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -475,7 +479,7 @@ export function SeatingQueue({
             className={cn(
               "rounded-full border px-2 py-1.5 text-[11px] focus-visible:outline-2 focus-visible:outline-primary",
               filter === value
-                ? "border-primary bg-primary/10 font-semibold"
+                ? "border-transparent bg-card font-semibold shadow-sm"
                 : "border-transparent text-muted-foreground",
             )}
           >

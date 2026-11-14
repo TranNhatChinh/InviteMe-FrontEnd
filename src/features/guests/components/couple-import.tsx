@@ -44,7 +44,7 @@ const importGuide = [
   ["Phía khách mời", "Nhà gái, Nhà trai hoặc Chung. Để trống là Chưa xác định.", "Nhà gái"],
   [
     "Nhóm khách",
-    "Họ hàng, Bạn bè, Đồng nghiệp, Đối tác, Hàng xóm hoặc Khác. Để trống dùng Khác.",
+    "Gia đình, VIP (Khách quan trọng), Họ hàng, Bạn bè, Đồng nghiệp, Đối tác, Hàng xóm hoặc Khác. Để trống dùng Khác.",
     "Họ hàng",
   ],
   [

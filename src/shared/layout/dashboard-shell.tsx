@@ -348,6 +348,14 @@ function DashboardShellFrame({
     setOpen(false);
   }, [pathname, setOpen]);
 
+  if (/^\/weddings\/[^/]+\/seating\/?$/.test(pathname)) {
+    return (
+      <main id="main-content" className="min-h-dvh bg-background p-3 sm:p-5">
+        {children}
+      </main>
+    );
+  }
+
   return (
     <div
       className={cn(

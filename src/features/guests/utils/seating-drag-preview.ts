@@ -64,19 +64,6 @@ export function seatingDropFeedback(
       messageValues: {},
       seats: [] as number[],
     };
-  if (
-    table.side &&
-    plan.places.some(
-      (p) => ids.includes(p.id) && plan.guests.find((g) => g.id === p.guestId)?.side !== table.side,
-    )
-  )
-    return {
-      valid: false,
-      message: "Guest side must match table side",
-      messageKey: "layout.sideConflict",
-      messageValues: {},
-      seats: [] as number[],
-    };
   const occupied = plan.assignments.filter(
     (a) => a.tableId === table.id && !ids.includes(a.placeId),
   ).length;
