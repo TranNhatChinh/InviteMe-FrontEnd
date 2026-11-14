@@ -63,9 +63,9 @@ export function SeatingPreview() {
   return (
     <main
       id="main-content"
-      className="min-h-dvh space-y-4 bg-[#faf8f5] p-4 sm:p-6"
+      className="flex h-dvh flex-col overflow-auto bg-[#faf8f5] lg:overflow-hidden"
     >
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3">
         <h1 className="text-2xl font-semibold">Sơ đồ chỗ ngồi</h1>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground">Dữ liệu mẫu</span>
@@ -81,10 +81,10 @@ export function SeatingPreview() {
         </div>
       </header>
       <div
-        className={`overflow-hidden rounded-xl border bg-card lg:grid ${sidebarOpen ? "lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[390px_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}
+        className={`flex min-h-[20rem] flex-1 flex-col overflow-hidden border-t bg-card lg:grid lg:min-h-0 ${sidebarOpen ? "lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[390px_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}
       >
         {sidebarOpen && (
-          <aside className="min-w-0 border-b bg-card lg:border-b-0 lg:border-r">
+          <aside className="min-h-0 min-w-0 max-h-[30dvh] shrink-0 overflow-auto border-b bg-card lg:max-h-none lg:border-b-0 lg:border-r">
             {paletteOpen ? (
               <SeatingObjectPalette
                 onClose={() => setPaletteOpen(false)}
@@ -174,7 +174,7 @@ export function SeatingPreview() {
             )}
           </aside>
         )}
-        <section className="min-w-0">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-2 border-b bg-card px-3 py-3">
             <Button
               type="button"

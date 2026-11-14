@@ -23,7 +23,7 @@ export function SeatingObjectPalette({
   const tile =
     "flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-lg p-1 text-center text-xs hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50";
   return (
-    <section className="space-y-6 bg-card p-5 sm:p-6 lg:max-h-[76dvh] lg:overflow-auto" aria-label={t("addObjects")}>
+    <section className="space-y-6 bg-card p-5 sm:p-6 " aria-label={t("addObjects")}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">{t("addObjects")}</h2>
         <Button

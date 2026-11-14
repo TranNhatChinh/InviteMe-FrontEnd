@@ -505,7 +505,7 @@ export function SeatingCanvas({
 
   return (
     <div
-      className="relative overflow-hidden bg-[#faf9f7]"
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#faf9f7]"
       onClickCapture={(event) => {
         if (!suppressClick.current || event.detail === 0) return;
         suppressClick.current = false;
@@ -563,7 +563,7 @@ export function SeatingCanvas({
         }}
         tabIndex={0}
         aria-label={t("floorPlan")}
-        className={`h-[min(68dvh,850px)] min-h-80 overflow-auto overscroll-contain ${panning ? "cursor-grabbing select-none" : ""}`}
+        className={`min-h-0 flex-1 overflow-auto overscroll-contain ${panning ? "cursor-grabbing select-none" : ""}`}
       >
         <div
           className="relative min-h-full min-w-full overflow-hidden"

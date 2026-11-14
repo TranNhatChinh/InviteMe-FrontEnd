@@ -718,7 +718,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       >
         <section
           data-seating-studio
-          className="space-y-4"
+          className="fixed inset-0 z-30 flex h-dvh flex-col overflow-auto bg-background lg:overflow-hidden [&>*]:shrink-0"
         >
           <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-card px-2 py-2 sm:px-4">
             <Button variant="ghost" size="icon" className="justify-self-start" asChild>
@@ -892,10 +892,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             </div>
           )}
           <div
-            className={`overflow-hidden rounded-xl border bg-card lg:grid ${sidebarOpen ? "lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[390px_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}
+            className={`flex min-h-[20rem] flex-1 flex-col overflow-hidden border-t bg-card lg:grid lg:min-h-0 ${sidebarOpen ? "lg:grid-cols-[350px_minmax(0,1fr)] xl:grid-cols-[390px_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)]"}`}
           >
             {sidebarOpen && (
-              <aside className="min-w-0 border-b bg-card lg:border-b-0 lg:border-r">
+              <aside className="min-h-0 min-w-0 max-h-[30dvh] shrink-0 overflow-auto border-b bg-card lg:max-h-none lg:border-b-0 lg:border-r">
                 {editable && boardView === "canvas" && paletteOpen ? (
                   <SeatingObjectPalette
                     tableDisabled={saving || plan.tables.length >= 100}
@@ -920,7 +920,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     anchor="queue"
                     target={{ tableId: null }}
                     disabled={!editable || saving}
-                    className="space-y-3 p-4 lg:max-h-[76dvh] lg:overflow-auto"
+                    className="space-y-3 p-4"
                     label={t("seating.filterGroup")}
                   >
                     <SeatingQueue
@@ -972,8 +972,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               data-seating-pointer-anchor="board"
               className={
                 boardView === "canvas"
-                  ? "min-w-0"
-                  : "min-w-0 rounded-xl border bg-[#F8F5EF] p-4"
+                  ? "flex min-h-0 min-w-0 flex-1 flex-col [&>*]:shrink-0"
+                  : "min-h-0 min-w-0 flex-1 overflow-auto bg-[#F8F5EF] p-4"
               }
               aria-label={generationDraft ? t("generation.draftTitle") : t("seating.savedPlan")}
             >
