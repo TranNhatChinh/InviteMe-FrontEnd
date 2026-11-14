@@ -153,7 +153,7 @@ export function SeatingCanvas({
       ),
     };
   });
-  const [split, setSplit] = useState(plan.canvasLayout?.splitZones ?? true);
+  const split = true;
   const [membership, setMembership] = useState<Record<string, ZoneSide | null>>(() =>
     Object.fromEntries(
       Object.entries(plan.canvasLayout?.tables ?? {})
@@ -766,19 +766,8 @@ export function SeatingCanvas({
           </button>
         </div>
       )}
-      <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 text-xs shadow-sm">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={split}
-            onChange={(event) => {
-              setSplit(event.target.checked);
-              setOutside(null);
-            }}
-          />
-          {t("splitZones")}
-        </label>
-        {split && editable && (
+      {editable && (
+        <div className="absolute left-3 top-3 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 text-xs shadow-sm">
           <Button
             size="sm"
             variant="outline"
@@ -812,8 +801,8 @@ export function SeatingCanvas({
           >
             {t("swapZones")}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
       {editable && onSaveLayout && (
         <Button
           size="sm"
