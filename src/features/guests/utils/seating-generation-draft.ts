@@ -16,6 +16,8 @@ export function generationDraftPlan(
 ): SeatingPlan {
   return {
     ...source,
+    positionPriority:
+      proposal.positionPriority ?? config.positionPriority ?? source.positionPriority,
     brideTablesPerRow: config.tablesPerRow.bride,
     groomTablesPerRow: config.tablesPerRow.groom,
     tables: proposal.tables.map((t) => ({
@@ -158,11 +160,8 @@ export function changeGenerationDraft(source: SeatingPlan, change: SeatingChange
       throw new Error("Kiểm tra tên, sức chứa và vị trí bàn.");
     slots.add(slot);
     for (const a of next.assignments.filter((a) => a.tableId === t.id)) {
-      const place = next.places.find((p) => p.id === a.placeId);
       if (a.seatNumber > t.capacity)
         throw new Error("Chuyển các suất đang xếp trước khi giảm số ghế.");
-      if (next.guests.find((g) => g.id === place?.guestId)?.side !== t.side)
-        throw new Error("Phía khách không khớp phía bàn.");
     }
   }
   return next;

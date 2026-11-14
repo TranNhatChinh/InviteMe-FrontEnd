@@ -1,4 +1,5 @@
 "use client";
+import { groupLabels } from "@/shared/lib/planning-groups";
 
 import {
   useEffect,
@@ -349,6 +350,21 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   }, [realtime, cache, weddingId]);
 
   const plan = generationDraft?.plan ?? preview ?? planQuery.data;
+  const draftTableGroups = new Map<string, Map<keyof typeof groupLabels, number>>();
+  if (generationDraft) {
+    const groupsByGuest = new Map(
+      generationDraft.plan.guests.map((guest) => [guest.id, guest.group?.id]),
+    );
+    const groupsByPlace = new Map(
+      generationDraft.plan.places.map((place) => [place.id, groupsByGuest.get(place.guestId)]),
+    );
+    for (const seat of generationDraft.plan.assignments) {
+      const group = groupsByPlace.get(seat.placeId) ?? "OTHER";
+      const counts = draftTableGroups.get(seat.tableId) ?? new Map();
+      counts.set(group, (counts.get(group) ?? 0) + 1);
+      draftTableGroups.set(seat.tableId, counts);
+    }
+  }
   const groupNames = new Map(
     (plan?.guests ?? []).flatMap((guest) =>
       guest.group ? [[guest.group.id, guest.group.name] as const] : [],
@@ -514,19 +530,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         (a) => a.tableId === target && !ids.includes(a.placeId),
       ).length;
       const shortage = table ? ids.length - (table.capacity - occupied) : 0;
-      const sideConflict =
-        table?.side &&
-        plan.places.some(
-          (place) =>
-            ids.includes(place.id) &&
-            plan.guests.find((guest) => guest.id === place.guestId)?.side !== table.side,
-        );
       setMessage(
         shortage > 0
           ? t("seating.shortage", { table: table?.name, count: shortage })
-          : sideConflict
-            ? t("layout.sideConflict")
-            : t("seating.placeUnavailable"),
+          : t("seating.placeUnavailable"),
       );
       return;
     }
@@ -779,6 +786,34 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               <div>
                 <p className="font-semibold">{t("generation.draftTitle")}</p>
                 <p className="text-sm">{t("generation.draftDescription")}</p>
+                <p className="mt-2 text-sm font-medium">{t("generation.positionPriority")}</p>
+                <p className="text-sm">
+                  {plan.positionPriority?.map((group) => groupLabels[group]).join(" → ")}
+                </p>
+                <details className="mt-2 text-sm">
+                  <summary className="cursor-pointer">{t("generation.tableBreakdown")}</summary>
+                  <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                    {plan.tables.map((table) => {
+                      const groups = [...(draftTableGroups.get(table.id) ?? [])];
+                      const seats = groups.reduce((total, [, count]) => total + count, 0);
+                      return (
+                        <li key={table.id}>
+                          <strong>{table.name}</strong> · {seats}/{table.capacity}
+                          {groups.length > 1 && <> · {t("generation.mixedGroups")}</>}
+                          {groups.length > 0 && (
+                            <>
+                              {" "}
+                              ·{" "}
+                              {groups
+                                .map(([group, count]) => `${groupLabels[group]} (${count})`)
+                                .join(", ")}
+                            </>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </details>
                 {planQuery.data?.version !== generationDraft.input.expectedVersion && (
                   <p className="text-sm text-red-800">{t("generation.stale")}</p>
                 )}
@@ -828,6 +863,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                         plan: generationDraftPlan(plan, value, config),
                         input: {
                           ...config,
+                          positionPriority: value.positionPriority ?? config.positionPriority,
                           sourceFingerprint: value.sourceFingerprint,
                           algorithmVersion: value.algorithmVersion,
                         },

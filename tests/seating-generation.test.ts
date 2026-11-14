@@ -5,6 +5,7 @@ import {
   generateSeatingPreview,
   applySeatingGeneration,
   seatingGenerationSchema,
+  defaultPositionPriority,
   seatingPlanSchema,
   type SeatingPlan,
 } from "../src/features/guests/api/planning-seating.api";
@@ -140,7 +141,7 @@ test("slot generation preserves holes and adds an empty row without mixing sides
   assert.equal(validSlotMove(tables[0]!, "GROOM", 1, 3, 2), false);
   assert.equal(validSlotMove(tables[0]!, "GROOM", 1, 1, 2), true);
 });
-test("generation counts places including declined guests and reports unknown sides and oversize invitations", () => {
+test("generation counts places including declined guests and allows shared guests and reports oversize invitations", () => {
   const source = plan();
   source.places[0]!.person = {
     id: "person",
@@ -149,12 +150,12 @@ test("generation counts places including declined guests and reports unknown sid
     attendanceStatus: "DECLINED",
   };
   source.guests[0]!.expectedPeople = 1;
-  assert.deepEqual(generationIssues(source, 10).lowerBounds, [0, 1]);
+  assert.equal(generationIssues(source, 10).lowerBound, 1);
   assert.equal(generationIssues(source, 3).oversized.length, 1);
   source.guests[0]!.side = "MUTUAL";
-  assert.equal(generationIssues(source, 10).missingSide.length, 1);
+  assert.equal(generationIssues(source, 10).lowerBound, 1);
 });
-test("manual move preview blocks opposite sides and identifies splitting a whole invitation", () => {
+test("manual move preview allows opposite sides and identifies splitting a whole invitation", () => {
   const source = plan();
   source.tables = [
     { id: "a", name: "A", capacity: 10, side: "GROOM", row: 1, column: 1 },
@@ -166,11 +167,8 @@ test("manual move preview blocks opposite sides and identifies splitting a whole
     tableId: "a",
     seatNumber: i + 1,
   }));
-  assert.equal(previewSeatMove(source, ["p1"], "c"), null);
-  assert.equal(
-    seatingDropFeedback(source, ["p1"], { tableId: "c" })?.messageKey,
-    "layout.sideConflict",
-  );
+  assert.equal(previewSeatMove(source, ["p1"], "c")?.assignments.at(-1)?.tableId, "c");
+  assert.equal(seatingDropFeedback(source, ["p1"], { tableId: "c" })?.valid, true);
   assert.equal(wouldSplitParty(source, ["p1"], "b"), true);
   assert.equal(wouldSplitParty(source, ["p1"], null), false);
   assert.equal(wouldSplitParty(source, ["p1", "p2", "p3", "p4"], "b"), false);
@@ -179,8 +177,9 @@ test("preview and apply use the same config and forward the snapshot token and a
   const requests: { path: string; body: unknown }[] = [];
   const response = {
     sourceVersion: 0,
+    positionPriority: [...defaultPositionPriority].reverse(),
     sourceFingerprint: "fingerprint",
-    algorithmVersion: "party-bfd-search-v1",
+    algorithmVersion: "party-bfd-search-v2",
     optimizationStatus: "PROVEN_OPTIMAL",
     summary: { guests: 1, places: 4, tables: 1, emptySeats: 6 },
     tables: [
@@ -210,9 +209,12 @@ test("preview and apply use the same config and forward the snapshot token and a
   const config = {
     expectedVersion: 0,
     tableCapacity: 10 as const,
+    positionPriority: response.positionPriority,
     tablesPerRow: { bride: 2, groom: 2 },
   };
   const preview = await generateSeatingPreview(api, "w", config);
+  assert.deepEqual(preview.positionPriority, config.positionPriority);
+  assert.deepEqual(requests[0]?.body, config);
   await applySeatingGeneration(api, "w", {
     ...config,
     sourceFingerprint: preview.sourceFingerprint,
@@ -223,7 +225,7 @@ test("preview and apply use the same config and forward the snapshot token and a
   assert.deepEqual(requests[1]?.body, {
     ...config,
     sourceFingerprint: "fingerprint",
-    algorithmVersion: "party-bfd-search-v1",
+    algorithmVersion: "party-bfd-search-v2",
   });
   assert.equal(
     seatingGenerationSchema.safeParse({ ...response, optimizationStatus: "UNKNOWN" }).success,

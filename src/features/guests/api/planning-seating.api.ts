@@ -3,11 +3,28 @@ import type { ApiClient } from "@/core/api/api-client";
 import { planningGuestSchema } from "./planning.api";
 import { groupKind } from "@/shared/lib/planning-groups";
 
+export const defaultPositionPriority = [
+  "FAMILY",
+  "VIP",
+  "RELATIVES",
+  "PARTNERS",
+  "COLLEAGUES",
+  "FRIENDS",
+  "NEIGHBORS",
+  "OTHER",
+] as const satisfies readonly z.infer<typeof groupKind>[];
+const positionPrioritySchema = z
+  .array(groupKind)
+  .length(groupKind.options.length)
+  .refine((groups) => new Set(groups).size === groupKind.options.length);
+export type PositionPriority = z.infer<typeof positionPrioritySchema>;
+
 export const seatingPlanSchema = z.object({
   weddingId: z.string(),
   version: z.number().int(),
   brideTablesPerRow: z.number().int().min(1).max(4).optional(),
   groomTablesPerRow: z.number().int().min(1).max(4).optional(),
+  positionPriority: positionPrioritySchema.optional(),
   tables: z.array(
     z
       .object({
@@ -121,12 +138,14 @@ export type SeatingSide = "BRIDE" | "GROOM";
 export type SeatingGenerationConfig = {
   expectedVersion: number;
   tableCapacity: SeatingCapacity;
+  positionPriority?: PositionPriority;
   tablesPerRow: { bride: number; groom: number };
 };
 export const seatingGenerationSchema = z.object({
   sourceVersion: z.number().int(),
   sourceFingerprint: z.string(),
   algorithmVersion: z.string(),
+  positionPriority: positionPrioritySchema.optional(),
   optimizationStatus: z.enum(["PROVEN_OPTIMAL", "FEASIBLE_NOT_PROVEN"]),
   summary: z.object({
     guests: z.number(),

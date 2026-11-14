@@ -47,6 +47,37 @@ test("import maps expected places including primary, explicit side and family wi
     ],
   });
 });
+test("import and manual guest forms accept family and VIP groups", () => {
+  const rows = validateCoupleRows([
+    { line: 2, values: ["An", "", "1", "", "Gia đình", "", "", ""] },
+    { line: 3, values: ["Bình", "", "1", "", "VIP", "", "", ""] },
+  ]);
+  assert.deepEqual(
+    rows.flatMap((row) => row.errors),
+    [],
+  );
+  const groups = importBody(rows).rows.map((row) => row.group);
+  assert.deepEqual(groups, ["FAMILY", "VIP"]);
+  for (const groupId of groups) {
+    const fields = {
+      recipientName: "An",
+      side: "MUTUAL",
+      groupId,
+      honorific: null,
+      phone: null,
+      note: null,
+      email: null,
+    };
+    assert.equal(
+      planningGuestCreateSchema.safeParse({ ...fields, expectedPeople: 1 }).success,
+      true,
+    );
+    assert.equal(
+      planningGuestUpdateSchema.safeParse({ ...fields, expectedVersion: 1 }).success,
+      true,
+    );
+  }
+});
 test("missing side stays unspecified, group optional, count includes representative", () => {
   const rows = validateCoupleRows([{ line: 2, values: ["Hoa", "", "", "", "", "", ""] }]);
   const row = importBody(rows).rows[0];
