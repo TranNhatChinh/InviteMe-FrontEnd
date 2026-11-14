@@ -1,12 +1,31 @@
 "use client";
 
-import { Armchair, DoorOpen, Gift, Layers, Music2, X } from "lucide-react";
+import {
+  Armchair,
+  DoorOpen,
+  Gift,
+  Layers,
+  Music2,
+  PanelTop,
+  RectangleHorizontal,
+  MoveVertical,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
 
-export const seatingObjectIcons = { danceFloor: Music2, giftTable: Gift, entrance: DoorOpen };
+export const seatingObjectIcons = {
+  danceFloor: Music2,
+  giftTable: Gift,
+  entrance: DoorOpen,
+  aisle: MoveVertical,
+  stage: PanelTop,
+};
 export type SeatingObjectKind = keyof typeof seatingObjectIcons;
-export type SeatingCanvasObject = { id: string; kind: SeatingObjectKind };
+export type SeatingCanvasObject = {
+  id: string;
+  kind: SeatingObjectKind | "brideArea" | "groomArea";
+};
 
 export function SeatingObjectPalette({
   onTable,
@@ -15,7 +34,7 @@ export function SeatingObjectPalette({
   tableDisabled,
 }: {
   onTable: () => void;
-  onObject: (kind: SeatingObjectKind) => void;
+  onObject: (kind: SeatingCanvasObject["kind"]) => void;
   onClose: () => void;
   tableDisabled?: boolean;
 }) {
@@ -45,6 +64,17 @@ export function SeatingObjectPalette({
             </span>
             {t("roundTable")}
           </button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium">{t("roomObjects")}</h3>
+        <div className="grid grid-cols-4">
+          {(["brideArea", "groomArea", "aisle", "stage"] as const).map((kind) => (
+            <button type="button" key={kind} className={tile} onClick={() => onObject(kind)}>
+              <RectangleHorizontal aria-hidden="true" className="size-6 text-primary" />
+              {t(kind)}
+            </button>
+          ))}
         </div>
       </div>
       <div className="space-y-2">

@@ -588,6 +588,7 @@
     }
   },
   "studio": {
+    "aisle": "Lối đi",
     "saveLayout": "Lưu bố cục",
     "panHint": "Giữ chuột phải + kéo để di chuyển",
     "zoomHint": "Ctrl + cuộn để zoom",

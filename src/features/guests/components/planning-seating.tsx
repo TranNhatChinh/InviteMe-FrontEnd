@@ -913,6 +913,12 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     onClose={() => setPaletteOpen(false)}
                     onObject={(kind) => {
                       const id = "object:" + crypto.randomUUID();
+                      if (
+                        (kind === "brideArea" || kind === "groomArea") &&
+                        (roomObjects.some((object) => object.kind === kind) ||
+                          plan.canvasLayout?.zones[kind === "brideArea" ? "BRIDE" : "GROOM"])
+                      )
+                        return;
                       setObjects([...roomObjects, { id, kind }]);
                     }}
                     onTable={() => {

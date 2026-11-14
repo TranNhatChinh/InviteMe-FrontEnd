@@ -588,6 +588,7 @@
     }
   },
   "studio": {
+    "aisle": "Aisle",
     "saveLayout": "Save layout",
     "panHint": "Hold right mouse button + drag to pan",
     "zoomHint": "Ctrl + scroll to zoom",

@@ -33,10 +33,13 @@ const canvasLayoutSchema = z.object({
       side: z.enum(["BRIDE", "GROOM"]).nullish(),
     }),
   ),
-  zones: z.object({ BRIDE: canvasZone, GROOM: canvasZone }),
-  stage: canvasPoint,
+  zones: z.object({ BRIDE: canvasZone.optional(), GROOM: canvasZone.optional() }),
+  stage: canvasPoint.nullable(),
   objects: z.array(
-    canvasPoint.extend({ id: z.string(), type: z.enum(["danceFloor", "giftTable", "entrance"]) }),
+    canvasPoint.extend({
+      id: z.string(),
+      type: z.enum(["danceFloor", "giftTable", "entrance", "aisle", "stage"]),
+    }),
   ),
 });
 export type CanvasLayout = z.infer<typeof canvasLayoutSchema>;
