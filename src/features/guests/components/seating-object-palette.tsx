@@ -22,8 +22,10 @@ export const seatingObjectIcons = {
   stage: PanelTop,
 };
 export type SeatingObjectKind = keyof typeof seatingObjectIcons;
+export const seatingPaletteMime = "application/x-inviteme-seating-item";
 export type SeatingCanvasObject = {
   id: string;
+  point?: { x: number; y: number };
   kind: SeatingObjectKind | "brideArea" | "groomArea";
 };
 
@@ -39,6 +41,13 @@ export function SeatingObjectPalette({
   tableDisabled?: boolean;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "studio" });
+  const dragItem = (kind: SeatingCanvasObject["kind"] | "table") => ({
+    draggable: true,
+    onDragStart: (event: React.DragEvent<HTMLButtonElement>) => {
+      event.dataTransfer.setData(seatingPaletteMime, kind);
+      event.dataTransfer.effectAllowed = "copy";
+    },
+  });
   const tile =
     "flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-lg p-1 text-center text-xs hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50";
   return (
@@ -58,7 +67,13 @@ export function SeatingObjectPalette({
       <div className="space-y-2">
         <h3 className="text-sm font-medium">{t("guestTables")}</h3>
         <div className="grid grid-cols-4">
-          <button type="button" className={tile} disabled={tableDisabled} onClick={onTable}>
+          <button
+            type="button"
+            className={tile}
+            {...(!tableDisabled && dragItem("table"))}
+            disabled={tableDisabled}
+            onClick={onTable}
+          >
             <span className="grid size-12 place-items-center rounded-xl bg-rose-100 text-rose-800">
               <Armchair className="size-7" />
             </span>
@@ -70,7 +85,13 @@ export function SeatingObjectPalette({
         <h3 className="text-sm font-medium">{t("roomObjects")}</h3>
         <div className="grid grid-cols-4">
           {(["brideArea", "groomArea", "aisle", "stage"] as const).map((kind) => (
-            <button type="button" key={kind} className={tile} onClick={() => onObject(kind)}>
+            <button
+              type="button"
+              key={kind}
+              className={tile}
+              {...dragItem(kind)}
+              onClick={() => onObject(kind)}
+            >
               <RectangleHorizontal aria-hidden="true" className="size-6 text-primary" />
               {t(kind)}
             </button>
@@ -94,7 +115,12 @@ export function SeatingObjectPalette({
             <div key={kind} className="space-y-2 pb-3">
               <h3 className="text-sm font-medium">{t(heading[kind])}</h3>
               <div className="grid grid-cols-4">
-                <button type="button" className={tile} onClick={() => onObject(kind)}>
+                <button
+                  type="button"
+                  className={tile}
+                  {...dragItem(kind)}
+                  onClick={() => onObject(kind)}
+                >
                   <span className={`grid size-12 place-items-center rounded-xl ${color[kind]}`}>
                     <Icon className="size-7" />
                   </span>

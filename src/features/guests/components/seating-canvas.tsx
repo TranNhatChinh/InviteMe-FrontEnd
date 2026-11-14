@@ -16,6 +16,7 @@ import type { SeatingTable } from "../utils/seating-layout";
 
 import {
   seatingObjectIcons,
+  seatingPaletteMime,
   type SeatingCanvasObject,
   type SeatingObjectKind,
 } from "./seating-object-palette";
@@ -47,6 +48,8 @@ export function SeatingCanvas({
   renderTable,
   objects = [],
   onRemoveObject,
+  onPaletteDrop,
+  tablePositions,
   onSaveLayout,
   onCaptureLayout,
   saving,
@@ -57,6 +60,12 @@ export function SeatingCanvas({
   onCaptureLayout?: (layout: CanvasLayout) => void;
   saving?: boolean;
   objects?: SeatingCanvasObject[];
+  onPaletteDrop?: (
+    kind: SeatingCanvasObject["kind"] | "table",
+    point: Point,
+    side?: ZoneSide,
+  ) => void;
+  tablePositions?: Record<string, Point>;
   onRemoveObject?: (id: string) => void;
   renderTable: (table: SeatingTable) => ReactNode;
 }) {
@@ -193,25 +202,28 @@ export function SeatingCanvas({
       x: (table.side === "GROOM" ? groomStart : 32) + column * spacing,
       y: top + row * spacing,
     };
-    return { table, point: positions[table.id] ?? initial };
+    return { table, point: positions[table.id] ?? tablePositions?.[table.id] ?? initial };
   });
   const stage = positions.stage ?? { x: center - 125, y: 48 };
   const objectLayout = objects
     .filter(
-      (object): object is { id: string; kind: SeatingObjectKind } =>
+      (object): object is SeatingCanvasObject & { kind: SeatingObjectKind } =>
         object.kind !== "brideArea" && object.kind !== "groomArea",
     )
     .map((object, index) => ({
       ...object,
-      point: positions[object.id] ?? {
-        x: center - 95 + (index % 2) * 210,
-        y: top + lastRow * spacing + Math.floor(index / 2) * 112,
-      },
+      point: positions[object.id] ??
+        object.point ?? {
+          x: center - 95 + (index % 2) * 210,
+          y: top + lastRow * spacing + Math.floor(index / 2) * 112,
+        },
     }));
   const makeZone = (side: ZoneSide, x: number, columns: number) => ({
     id: `zone:${side}`,
     side,
-    point: positions[`zone:${side}`] ?? { x, y: 135 },
+    point: positions[`zone:${side}`] ??
+      objects.find(({ kind }) => kind === (side === "BRIDE" ? "brideArea" : "groomArea"))
+        ?.point ?? { x, y: 135 },
     size: positions[`size:${side}`] ?? {
       x: columns * spacing,
       y: Math.max(336, 68 + lastRow * spacing),
@@ -219,10 +231,8 @@ export function SeatingCanvas({
   });
   const brideZone = makeZone("BRIDE", 14, brideWidth);
   const groomZone = makeZone("GROOM", groomStart - 18, groomWidth);
-  const zones = [brideZone, groomZone].filter(
-    ({ side }) =>
-      !!plan.canvasLayout?.zones[side] ||
-      objects.some(({ kind }) => kind === (side === "BRIDE" ? "brideArea" : "groomArea")),
+  const zones = [brideZone, groomZone].filter(({ side }) =>
+    objects.some(({ kind }) => kind === (side === "BRIDE" ? "brideArea" : "groomArea")),
   );
   const split = zones.length > 0;
   const assignedZone = (table: SeatingTable) =>
@@ -542,6 +552,29 @@ export function SeatingCanvas({
     >
       <div
         ref={viewport}
+        onDragOver={(event) => {
+          if (!onPaletteDrop || !event.dataTransfer.types.includes(seatingPaletteMime)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={(event) => {
+          if (!onPaletteDrop || !event.dataTransfer.types.includes(seatingPaletteMime)) return;
+          event.preventDefault();
+          const kind = event.dataTransfer.getData(seatingPaletteMime);
+          const isObject = Object.keys(seatingObjectIcons).some((key) => key === kind);
+          if (!isObject && kind !== "table" && kind !== "brideArea" && kind !== "groomArea") return;
+          const rect = surface.current?.getBoundingClientRect();
+          if (!rect) return;
+          const point = {
+            x: Math.round((event.clientX - rect.left) / zoom + left),
+            y: Math.round((event.clientY - rect.top) / zoom + upper),
+          };
+          if (kind === "table") {
+            point.x -= tableWidth / 2;
+            point.y -= tableWidth / 2;
+          }
+          onPaletteDrop(kind as SeatingCanvasObject["kind"] | "table", point, zoneAt(point)?.side);
+        }}
         onContextMenu={(event) => event.preventDefault()}
         onPointerDownCapture={(event) => {
           if (event.button !== 2 || event.buttons !== 2 || drag.current) return;
@@ -635,6 +668,30 @@ export function SeatingCanvas({
                     >
                       {label}
                     </div>
+                    {editable && selectedId === id && onRemoveObject && (
+                      <button
+                        type="button"
+                        data-seating-canvas-interactive
+                        className="absolute right-3 top-3 rounded border bg-white p-1.5 text-destructive"
+                        aria-label={t("removeObject", { name: label })}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const object = objects.find(
+                            ({ kind }) => kind === (side === "BRIDE" ? "brideArea" : "groomArea"),
+                          );
+                          if (object) onRemoveObject(object.id);
+                          setSelectedId(null);
+                          setPositions((current) => {
+                            const next = { ...current };
+                            delete next[id];
+                            delete next[`size:${side}`];
+                            return next;
+                          });
+                        }}
+                      >
+                        <X className="size-4" />
+                      </button>
+                    )}
                     {editable &&
                       selectedId === id &&
                       resizeCorners.map((corner) => {

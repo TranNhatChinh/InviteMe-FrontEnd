@@ -28,7 +28,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
-import { PanelLeft, Plus, X } from "lucide-react";
+import { PanelLeft, Plus, Trash2, X } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
 import { REALTIME_EVENTS } from "@/core/realtime/realtime-events";
@@ -260,6 +260,11 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     target: string | null;
     seatNumber?: number;
   } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [tableDrop, setTableDrop] = useState<{ x: number; y: number } | undefined>();
+  const [tablePositions, setTablePositions] = useState<Record<string, { x: number; y: number }>>(
+    {},
+  );
   const [tableSlot, setTableSlot] = useState<TableSlot | null>(null);
   const [preview, setPreview] = useState<SeatingPlan | null>(null);
   const [generationDraft, setGenerationDraft] = useState<{
@@ -358,8 +363,39 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   }, [realtime, cache, weddingId]);
 
   const plan = generationDraft?.plan ?? preview ?? planQuery.data;
-  const roomObjects =
-    objects ?? plan?.canvasLayout?.objects.map(({ id, type }) => ({ id, kind: type })) ?? [];
+  const roomObjects: SeatingCanvasObject[] = objects ?? [
+    ...(plan?.canvasLayout?.objects.map(({ id, type }) => ({ id, kind: type })) ?? []),
+    ...(plan?.canvasLayout?.zones.BRIDE ? [{ id: "zone:BRIDE", kind: "brideArea" as const }] : []),
+    ...(plan?.canvasLayout?.zones.GROOM ? [{ id: "zone:GROOM", kind: "groomArea" as const }] : []),
+  ];
+
+  function addCanvasItem(
+    kind: SeatingCanvasObject["kind"] | "table",
+    point?: { x: number; y: number },
+    side?: TableSlot["side"],
+  ) {
+    if (!plan || !editable || saving) return;
+    if (kind !== "table") {
+      if (
+        (kind === "brideArea" || kind === "groomArea") &&
+        roomObjects.some((object) => object.kind === kind)
+      )
+        return;
+      setObjects([...roomObjects, { id: "object:" + crypto.randomUUID(), kind, point }]);
+      return;
+    }
+    if (plan.tables.length >= 100) return;
+    const slot = [
+      ...sideSlots(plan.tables, "BRIDE", plan.brideTablesPerRow ?? 2),
+      ...sideSlots(plan.tables, "GROOM", plan.groomTablesPerRow ?? 2),
+    ]
+      .filter((slot) => !slot.table && (!side || slot.side === side))
+      .sort((a, b) => a.row - b.row)[0];
+    if (slot) {
+      setTableDrop(point);
+      setTableSlot(slot);
+    }
+  }
   const draftTableGroups = new Map<string, Map<keyof typeof groupLabels, number>>();
   const draftTableSides = new Map<string, Set<PlanningGuest["side"]>>();
   if (generationDraft) {
@@ -388,14 +424,18 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       guest.group ? [[guest.group.id, guest.group.name] as const] : [],
     ),
   );
-  async function change(input: SeatingChange, optimistic?: SeatingPlan, expectedVersion?: number) {
+  async function change(
+    input: SeatingChange,
+    optimistic?: SeatingPlan,
+    expectedVersion?: number,
+    onChanged?: (plan: SeatingPlan) => void,
+  ) {
     if (!editable || savingRef.current || !planQuery.data) return false;
     if (generationDraft) {
       try {
-        setGenerationDraft({
-          ...generationDraft,
-          plan: changeGenerationDraft(generationDraft.plan, input),
-        });
+        const next = changeGenerationDraft(generationDraft.plan, input);
+        setGenerationDraft({ ...generationDraft, plan: next });
+        onChanged?.(next);
         setFailure(false);
         setMessage(t("generation.draftChanged"));
         setSelection([]);
@@ -426,6 +466,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               ),
             )
           : await changeSeatingPlan(api, weddingId, expectedVersion ?? source.version, input);
+      onChanged?.(latest);
       cache.setQueryData<SeatingPlan>(key, (current) =>
         current && current.version > latest.version ? current : latest,
       );
@@ -618,6 +659,38 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             )
       }
     >
+      <Modal
+        open={!!pendingDelete}
+        onClose={() => {
+          if (!saving) setPendingDelete(null);
+        }}
+        title={t("layout.deleteTable", { name: pendingDelete?.name ?? "" })}
+        description={t("layout.deleteDescription")}
+      >
+        {failure && message && (
+          <p role="alert" className="mb-3 text-sm text-destructive">
+            {message}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" disabled={saving} onClick={() => setPendingDelete(null)}>
+            {t("layout.cancel")}
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={saving}
+            onClick={async () => {
+              if (
+                pendingDelete &&
+                (await change({ action: "DELETE_TABLE", tableId: pendingDelete.id }))
+              )
+                setPendingDelete(null);
+            }}
+          >
+            {t("layout.deleteTable", { name: pendingDelete?.name ?? "" })}
+          </Button>
+        </div>
+      </Modal>
       <Modal
         open={!!pendingSplit}
         onClose={() => setPendingSplit(null)}
@@ -911,25 +984,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   <SeatingObjectPalette
                     tableDisabled={saving || plan.tables.length >= 100}
                     onClose={() => setPaletteOpen(false)}
-                    onObject={(kind) => {
-                      const id = "object:" + crypto.randomUUID();
-                      if (
-                        (kind === "brideArea" || kind === "groomArea") &&
-                        (roomObjects.some((object) => object.kind === kind) ||
-                          plan.canvasLayout?.zones[kind === "brideArea" ? "BRIDE" : "GROOM"])
-                      )
-                        return;
-                      setObjects([...roomObjects, { id, kind }]);
-                    }}
-                    onTable={() => {
-                      const slots = [
-                        ...sideSlots(plan.tables, "BRIDE", plan.brideTablesPerRow ?? 2),
-                        ...sideSlots(plan.tables, "GROOM", plan.groomTablesPerRow ?? 2),
-                      ]
-                        .filter((slot) => !slot.table)
-                        .sort((a, b) => a.row - b.row);
-                      if (slots[0]) setTableSlot(slots[0]);
-                    }}
+                    onObject={(kind) => addCanvasItem(kind)}
+                    onTable={() => addCanvasItem("table")}
                   />
                 ) : (
                   <DropTarget
@@ -1070,7 +1126,22 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       disabled={saving}
                       slot={tableSlot}
                       onCloseSlot={() => setTableSlot(null)}
-                      onChange={change}
+                      onChange={(input) =>
+                        change(input, undefined, undefined, (next) => {
+                          const created = next.tables.find(
+                            (table) =>
+                              !plan.tables.some((existing) => existing.id === table.id) &&
+                              table.side === tableSlot.side &&
+                              table.row === tableSlot.row &&
+                              table.column === tableSlot.column,
+                          );
+                          if (created && tableDrop)
+                            setTablePositions((current) => ({
+                              ...current,
+                              [created.id]: tableDrop,
+                            }));
+                        })
+                      }
                       error={failure ? message : undefined}
                     />
                   )}
@@ -1083,6 +1154,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 key={generationDraft ? "draft" : "saved"}
                 plan={plan}
                 objects={roomObjects}
+                tablePositions={tablePositions}
+                onPaletteDrop={editable && !saving ? addCanvasItem : undefined}
                 onCaptureLayout={
                   generationDraft
                     ? (layout: CanvasLayout) => {
@@ -1155,6 +1228,21 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                             names: remote.map((lease) => lease.displayName).join(", "),
                           })}
                         </p>
+                      )}
+                      {editable && (
+                        <button
+                          type="button"
+                          data-seating-canvas-interactive
+                          className="absolute right-1 top-1 z-10 rounded-md border bg-card p-1.5 text-destructive hover:bg-muted"
+                          aria-label={t("layout.deleteTable", { name: table.name })}
+                          disabled={saving}
+                          onClick={() => {
+                            setFailure(false);
+                            setPendingDelete({ id: table.id, name: table.name });
+                          }}
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
                       )}
                       <div
                         id={`seating-table-${table.id}`}
