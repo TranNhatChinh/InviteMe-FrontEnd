@@ -588,6 +588,7 @@
     }
   },
   "studio": {
+    "saveLayout": "Save layout",
     "panHint": "Hold right mouse button + drag to pan",
     "zoomHint": "Ctrl + scroll to zoom",
     "dismissHint": "Dismiss instructions",

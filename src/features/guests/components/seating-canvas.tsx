@@ -11,12 +11,18 @@ import {
 import { Minus, Mouse, Plus, Scan, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
-import type { SeatingPlan } from "../api/planning-seating.api";
+import type { CanvasLayout, SeatingPlan } from "../api/planning-seating.api";
 import type { SeatingTable } from "../utils/seating-layout";
 
 import { seatingObjectIcons, type SeatingCanvasObject } from "./seating-object-palette";
 
 const sides = ["BRIDE", "GROOM"] as const;
+function layoutKey(layout: CanvasLayout | null | undefined) {
+  return JSON.stringify(layout ?? null, (_key, value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
+  });
+}
 type ZoneSide = (typeof sides)[number];
 type Point = { x: number; y: number };
 const spacing = 270;
@@ -37,9 +43,15 @@ export function SeatingCanvas({
   renderTable,
   objects = [],
   onRemoveObject,
+  onSaveLayout,
+  onCaptureLayout,
+  saving,
 }: {
   plan: SeatingPlan;
   editable: boolean;
+  onSaveLayout?: (layout: CanvasLayout, version: number) => Promise<boolean>;
+  onCaptureLayout?: (layout: CanvasLayout) => void;
+  saving?: boolean;
   objects?: SeatingCanvasObject[];
   onRemoveObject?: (id: string) => void;
   renderTable: (table: SeatingTable) => ReactNode;
@@ -123,9 +135,32 @@ export function SeatingCanvas({
     requestedZoom.current = next;
     setZoom(next);
   }
-  const [positions, setPositions] = useState<Record<string, Point>>({});
-  const [split, setSplit] = useState(true);
-  const [membership, setMembership] = useState<Record<string, ZoneSide | null>>({});
+  const [positions, setPositions] = useState<Record<string, Point>>(() => {
+    const saved = plan.canvasLayout;
+    if (!saved) return {};
+    return {
+      ...Object.fromEntries(Object.entries(saved.tables).map(([id, { x, y }]) => [id, { x, y }])),
+      stage: saved.stage,
+      ...Object.fromEntries(saved.objects.map(({ id, x, y }) => [id, { x, y }])),
+      ...Object.fromEntries(
+        sides.flatMap((side) => {
+          const zone = saved.zones[side];
+          return [
+            [`zone:${side}`, { x: zone.x, y: zone.y }],
+            [`size:${side}`, { x: zone.width, y: zone.height }],
+          ];
+        }),
+      ),
+    };
+  });
+  const [split, setSplit] = useState(plan.canvasLayout?.splitZones ?? true);
+  const [membership, setMembership] = useState<Record<string, ZoneSide | null>>(() =>
+    Object.fromEntries(
+      Object.entries(plan.canvasLayout?.tables ?? {})
+        .filter(([, table]) => table.outsideZone)
+        .map(([id]) => [id, null]),
+    ),
+  );
   const [outside, setOutside] = useState<{ id: string; name: string; point: Point } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
@@ -188,6 +223,39 @@ export function SeatingCanvas({
     );
     return hits.find((zone) => zone.side === preferred) ?? hits.at(-1);
   };
+  const [baseVersion, setBaseVersion] = useState(plan.version);
+  const [baseLayout, setBaseLayout] = useState(plan.canvasLayout);
+  const snapshot: CanvasLayout = {
+    splitZones: split,
+    tables: Object.fromEntries(
+      layout.map(({ table, point }) => {
+        const side = membership[table.id];
+        return [
+          table.id,
+          {
+            ...point,
+            ...(side === null
+              ? { outsideZone: true }
+              : side && side !== table.side
+                ? { side }
+                : {}),
+          },
+        ];
+      }),
+    ),
+    zones: {
+      BRIDE: { ...brideZone.point, width: brideZone.size.x, height: brideZone.size.y },
+      GROOM: { ...groomZone.point, width: groomZone.size.x, height: groomZone.size.y },
+    },
+    stage,
+    objects: objectLayout.map(({ id, kind, point }) => ({ id, type: kind, ...point })),
+  };
+  useEffect(() => {
+    onCaptureLayout?.(snapshot);
+  });
+
+  const layoutVersion =
+    layoutKey(baseLayout) === layoutKey(plan.canvasLayout) ? plan.version : baseVersion;
   const movingTable = layout.find(({ table }) => table.id === movingId);
   const destination = movingTable && zoneAt(movingTable.point, assignedZone(movingTable.table));
   const points = [...layout, ...objectLayout].map(({ point }) => point);
@@ -746,6 +814,32 @@ export function SeatingCanvas({
           </Button>
         )}
       </div>
+      {editable && onSaveLayout && (
+        <Button
+          size="sm"
+          className="absolute right-3 top-3"
+          disabled={saving || !!movingId}
+          onClick={async () => {
+            if (await onSaveLayout(snapshot, layoutVersion)) {
+              setBaseVersion(layoutVersion + 1);
+              setBaseLayout({
+                ...snapshot,
+                tables: Object.fromEntries(
+                  Object.entries(snapshot.tables).map(([id, table]) => [
+                    id,
+                    { x: table.x, y: table.y, outsideZone: table.outsideZone ?? false, side: null },
+                  ]),
+                ),
+              });
+              setMembership((current) =>
+                Object.fromEntries(Object.entries(current).filter(([, side]) => side === null)),
+              );
+            }
+          }}
+        >
+          {t("saveLayout")}
+        </Button>
+      )}
       {split && movingTable && (
         <p
           role="status"

@@ -66,6 +66,8 @@ export function generationDraftInput(
 }
 
 export function changeGenerationDraft(source: SeatingPlan, change: SeatingChange): SeatingPlan {
+  if (change.action === "UPDATE_CANVAS_LAYOUT")
+    return { ...source, canvasLayout: change.canvasLayout };
   if (change.action === "MOVE_PLACES") {
     const next = previewSeatMove(source, change.placeIds, change.tableId, change.seatNumber);
     if (!next) throw new Error("Không thể chuyển các suất đến vị trí đã chọn.");

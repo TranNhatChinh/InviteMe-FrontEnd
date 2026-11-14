@@ -38,6 +38,7 @@ import { Button } from "@/shared/ui/button";
 import { trapDialogFocus } from "@/shared/lib/dialog-focus";
 import {
   applySeatingGeneration,
+  type CanvasLayout,
   applySeatingArrangement,
   type ArrangeSeatingInput,
   type SeatingGenerationApply,
@@ -216,7 +217,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   const [boardView, setBoardView] = useState<"canvas" | "grid">("canvas");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [objects, setObjects] = useState<SeatingCanvasObject[]>([]);
+  const [objects, setObjects] = useState<SeatingCanvasObject[] | null>(null);
+  const canvasDraft = useRef<CanvasLayout | undefined>(undefined);
   const Board = boardView === "canvas" ? SeatingCanvas : SeatingBoard;
   const { t } = useTranslation("guestPlanning");
   const { api, realtime } = useRuntime();
@@ -360,6 +362,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   }, [realtime, cache, weddingId]);
 
   const plan = generationDraft?.plan ?? preview ?? planQuery.data;
+  const roomObjects =
+    objects ?? plan?.canvasLayout?.objects.map(({ id, type }) => ({ id, kind: type })) ?? [];
   const draftTableGroups = new Map<string, Map<keyof typeof groupLabels, number>>();
   if (generationDraft) {
     const groupsByGuest = new Map(
@@ -380,7 +384,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       guest.group ? [[guest.group.id, guest.group.name] as const] : [],
     ),
   );
-  async function change(input: SeatingChange, optimistic?: SeatingPlan) {
+  async function change(input: SeatingChange, optimistic?: SeatingPlan, expectedVersion?: number) {
     if (!editable || savingRef.current || !planQuery.data) return false;
     if (generationDraft) {
       try {
@@ -417,7 +421,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 realtime.invokeSeating("RenewSeatingDrag", weddingId, token),
               ),
             )
-          : await changeSeatingPlan(api, weddingId, source.version, input);
+          : await changeSeatingPlan(api, weddingId, expectedVersion ?? source.version, input);
       cache.setQueryData<SeatingPlan>(key, (current) =>
         current && current.version > latest.version ? current : latest,
       );
@@ -465,13 +469,21 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   async function saveGenerationDraft() {
     if (!generationDraft || savingRef.current) return;
     const saved = await applyProposal(() =>
-      applySeatingGeneration(
-        api,
-        weddingId,
-        generationDraftInput(generationDraft.plan, generationDraft.input),
-      ),
+      applySeatingGeneration(api, weddingId, {
+        ...generationDraftInput(generationDraft.plan, generationDraft.input),
+        canvasLayout: canvasDraft.current && {
+          ...canvasDraft.current,
+          tables: Object.fromEntries(
+            generationDraft.plan.tables.flatMap(({ id }) => {
+              const position = canvasDraft.current?.tables[id];
+              return position ? [[id, position]] : [];
+            }),
+          ),
+        },
+      }),
     );
     if (saved) {
+      setObjects(null);
       setGenerationDraft(null);
       await cache.invalidateQueries({ queryKey: ["guest-planning", weddingId] });
     }
@@ -704,7 +716,10 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
           else collaboration.cancel(false);
         }}
       >
-        <section data-seating-studio className="space-y-4">
+        <section
+          data-seating-studio
+          className="space-y-4"
+        >
           <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-card px-2 py-2 sm:px-4">
             <Button variant="ghost" size="icon" className="justify-self-start" asChild>
               <Link
@@ -852,6 +867,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   variant="outline"
                   disabled={saving}
                   onClick={() => {
+                    setObjects(null);
                     setGenerationDraft(null);
                     setSelection([]);
                     closeDetails();
@@ -886,7 +902,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     onClose={() => setPaletteOpen(false)}
                     onObject={(kind) => {
                       const id = "object:" + crypto.randomUUID();
-                      setObjects([...objects, { id, kind }]);
+                      setObjects([...roomObjects, { id, kind }]);
                     }}
                     onTable={() => {
                       const slots = [
@@ -955,7 +971,9 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             <section
               data-seating-pointer-anchor="board"
               className={
-                boardView === "canvas" ? "min-w-0" : "min-w-0 rounded-xl border bg-[#F8F5EF] p-4"
+                boardView === "canvas"
+                  ? "min-w-0"
+                  : "min-w-0 rounded-xl border bg-[#F8F5EF] p-4"
               }
               aria-label={generationDraft ? t("generation.draftTitle") : t("seating.savedPlan")}
             >
@@ -998,6 +1016,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                         disabled={saving}
                         onPreview={(value, config) => {
                           if (value.sourceVersion !== plan.version) return;
+                          canvasDraft.current = undefined;
                           setGenerationDraft({
                             plan: generationDraftPlan(plan, value, config),
                             input: {
@@ -1068,8 +1087,27 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
               <Board
                 key={generationDraft ? "draft" : "saved"}
                 plan={plan}
-                objects={objects}
-                onRemoveObject={(id) => setObjects(objects.filter((object) => object.id !== id))}
+                objects={roomObjects}
+                onCaptureLayout={
+                  generationDraft
+                    ? (layout: CanvasLayout) => {
+                        canvasDraft.current = layout;
+                      }
+                    : undefined
+                }
+                onSaveLayout={
+                  generationDraft
+                    ? undefined
+                    : (layout: CanvasLayout, version: number) =>
+                        change(
+                          { action: "UPDATE_CANVAS_LAYOUT", canvasLayout: layout },
+                          undefined,
+                          version,
+                        )
+                }
+                onRemoveObject={(id) =>
+                  setObjects(roomObjects.filter((object) => object.id !== id))
+                }
                 editable={
                   editable && isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")
                 }
