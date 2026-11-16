@@ -240,6 +240,7 @@
     "SEATING_VIEW": "View seating plan",
     "SEATING_EDIT": "Assign tables and seats",
     "CHECKIN_MANAGE": "Find guests and check them in",
+    "WALK_IN_MANAGE": "Manage walk-in guests",
     "GIFT_VIEW": "View gift ledger",
     "GIFT_EDIT": "Manage gift ledger",
     "ANALYTICS_VIEW": "View analytics"

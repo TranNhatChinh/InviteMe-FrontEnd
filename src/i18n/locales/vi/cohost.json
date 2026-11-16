@@ -64,6 +64,7 @@
     "SEATING_VIEW": "Xem sơ đồ chỗ ngồi",
     "SEATING_EDIT": "Chỉnh sửa chỗ ngồi",
     "CHECKIN_MANAGE": "Quản lý check-in",
+    "WALK_IN_MANAGE": "Tiếp nhận khách vãng lai",
     "GIFT_RECORD": "Ghi nhận quà tại quầy"
   },
   "actions": {
@@ -141,7 +142,8 @@
     "RSVP_VIEW": "Xem ai đã xác nhận, từ chối hoặc chưa trả lời.",
     "SEATING_VIEW": "Xem sơ đồ bàn và chỗ của từng khách.",
     "SEATING_EDIT": "Tạo bàn, xếp và đổi chỗ khách.",
-    "CHECKIN_MANAGE": "Check-in khách và thêm khách vãng lai. Luôn áp dụng cho toàn bộ đám cưới.",
+    "CHECKIN_MANAGE": "Tra cứu, xác minh và check-in khách trong danh sách. Luôn áp dụng cho toàn bộ đám cưới.",
+    "WALK_IN_MANAGE": "Tạo và tiếp nhận khách chưa có trong danh sách khi Couple bật chính sách khách vãng lai. Luôn áp dụng cho toàn bộ đám cưới.",
     "GIFT_RECORD": "Ghi phong bì và quà tại quầy, không xem được tổng tiền. Luôn áp dụng cho toàn bộ đám cưới."
   },
   "seatingViewLocked": "Bật sẵn vì co-host có quyền chỉnh sửa chỗ ngồi.",

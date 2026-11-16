@@ -8,6 +8,9 @@ export const checkInSummarySchema = z.object({
   checkedInWithoutRsvp: z.number(),
   checkedInExceptions: z.number(),
   checkedInWalkIns: z.number(),
+  checkedInCounterVerified: z.number(),
+  checkedInInvitedCompanions: z.number(),
+  checkedInUnassigned: z.number(),
   bySide: z.array(
     z.object({
       side: z.string(),

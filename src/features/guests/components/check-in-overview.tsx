@@ -31,6 +31,9 @@ export function CheckInOverview({ weddingId }: { weddingId: string }) {
     { label: t("checkIn.arrivedWithoutRsvp"), value: data.checkedInWithoutRsvp },
     { label: t("checkIn.rsvpExceptions"), value: data.checkedInExceptions },
     { label: t("checkIn.walkIns"), value: data.checkedInWalkIns },
+    { label: t("checkIn.counterVerified"), value: data.checkedInCounterVerified },
+    { label: t("checkIn.invitedCompanions"), value: data.checkedInInvitedCompanions },
+    { label: t("checkIn.unassigned"), value: data.checkedInUnassigned },
   ];
 
   return (

@@ -26,6 +26,8 @@ export const rsvpSettingsSchema = z.object({
   plusOneLimit: count,
   version: count,
   rsvpDeadline: z.string().nullable(),
+  rsvpCheckInPolicy: z.enum(["REQUIRED", "OPTIONAL"]),
+  allowWalkIns: z.boolean(),
 });
 export const rsvpDashboardSchema = z.object({
   weddingId: z.string(),
@@ -189,10 +191,12 @@ export function saveRsvpSettings(
   weddingId: string,
   expectedVersion: number,
   plusOneLimit: number,
+  rsvpCheckInPolicy?: RsvpSettings["rsvpCheckInPolicy"],
+  allowWalkIns?: boolean,
 ) {
   return api.request(`${base(weddingId)}/rsvp-settings`, {
     method: "PUT",
-    body: { expectedVersion, plusOneLimit },
+    body: { expectedVersion, plusOneLimit, rsvpCheckInPolicy, allowWalkIns },
     schema: rsvpSettingsSchema,
   });
 }

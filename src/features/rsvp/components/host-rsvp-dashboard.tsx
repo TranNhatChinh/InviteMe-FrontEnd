@@ -38,6 +38,7 @@ const fieldClass = "h-10 w-full rounded-lg border bg-background px-3 text-sm";
 function message(error: unknown, t: (key: string) => string) {
   if (error instanceof ApiError) {
     if (error.backendCode === "CONCURRENCY_CONFLICT") return t("hostRsvp.errors.conflict");
+    if (error.backendCode === "CHECKIN_POLICY_LOCKED") return t("hostRsvp.errors.checkinPolicyLocked");
     if (error.backendCode === "RSVP_NOT_ATTENDING") return t("hostRsvp.errors.notAttending");
     if (error.status === 403) return t("hostRsvp.errors.forbidden");
     return t("hostRsvp.errors.generic");
@@ -351,6 +352,8 @@ function SettingsEditor({
   const { api } = useRuntime();
   const cache = useQueryClient();
   const [limit, setLimit] = useState(settings.plusOneLimit);
+  const [checkInPolicy, setCheckInPolicy] = useState(settings.rsvpCheckInPolicy);
+  const [allowWalkIns, setAllowWalkIns] = useState(settings.allowWalkIns);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   return (
@@ -364,32 +367,55 @@ function SettingsEditor({
         . {t("hostRsvp.deadlineHelp")}
       </p>
       <form
-        className="flex flex-wrap items-end gap-3"
+        className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
           setSaving(true);
           setError("");
-          void saveRsvpSettings(api, weddingId, settings.version, limit)
+          void saveRsvpSettings(api, weddingId, settings.version, limit, checkInPolicy, allowWalkIns)
             .then(() => cache.invalidateQueries({ queryKey: hostRsvpKeys.all(weddingId) }))
             .catch((cause) => setError(message(cause, t)))
             .finally(() => setSaving(false));
         }}
       >
-        <label className="text-sm">
-          {t("hostRsvp.plusOneLimit")}
-          <input
-            className={`${fieldClass} mt-1 w-44`}
-            type="number"
-            min={0}
-            max={20}
-            value={limit}
-            disabled={!editable}
-            onChange={(event) => setLimit(Number(event.target.value))}
-          />
-        </label>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            {t("hostRsvp.plusOneLimit")}
+            <input
+              className={`${fieldClass} mt-1 w-44`}
+              type="number"
+              min={0}
+              max={20}
+              value={limit}
+              disabled={!editable}
+              onChange={(event) => setLimit(Number(event.target.value))}
+            />
+          </label>
+        </div>
+        <fieldset className="space-y-2 border-t pt-4" disabled={!editable || saving}>
+          <legend className="text-sm font-medium">{t("hostRsvp.checkInPolicy")}</legend>
+          <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+            <input type="radio" name="checkin-policy" value="REQUIRED" checked={checkInPolicy === "REQUIRED"}
+              onChange={() => setCheckInPolicy("REQUIRED")} className="mt-1" />
+            <span><span className="block font-medium">{t("hostRsvp.checkInRequired")}</span>
+              <span className="text-muted-foreground">{t("hostRsvp.checkInRequiredHelp")}</span></span>
+          </label>
+          <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+            <input type="radio" name="checkin-policy" value="OPTIONAL" checked={checkInPolicy === "OPTIONAL"}
+              onChange={() => setCheckInPolicy("OPTIONAL")} className="mt-1" />
+            <span><span className="block font-medium">{t("hostRsvp.checkInOptional")}</span>
+              <span className="text-muted-foreground">{t("hostRsvp.checkInOptionalHelp")}</span></span>
+          </label>
+          <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+            <input type="checkbox" checked={allowWalkIns} onChange={(event) => setAllowWalkIns(event.target.checked)} className="mt-1" />
+            <span><span className="block font-medium">{t("hostRsvp.allowWalkIns")}</span>
+              <span className="text-muted-foreground">{t("hostRsvp.allowWalkInsHelp")}</span></span>
+          </label>
+          <p className="text-xs text-muted-foreground">{t("hostRsvp.checkInPolicyLockedHelp")}</p>
+        </fieldset>
         {editable && (
-          <Button disabled={saving || limit === settings.plusOneLimit} type="submit">
-            {t("hostRsvp.saveLimit")}
+          <Button disabled={saving || (limit === settings.plusOneLimit && checkInPolicy === settings.rsvpCheckInPolicy && allowWalkIns === settings.allowWalkIns)} type="submit">
+            {saving ? t("hostRsvp.saving") : t("hostRsvp.saveSettings")}
           </Button>
         )}
       </form>
