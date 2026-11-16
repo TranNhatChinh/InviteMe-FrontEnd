@@ -14,6 +14,7 @@ export const CO_HOST_PERMISSIONS = [
   "SEATING_VIEW",
   "SEATING_EDIT",
   "CHECKIN_MANAGE",
+  "WALK_IN_MANAGE",
   "GIFT_RECORD",
 ] as const;
 
@@ -23,6 +24,7 @@ export type CoHostPermission = z.infer<typeof coHostPermissionSchema>;
 /** Reception permissions: the backend only grants them for the whole wedding, never per guest group. */
 export const WEDDING_WIDE_ONLY_PERMISSIONS: readonly CoHostPermission[] = [
   "CHECKIN_MANAGE",
+  "WALK_IN_MANAGE",
   "GIFT_RECORD",
 ];
 export const isWeddingWideOnly = (permission: CoHostPermission) =>

@@ -64,6 +64,7 @@
     "SEATING_VIEW": "View seating plan",
     "SEATING_EDIT": "Edit seating plan",
     "CHECKIN_MANAGE": "Manage check-in",
+    "WALK_IN_MANAGE": "Manage walk-in guests",
     "GIFT_RECORD": "Record gifts at the desk"
   },
   "actions": {
@@ -141,7 +142,8 @@
     "RSVP_VIEW": "See who accepted, declined or has not replied.",
     "SEATING_VIEW": "See the table plan and each guest’s seat.",
     "SEATING_EDIT": "Create tables, seat and move guests.",
-    "CHECKIN_MANAGE": "Check guests in and add walk-ins. Always applies to the whole wedding.",
+    "CHECKIN_MANAGE": "Find, verify, and check in invited guests. Always applies to the whole wedding.",
+    "WALK_IN_MANAGE": "Create and check in guests not on the list when the couple enables walk-ins. Always applies to the whole wedding.",
     "GIFT_RECORD": "Record envelopes and presents at the desk, without seeing totals. Always applies to the whole wedding."
   },
   "seatingViewLocked": "On because this co-host can edit seating.",

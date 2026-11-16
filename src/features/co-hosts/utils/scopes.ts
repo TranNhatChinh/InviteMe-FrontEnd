@@ -17,6 +17,7 @@ export const PERMISSION_LABELS: Record<CoHostPermission, string> = {
   SEATING_VIEW: "Xem sơ đồ chỗ ngồi",
   SEATING_EDIT: "Chỉnh sửa chỗ ngồi",
   CHECKIN_MANAGE: "Quản lý check-in",
+  WALK_IN_MANAGE: "Tiếp nhận khách vãng lai",
   GIFT_RECORD: "Ghi nhận quà tại quầy",
 };
 
@@ -27,7 +28,7 @@ export const PERMISSION_AREAS: {
 }[] = [
   { key: "guests", permissions: ["GUEST_VIEW", "GUEST_EDIT", "RSVP_VIEW"] },
   { key: "seating", permissions: ["SEATING_VIEW", "SEATING_EDIT"] },
-  { key: "reception", permissions: ["CHECKIN_MANAGE", "GIFT_RECORD"] },
+  { key: "reception", permissions: ["CHECKIN_MANAGE", "WALK_IN_MANAGE", "GIFT_RECORD"] },
 ];
 
 /** What is wrong with one permission's scope, as a translation key; "" when it can be saved. */

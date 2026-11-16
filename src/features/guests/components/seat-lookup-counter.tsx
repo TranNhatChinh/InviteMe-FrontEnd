@@ -21,12 +21,14 @@ import { ConfirmDialog } from "@/shared/feedback/confirm-dialog";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { useLocale } from "@/i18n/language-context";
+import { usePermission } from "@/shared/components/permission-guard";
 import styles from "./seat-lookup-counter.module.css";
 import {
   addReceptionWalkIn,
   checkInGuestPlaces,
   lookupGuestSeats,
   searchReceptionGuests,
+  voidCheckInPlace,
   type ReceptionGuest,
   type CheckInResult,
   type SeatLookup,
@@ -53,12 +55,16 @@ function apiErrorMessage(
   const actionKey = action.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
   if (!(error instanceof ApiError)) return t(`reception.errors.${actionKey}.network`);
   if (error.status === 401) return t("reception.errors.unauthenticated");
-  if (error.status === 403) return t("reception.errors.forbidden");
+  if (error.status === 403) return action === "walk-in" ? t("reception.errors.walkInPermissionRequired") : t("reception.errors.forbidden");
   if (error.status === 404) return t("reception.errors.notFound");
-  if (error.backendCode === "CHECKIN_EXCEPTION_REASON_REQUIRED")
-    return t("reception.errors.exceptionRequired");
+  if (error.backendCode === "RSVP_DECLINED") return t("reception.errors.rsvpDeclined");
+  if (error.backendCode === "RSVP_PLACE_NOT_ATTENDING") return t("reception.errors.rsvpPlaceNotAttending");
+  if (error.backendCode === "RSVP_CONFIRMATION_REQUIRED") return t("reception.errors.rsvpConfirmationRequired");
+  if (error.backendCode === "WALK_INS_DISABLED") return t("reception.errors.walkInsDisabled");
+  if (error.backendCode === "WALK_IN_DUPLICATE_GUEST") return t("reception.errors.walkInDuplicateGuest");
+  if (error.backendCode === "CAPACITY_EXCEEDED" || error.backendCode === "WALK_IN_OVER_CAPACITY")
+    return t("reception.errors.capacityExceeded");
   if (error.backendCode === "PLACE_NOT_IN_INVITATION") return t("reception.errors.placeChanged");
-  if (error.backendCode === "WALK_IN_OVER_CAPACITY") return t("reception.errors.overCapacity");
   if (error.backendCode === "IDEMPOTENCY_KEY_REUSED")
     return t("reception.errors.idempotencyConflict");
   if (error.status === 400) {
@@ -77,7 +83,11 @@ function attendanceLabel(
   latestOutcome: CheckInOutcome | undefined,
   t: (key: string) => string,
 ) {
+  if (latestOutcome === "CHECKED_IN" && seat.checkInMethod === "COUNTER_VERIFIED")
+    return t("reception.status.counterVerified");
   if (latestOutcome === "CHECKED_IN") return t("reception.status.checkedIn");
+  if ((latestOutcome === "ALREADY_CHECKED_IN" || seat.checkedInAt) && seat.checkInMethod === "COUNTER_VERIFIED")
+    return t("reception.status.counterVerified");
   if (latestOutcome === "ALREADY_CHECKED_IN" || seat.checkedInAt)
     return t("reception.status.alreadyCheckedIn");
   return t("reception.status.notCheckedIn");
@@ -103,10 +113,43 @@ function guestInitials(value: string) {
     .toLocaleUpperCase();
 }
 
-export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
+function normalizeGuestName(value: string) {
+  return value
+    .normalize("NFD")
+    .toLocaleLowerCase("vi")
+    .replace(/đ/g, "d")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function SeatLookupCounter({
+  weddingId,
+  walkInSettings,
+  walkInSettingsLoading = false,
+  walkInSettingsFailed = false,
+}: {
+  weddingId: string;
+  walkInSettings: { rsvpCheckInPolicy: "REQUIRED" | "OPTIONAL"; allowWalkIns: boolean } | null;
+  walkInSettingsLoading?: boolean;
+  walkInSettingsFailed?: boolean;
+}) {
   const { t } = useTranslation("guests");
   const { language } = useLocale();
   const { api, realtime } = useRuntime();
+  const { can, isOwner } = usePermission();
+  const mayCreateWalkIn = isOwner || can("WALK_IN_MANAGE");
+  const allowWalkIns = walkInSettings?.allowWalkIns ?? false;
+  const canCreateWalkIn = mayCreateWalkIn && allowWalkIns && walkInSettings !== null &&
+    !walkInSettingsLoading && !walkInSettingsFailed;
+  const walkInGateMessage = walkInSettingsLoading
+    ? t("reception.walkInSettingsLoading")
+    : walkInSettingsFailed || walkInSettings === null
+      ? t("reception.walkInSettingsFailed")
+      : !mayCreateWalkIn
+        ? t("reception.walkInPermissionRequired")
+        : t("reception.walkInsDisabled");
   const [mode, setMode] = useState<"QR" | "SEARCH" | "WALK_IN">("QR");
   const [code, setCode] = useState("");
   const [lookupCode, setLookupCode] = useState<string | null>(null);
@@ -122,13 +165,14 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
   const [walkInSide, setWalkInSide] = useState<NonNullable<WalkInInput["side"]>>("UNSPECIFIED");
   const [walkInPeople, setWalkInPeople] = useState("1");
   const [walkInNames, setWalkInNames] = useState("");
-  const [walkInReason, setWalkInReason] = useState("");
   const [showWalkInDetails, setShowWalkInDetails] = useState(false);
   const [walkInPending, setWalkInPending] = useState(false);
   const walkInAttempt = useRef<{ signature: string; key: string } | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [outcomes, setOutcomes] = useState<Record<string, CheckInOutcome>>({});
-  const [exceptionReason, setExceptionReason] = useState("");
+  const [voidReason, setVoidReason] = useState("");
+  const [voidingPlaceId, setVoidingPlaceId] = useState<string | null>(null);
+  const [voidPending, setVoidPending] = useState(false);
   const [lookupPending, setLookupPending] = useState(false);
   const [checkInPending, setCheckInPending] = useState(false);
   const [counterDisplay, setCounterDisplay] = useState<CounterDisplayResult | null>(null);
@@ -158,7 +202,8 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     setWalkInGuestId(null);
     setSelectedIds([]);
     setOutcomes({});
-    setExceptionReason("");
+    setVoidReason("");
+    setVoidingPlaceId(null);
     setError("");
     setMessage("");
     setForbidden(false);
@@ -235,7 +280,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     setActiveSearchQuery(null);
     setSelectedIds([]);
     setOutcomes({});
-    setExceptionReason("");
+    setVoidReason("");
     setError("");
     setMessage("");
     setForbidden(false);
@@ -262,8 +307,11 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
   }
 
   function togglePlace(placeId: string, checked: boolean) {
+    const seat = guest?.seats.find((item) => item.placeId === placeId);
+    if (!seat || seat.status === "UNUSED" ||
+        (seat.status === "PENDING" && guest?.rsvpCheckInPolicy === "REQUIRED")) return;
     setSelectedIds((current) =>
-      checked ? [...current, placeId] : current.filter((item) => item !== placeId),
+      checked ? [...new Set([...current, placeId])] : current.filter((item) => item !== placeId),
     );
   }
 
@@ -275,15 +323,6 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
       checkInPending
     )
       return;
-    const selectedUnused = guest.seats.some(
-      (seat) => selectedIds.includes(seat.placeId) && seat.status === "UNUSED",
-    );
-    const reason = exceptionReason.trim();
-    if (selectedUnused && !reason) {
-      setError(t("reception.errors.exceptionRequired"));
-      return;
-    }
-
     setCheckInPending(true);
     setError("");
     setMessage("");
@@ -294,7 +333,6 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
         weddingId,
         lookupCode ? { code: lookupCode } : { guestId: guest.guestId },
         selectedIds,
-        selectedUnused ? reason : undefined,
       );
       setCounterDisplay({
         recipientName: result.recipientName,
@@ -315,14 +353,15 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
               seats: current.seats.map((seat) => {
                 const place = result.places.find((item) => item.placeId === seat.placeId);
                 return place
-                  ? { ...seat, checkedInAt: place.checkedInAt, checkInKind: place.kind }
+                  ? { ...seat, checkedInAt: place.checkedInAt, checkInKind: place.kind,
+                      checkInMethod: place.checkInMethod, originalRsvpStatus: place.originalRsvpStatus }
                   : seat;
               }),
             }
           : current,
       );
       setSelectedIds([]);
-      setExceptionReason("");
+      setVoidReason("");
       const newlyChecked = result.places.filter((place) => place.result === "CHECKED_IN").length;
       const alreadyDone = result.places.length - newlyChecked;
       setMessage(
@@ -384,14 +423,51 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     window.setTimeout(() => guestHeading.current?.focus(), 0);
   }
 
+  async function confirmVoidCheckIn(placeId: string) {
+    const reason = voidReason.trim();
+    if (!reason || voidPending) return;
+    setVoidPending(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await voidCheckInPlace(api, weddingId, placeId, reason);
+      setGuest((current) =>
+        current?.guestId === result.guestId ? { ...current, seats: result.seats } : current,
+      );
+      setOutcomes((current) => {
+        const next = { ...current };
+        delete next[placeId];
+        return next;
+      });
+      setSelectedIds((current) => current.filter((id) => id !== placeId));
+      setVoidingPlaceId(null);
+      setVoidReason("");
+      setMessage(t("reception.undoSuccess"));
+    } catch (cause) {
+      setError(apiErrorMessage(cause, "check-in", t));
+      if (cause instanceof ApiError && cause.status === 403) setForbidden(true);
+      if (cause instanceof ApiError && cause.status === 409) await reloadCurrentGuestSnapshot();
+    } finally {
+      setVoidPending(false);
+    }
+  }
+
   function startCompanionWalkIn(result: ReceptionGuest) {
+    const canAddCompanion = result.seats.some(
+      (seat) => seat.status === "USED" || (seat.status === "PENDING" && result.rsvpCheckInPolicy === "OPTIONAL"),
+    );
+    if (!canAddCompanion) {
+      setError(result.seats.some((seat) => seat.status === "UNUSED")
+        ? t("reception.declinedBlocked")
+        : t("reception.policyRequired"));
+      return;
+    }
     setWalkInGuestId(result.guestId);
     setWalkInName("");
     setWalkInHonorific("");
     setWalkInSide("UNSPECIFIED");
     setWalkInPeople("1");
     setWalkInNames("");
-    setWalkInReason("");
     setShowWalkInDetails(false);
     setError("");
     setMode("WALK_IN");
@@ -399,6 +475,10 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
 
   async function submitWalkIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!walkInGuestId && !canCreateWalkIn) {
+      setError(walkInGateMessage);
+      return;
+    }
     const people = Number(walkInPeople);
     const recipientName = walkInName.trim();
     const names = walkInNames
@@ -412,6 +492,30 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     if (!walkInGuestId && !recipientName) {
       setError(t("reception.errors.walkInName"));
       return;
+    }
+    if (!walkInGuestId && recipientName.length >= 2) {
+      try {
+        const candidates = await searchReceptionGuests(api, weddingId, recipientName);
+        const candidateName = normalizeGuestName(recipientName);
+        const duplicates = candidates.filter((candidate) =>
+          normalizeGuestName(candidate.recipientName) === candidateName ||
+          candidate.seats.some((seat) => seat.personName && normalizeGuestName(seat.personName) === candidateName),
+        );
+        if (duplicates.length > 0) {
+          setSearchText(recipientName);
+          setSearchQuery(recipientName);
+          setSearchResults(duplicates);
+          setGuest(null);
+          setLookupCode(null);
+          setActiveSearchQuery(null);
+          setMode("SEARCH");
+          setError(t("reception.errors.walkInDuplicateGuest"));
+          return;
+        }
+      } catch (cause) {
+        setError(apiErrorMessage(cause, "search", t));
+        return;
+      }
     }
     if (names.length > (walkInGuestId ? people : people - 1)) {
       setError(
@@ -428,7 +532,6 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
       honorific: walkInGuestId ? null : walkInHonorific.trim() || null,
       side: walkInGuestId ? null : walkInSide,
       names: names.length ? names : null,
-      overrideReason: walkInReason.trim() || null,
     };
     const signature = JSON.stringify(input);
     if (!walkInAttempt.current || walkInAttempt.current.signature !== signature) {
@@ -460,6 +563,8 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
         seatNumber: place.seatNumber,
         checkedInAt: place.checkedInAt,
         checkInKind: place.kind,
+        checkInMethod: place.checkInMethod,
+        originalRsvpStatus: place.originalRsvpStatus,
       }));
       const walkInGuest: ReceptionGuest = {
         guestId: result.guestId,
@@ -468,6 +573,8 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
         side: walkInSide,
         places: seats.length,
         checkedIn: seats.length,
+        rsvpCheckInPolicy: walkInSettings?.rsvpCheckInPolicy ?? "REQUIRED",
+        allowWalkIns: walkInSettings?.allowWalkIns ?? false,
         tables: [...new Set(seats.flatMap((seat) => (seat.table ? [seat.table] : [])))],
         seats,
       };
@@ -497,8 +604,8 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
     }
   }
 
-  const selectedUnused =
-    guest?.seats.some((seat) => selectedIds.includes(seat.placeId) && seat.status === "UNUSED") ??
+  const selectedPending =
+    guest?.seats.some((seat) => selectedIds.includes(seat.placeId) && seat.status === "PENDING") ??
     false;
 
   if (counterDisplay) {
@@ -563,7 +670,9 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                     <span>
                       {alreadyCheckedIn
                         ? t("reception.status.alreadyCheckedIn")
-                        : t("reception.status.justCheckedIn")}
+                        : place.checkInMethod === "COUNTER_VERIFIED"
+                          ? t("reception.status.counterVerified")
+                          : t("reception.status.justCheckedIn")}
                     </span>
                     <small>{friendlyTime(place.checkedInAt, language)}</small>
                   </div>
@@ -621,23 +730,21 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
             type="button"
             className={buttonClassName}
             disabled={
-              selectedIds.length === 0 ||
-              checkInPending ||
-              (selectedUnused && !exceptionReason.trim())
+              selectedIds.length === 0 || checkInPending
             }
           >
             <Check aria-hidden="true" />
             {checkInPending
               ? t("reception.recording")
-              : t("reception.confirmCheckInCount", { count: selectedIds.length })}
+              : t(selectedPending ? "reception.verifiedCheckInAction" : "reception.normalCheckInAction")}
           </Button>
         }
         title={t("reception.confirmTitle")}
         description={confirmationDescription}
         contentClassName={styles.confirmationDialog}
         notice={
-          selectedUnused ? (
-            <p className={styles.confirmationNotice}>{t("reception.exceptionConfirmation")}</p>
+          selectedPending ? (
+            <p className={styles.confirmationNotice}>{t("reception.policyOptionalPending")}</p>
           ) : null
         }
         cancelLabel={t("reception.goBack")}
@@ -797,7 +904,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                   setSelectedIds([]);
                   setOutcomes({});
                   setActiveSearchQuery(null);
-                  setExceptionReason("");
+                  setVoidReason("");
                   setError("");
                   setForbidden(false);
                   searchInput.current?.focus();
@@ -869,6 +976,10 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                           type="button"
                           variant="outline"
                           onClick={() => startCompanionWalkIn(result)}
+                          disabled={!result.seats.some((seat) =>
+                            seat.status === "USED" ||
+                            (seat.status === "PENDING" && result.rsvpCheckInPolicy === "OPTIONAL"),
+                          )}
                         >
                           <UserPlus aria-hidden="true" />
                           {t("reception.addCompanion")}
@@ -882,17 +993,18 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
             {searchQuery && !searchPending && searchResults.length === 0 && (
               <div className={styles.searchEmpty}>
                 <p>{t("reception.noSearchMatchHint")}</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-3"
-                  onClick={() => {
+                {canCreateWalkIn ? (
+                  <Button type="button" variant="outline" className="mt-3" onClick={() => {
                     setWalkInGuestId(null);
                     setMode("WALK_IN");
-                  }}
-                >
-                  {t("reception.createWalkIn")}
-                </Button>
+                  }}>
+                    {t("reception.createWalkIn")}
+                  </Button>
+                ) : (
+                  <p className={styles.policyNotice}>
+                    {walkInGateMessage}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -912,6 +1024,11 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                 <p>{t("reception.walkInImmediateHint")}</p>
               </div>
             </header>
+            {!walkInGuestId && !canCreateWalkIn && (
+              <p className={styles.policyNotice} role="status">
+                {walkInGateMessage}
+              </p>
+            )}
             {walkInGuestId ? (
               <div className={styles.companionContext}>
                 <p>
@@ -925,7 +1042,13 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setWalkInGuestId(null)}
+                  onClick={() => {
+                    if (!canCreateWalkIn) {
+                      setError(walkInGateMessage);
+                      return;
+                    }
+                    setWalkInGuestId(null);
+                  }}
                 >
                   {t("reception.createNewGuest")}
                 </Button>
@@ -943,7 +1066,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                     maxLength={150}
                     required
                     placeholder={t("reception.walkInNamePlaceholder")}
-                    disabled={walkInPending}
+                    disabled={walkInPending || (!walkInGuestId && !canCreateWalkIn)}
                   />
                 </label>
               )}
@@ -959,7 +1082,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                   value={walkInPeople}
                   onChange={(event) => setWalkInPeople(event.target.value)}
                   required
-                  disabled={walkInPending}
+                  disabled={walkInPending || (!walkInGuestId && !canCreateWalkIn)}
                 />
                 <span>
                   {walkInGuestId
@@ -969,7 +1092,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
               </label>
             </div>
             <details
-              open={showWalkInDetails || Boolean(walkInReason)}
+              open={showWalkInDetails}
               onToggle={(event) => setShowWalkInDetails(event.currentTarget.open)}
               className={styles.walkInDetails}
             >
@@ -987,7 +1110,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                         onChange={(event) => setWalkInHonorific(event.target.value)}
                         maxLength={50}
                         placeholder={t("reception.honorificPlaceholder")}
-                        disabled={walkInPending}
+                        disabled={walkInPending || (!walkInGuestId && !canCreateWalkIn)}
                       />
                     </label>
                     <label>
@@ -997,7 +1120,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                         onChange={(event) =>
                           setWalkInSide(event.target.value as NonNullable<WalkInInput["side"]>)
                         }
-                        disabled={walkInPending}
+                        disabled={walkInPending || (!walkInGuestId && !canCreateWalkIn)}
                       >
                         <option value="UNSPECIFIED">{t("planning.sideValues.UNSPECIFIED")}</option>
                         <option value="BRIDE">{t("planning.sideValues.BRIDE")}</option>
@@ -1013,18 +1136,8 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                     value={walkInNames}
                     onChange={(event) => setWalkInNames(event.target.value)}
                     rows={2}
-                    disabled={walkInPending}
+                    disabled={walkInPending || (!walkInGuestId && !canCreateWalkIn)}
                     placeholder={t("reception.companionNamesPlaceholder")}
-                  />
-                </label>
-                <label className={styles.capacityReasonField}>
-                  <span>{t("reception.capacityOverrideReason")}</span>
-                  <Input
-                    value={walkInReason}
-                    onChange={(event) => setWalkInReason(event.target.value)}
-                    maxLength={500}
-                    disabled={walkInPending}
-                    placeholder={t("reception.capacityOverridePlaceholder")}
                   />
                 </label>
               </div>
@@ -1032,7 +1145,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
             <Button
               type="submit"
               className={styles.walkInSubmit}
-              disabled={walkInPending || checkInPending}
+              disabled={walkInPending || checkInPending || (!walkInGuestId && !canCreateWalkIn)}
             >
               <UserPlus aria-hidden="true" />
               {walkInPending
@@ -1092,7 +1205,7 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                     setGuest(null);
                     setSelectedIds([]);
                     setOutcomes({});
-                    setExceptionReason("");
+                    setVoidReason("");
                     setError("");
                     setMessage("");
                     window.setTimeout(() => searchInput.current?.focus(), 0);
@@ -1141,7 +1254,8 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                             className={styles.attendeeCheckbox}
                             checked={selectedIds.includes(seat.placeId)}
                             onChange={(event) => togglePlace(seat.placeId, event.target.checked)}
-                            disabled={checkedIn || checkInPending}
+                            disabled={checkedIn || checkInPending || seat.status === "UNUSED" ||
+                              (seat.status === "PENDING" && guest.rsvpCheckInPolicy === "REQUIRED")}
                             aria-label={t("reception.selectPersonForCheckIn", {
                               name: seat.personName ?? t("guestNumber", { number: seat.position }),
                             })}
@@ -1186,6 +1300,46 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
                             )}
                           </span>
                         </label>
+                        {seat.checkedInAt && (
+                          <div className={styles.undoCheckIn}>
+                            {voidingPlaceId === seat.placeId ? (
+                              <>
+                                <label>
+                                  <span>{t("reception.undoReason")}</span>
+                                  <Input
+                                    value={voidReason}
+                                    onChange={(event) => setVoidReason(event.target.value)}
+                                    maxLength={500}
+                                    placeholder={t("reception.undoReasonPlaceholder")}
+                                    disabled={voidPending}
+                                  />
+                                </label>
+                                <div className={styles.undoActions}>
+                                  <Button type="button" variant="ghost" disabled={voidPending}
+                                    onClick={() => { setVoidingPlaceId(null); setVoidReason(""); }}>
+                                    {t("reception.goBack")}
+                                  </Button>
+                                  <ConfirmDialog
+                                    trigger={<Button type="button" variant="outline" disabled={voidPending || !voidReason.trim()}>
+                                      {t("reception.undoCheckIn")}
+                                    </Button>}
+                                    title={t("reception.undoTitle")}
+                                    description={t("reception.undoDescription")}
+                                    notice={<p className={styles.confirmationNotice}>{voidReason.trim()}</p>}
+                                    cancelLabel={t("reception.goBack")}
+                                    confirmLabel={t("reception.undoConfirm")}
+                                    onConfirm={() => void confirmVoidCheckIn(seat.placeId)}
+                                  />
+                                </div>
+                              </>
+                            ) : (
+                              <Button type="button" variant="ghost" size="sm" disabled={voidPending}
+                                onClick={() => { setVoidingPlaceId(seat.placeId); setVoidReason(""); }}>
+                                {t("reception.undoCheckIn")}
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </li>
                     );
                   })}
@@ -1193,21 +1347,18 @@ export function SeatLookupCounter({ weddingId }: { weddingId: string }) {
               )}
             </section>
 
-            {selectedUnused && (
-              <label className={styles.exceptionField}>
-                <span>
-                  {t("reception.exceptionReasonLabel")} <span aria-hidden="true">*</span>
-                </span>
-                <span>{t("reception.exceptionReasonHint")}</span>
-                <Input
-                  value={exceptionReason}
-                  onChange={(event) => setExceptionReason(event.target.value)}
-                  maxLength={500}
-                  placeholder={t("reception.exceptionReasonPlaceholder")}
-                  aria-required="true"
-                  disabled={checkInPending}
-                />
-              </label>
+            {guest.seats.some((seat) => seat.status === "PENDING" && !seat.checkedInAt) && (
+              <p className={styles.policyNotice}>
+                {guest.rsvpCheckInPolicy === "OPTIONAL"
+                  ? t("reception.policyOptionalPending")
+                  : t("reception.policyRequired")}
+              </p>
+            )}
+            {guest.seats.some((seat) => seat.status === "UNUSED" && !seat.checkedInAt) && (
+              <p className={styles.policyNotice}>{t("reception.declinedBlocked")}</p>
+            )}
+            {guest.seats.some((seat) => selectedIds.includes(seat.placeId) && !seat.table) && (
+              <p className={styles.policyNotice}>{t("reception.unassignedSeatWarning")}</p>
             )}
 
             <div className={styles.selectionFooter}>

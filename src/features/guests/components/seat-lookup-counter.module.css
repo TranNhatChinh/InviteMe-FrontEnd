@@ -754,6 +754,16 @@
   margin: 5px 0 0;
 }
 
+.policyNotice {
+  margin: 0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fff5e9;
+  color: #73552e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .guestCard {
   display: grid;
   gap: 24px;
@@ -940,6 +950,27 @@
 
 .attendeeRow[data-check-in-status="already-checked-in"] .attendeeSelect {
   cursor: default;
+}
+
+.undoCheckIn {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #eee1e5;
+  padding: 0 15px 12px 54px;
+  font-size: 12px;
+}
+
+.undoCheckIn label {
+  display: grid;
+  gap: 5px;
+  max-width: 420px;
+}
+
+.undoActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .attendeeCheckbox {

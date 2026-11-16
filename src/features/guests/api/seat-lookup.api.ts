@@ -6,6 +6,8 @@ export const seatLookupSchema = z.object({
   recipientName: z.string(),
   honorific: z.string().nullable(),
   published: z.boolean(),
+  rsvpCheckInPolicy: z.enum(["REQUIRED", "OPTIONAL"]),
+  allowWalkIns: z.boolean(),
   seats: z.array(
     z.object({
       position: z.number().int().positive(),
@@ -16,7 +18,9 @@ export const seatLookupSchema = z.object({
       placeId: z.string(),
       participantId: z.string().nullable(),
       checkedInAt: z.string().nullable(),
-      checkInKind: z.enum(["INVITED", "WALK_IN"]).nullable(),
+      checkInKind: z.enum(["INVITED", "INVITED_COMPANION", "WALK_IN"]).nullable(),
+      checkInMethod: z.enum(["NORMAL", "COUNTER_VERIFIED"]).nullable(),
+      originalRsvpStatus: z.enum(["ATTENDING", "MAYBE", "DECLINED", "NOT_RESPONDED"]).nullable(),
     }),
   ),
 });
@@ -31,7 +35,9 @@ const receptionSeatSchema = z.object({
   table: z.string().nullable(),
   seatNumber: z.number().int().nullable(),
   checkedInAt: z.string().nullable(),
-  checkInKind: z.enum(["INVITED", "WALK_IN"]).nullable(),
+  checkInKind: z.enum(["INVITED", "INVITED_COMPANION", "WALK_IN"]).nullable(),
+  checkInMethod: z.enum(["NORMAL", "COUNTER_VERIFIED"]).nullable(),
+  originalRsvpStatus: z.enum(["ATTENDING", "MAYBE", "DECLINED", "NOT_RESPONDED"]).nullable(),
 });
 
 export const receptionGuestSchema = z.object({
@@ -41,6 +47,8 @@ export const receptionGuestSchema = z.object({
   side: z.string(),
   places: z.number().int().nonnegative(),
   checkedIn: z.number().int().nonnegative(),
+  rsvpCheckInPolicy: z.enum(["REQUIRED", "OPTIONAL"]),
+  allowWalkIns: z.boolean(),
   tables: z.array(z.string()),
   seats: z.array(receptionSeatSchema),
 });
@@ -55,7 +63,9 @@ const checkInPlaceResultSchema = z.object({
   seatNumber: z.number().int().nullable(),
   result: z.enum(["CHECKED_IN", "ALREADY_CHECKED_IN"]),
   checkedInAt: z.string(),
-  kind: z.enum(["INVITED", "WALK_IN"]),
+  kind: z.enum(["INVITED", "INVITED_COMPANION", "WALK_IN"]),
+  checkInMethod: z.enum(["NORMAL", "COUNTER_VERIFIED"]).nullable(),
+  originalRsvpStatus: z.enum(["ATTENDING", "MAYBE", "DECLINED", "NOT_RESPONDED"]).nullable(),
 });
 export const checkInResultSchema = z.object({
   guestId: z.string(),
@@ -82,7 +92,6 @@ export type WalkInInput = {
   honorific?: string | null;
   side?: "BRIDE" | "GROOM" | "MUTUAL" | "UNSPECIFIED" | null;
   names?: string[] | null;
-  overrideReason?: string | null;
 };
 
 export function searchReceptionGuests(api: ApiClient, weddingId: string, query: string) {
@@ -106,7 +115,6 @@ export function checkInGuestPlaces(
   weddingId: string,
   target: { code: string } | { guestId: string },
   placeIds: string[],
-  exceptionReason?: string,
 ) {
   return api.request(`/weddings/${encodeURIComponent(weddingId)}/guest-planning/check-ins`, {
     method: "POST",
@@ -114,9 +122,21 @@ export function checkInGuestPlaces(
       code: "code" in target ? target.code.trim() : null,
       guestId: "guestId" in target ? target.guestId : null,
       placeIds,
-      ...(exceptionReason ? { exceptionReason } : {}),
     },
     schema: checkInResultSchema,
+  });
+}
+
+export function voidCheckInPlace(api: ApiClient, weddingId: string, placeId: string, reason: string) {
+  return api.request(`/weddings/${encodeURIComponent(weddingId)}/guest-planning/check-ins/${encodeURIComponent(placeId)}/void`, {
+    method: "POST",
+    body: { reason },
+    schema: z.object({
+      guestId: z.string(),
+      placeId: z.string(),
+      voidedAt: z.string(),
+      seats: z.array(receptionSeatSchema),
+    }),
   });
 }
 
