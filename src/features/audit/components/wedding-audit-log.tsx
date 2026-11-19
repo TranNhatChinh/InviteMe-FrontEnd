@@ -15,6 +15,14 @@ import { listWeddingAuditLogs, type AuditLogFilters } from "../api/audit.api";
 import { useLocale } from "@/i18n/language-context";
 import { formatDate, formatNumber } from "@/i18n/format";
 
+function metadataText(metadata: unknown, key: string): string | undefined {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+
+  const record = metadata as Record<string, unknown>;
+  const value = Object.entries(record).find(([name]) => name.toLowerCase() === key.toLowerCase())?.[1];
+  return typeof value === "string" || typeof value === "number" ? String(value) : undefined;
+}
+
 function dateBound(value: string, endOfDay: boolean) {
   if (!value) return undefined;
   const date = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
@@ -65,8 +73,8 @@ export function WeddingAuditLog({ weddingId }: { weddingId: string }) {
   return (
     <section className="space-y-6">
       <PageHeader
-        title="Lịch sử hoạt động"
-        description="Theo dõi ai đã thực hiện hành động nào trong đám cưới này."
+        title={t("title")}
+        description={t("description")}
       />
       <form
         onSubmit={apply}
@@ -128,30 +136,37 @@ export function WeddingAuditLog({ weddingId }: { weddingId: string }) {
             <EmptyState title={t("noMatches")} description={t("noMatchesHint")} />
           ) : (
             <div className="space-y-3">
-              {query.data.items.map((entry) => (
-                <article key={entry.id} className="space-y-2 rounded-xl border bg-card p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <h2 className="font-semibold">{entry.action.replaceAll("_", " ")}</h2>
-                      <p className="text-sm text-muted-foreground">
-                        {entry.actorName || entry.actorEmail || entry.actorType} ·{" "}
-                        {entry.entityType}
-                      </p>
+              {query.data.items.map((entry) => {
+                const actor =
+                  entry.actorName ||
+                  entry.actorEmail ||
+                  t(`actors.${entry.actorType}`, { defaultValue: t("actors.unknown") });
+                const channel = metadataText(entry.metadata, "channel")?.toUpperCase();
+                const channelLabel =
+                  channel === "SMS" || channel === "EMAIL" ? t(`channels.${channel}`) : undefined;
+
+                return (
+                  <article key={entry.id} className="space-y-2 rounded-xl border bg-card p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h2 className="font-semibold">
+                          {t(`actions.${entry.action}`, { defaultValue: t("unknownAction") })}
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          {actor}
+                          {channelLabel ? ` · ${channelLabel}` : null}
+                        </p>
+                      </div>
+                      <time className="text-sm text-muted-foreground" dateTime={entry.createdAt}>
+                        {formatDate(entry.createdAt, language, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </time>
                     </div>
-                    <time className="text-sm text-muted-foreground" dateTime={entry.createdAt}>
-                      {formatDate(entry.createdAt, language, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </time>
-                  </div>
-                  {entry.entityId && (
-                    <p className="break-all text-xs text-muted-foreground">
-                      {t("entityId", { id: entry.entityId })}
-                    </p>
-                  )}
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
           <div className="flex items-center justify-between gap-3">

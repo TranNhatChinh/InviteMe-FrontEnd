@@ -135,6 +135,7 @@
   "invalidTemplateJson": "Configuration must be a valid JSON object.",
   "auditAction": "Action",
   "auditActionPlaceholder": "For example: GUEST_IMPORTED",
+  "auditAdvancedFilters": "Advanced filters",
   "auditRecordType": "Record type",
   "auditRecordPlaceholder": "For example: planning_guests",
   "from": "From date",
@@ -251,8 +252,8 @@
     "ADMIN_RBAC_MANAGE": "Assign platform permissions to the Admin role.",
     "ADMIN_PLANS_MANAGE": "Manage plans, orders, payments, grants, and revenue."
   },
-  "platformAuditTitle": "Platform audit log",
-  "platformAuditDescription": "Review sensitive actions. Sensitive data and private content are removed from event metadata.",
+  "platformAuditTitle": "Platform activity history",
+  "platformAuditDescription": "Review important changes made by administrators and InviteMe.",
   "templateManagementTitle": "Invitation templates",
   "templateManagementDescription": "Manage the invitation template catalog. Hiding a template does not remove existing invitations."
 }

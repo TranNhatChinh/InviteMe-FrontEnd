@@ -21,6 +21,7 @@ function bound(value: string, end: boolean) {
 }
 export function AdminAuditLogs() {
   const { t } = useTranslation("admin");
+  const { t: auditT } = useTranslation("audit");
   const { language } = useLocale();
   const { api } = useRuntime();
   const [page, setPage] = useState(1);
@@ -77,57 +78,66 @@ export function AdminAuditLogs() {
       <PageHeader title={t("platformAuditTitle")} description={t("platformAuditDescription")} />
       <form
         onSubmit={apply}
-        className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-6"
+        className="space-y-3 rounded-2xl border bg-card p-4"
       >
-        <label className="grid gap-1 text-sm">
-          {t("auditAction")}
-          <Input
-            value={draft.action}
-            maxLength={100}
-            onChange={(e) => setDraft({ ...draft, action: e.target.value })}
-            placeholder={t("auditActionPlaceholder")}
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          {t("auditEntityId")}
-          <Input
-            value={draft.entityId}
-            maxLength={36}
-            onChange={(e) => setDraft({ ...draft, entityId: e.target.value })}
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          {t("auditRecordType")}
-          <Input
-            value={draft.entityType}
-            maxLength={100}
-            onChange={(e) => setDraft({ ...draft, entityType: e.target.value })}
-            placeholder={t("auditRecordPlaceholder")}
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          {t("from")}
-          <Input
-            type="date"
-            value={draft.from}
-            onChange={(e) => setDraft({ ...draft, from: e.target.value })}
-          />
-        </label>
-        <label className="grid gap-1 text-sm">
-          {t("to")}
-          <Input
-            type="date"
-            value={draft.to}
-            onChange={(e) => setDraft({ ...draft, to: e.target.value })}
-          />
-        </label>
-        <div className="flex items-end gap-2">
-          <Button type="submit">{t("filter")}</Button>
-          <Button type="button" variant="outline" onClick={reset}>
-            {t("reset")}
-          </Button>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <label className="grid gap-1 text-sm">
+            {t("from")}
+            <Input
+              type="date"
+              value={draft.from}
+              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            {t("to")}
+            <Input
+              type="date"
+              value={draft.to}
+              onChange={(e) => setDraft({ ...draft, to: e.target.value })}
+            />
+          </label>
+          <div className="flex items-end gap-2">
+            <Button type="submit">{t("filter")}</Button>
+            <Button type="button" variant="outline" onClick={reset}>
+              {t("reset")}
+            </Button>
+          </div>
         </div>
+        <details className="rounded-xl bg-muted/30 px-3">
+          <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">
+            {t("auditAdvancedFilters")}
+          </summary>
+          <div className="grid gap-3 border-t pb-3 pt-3 sm:grid-cols-2 xl:grid-cols-3">
+            <label className="grid gap-1 text-sm">
+              {t("auditAction")}
+              <Input
+                value={draft.action}
+                maxLength={100}
+                onChange={(e) => setDraft({ ...draft, action: e.target.value })}
+                placeholder={t("auditActionPlaceholder")}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              {t("auditEntityId")}
+              <Input
+                value={draft.entityId}
+                maxLength={36}
+                onChange={(e) => setDraft({ ...draft, entityId: e.target.value })}
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              {t("auditRecordType")}
+              <Input
+                value={draft.entityType}
+                maxLength={100}
+                onChange={(e) => setDraft({ ...draft, entityType: e.target.value })}
+                placeholder={t("auditRecordPlaceholder")}
+              />
+            </label>
+          </div>
+        </details>
       </form>
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -142,41 +152,48 @@ export function AdminAuditLogs() {
         ) : (
           <>
             <div className="space-y-3">
-              {logs.data.items.map((log) => (
-                <article key={log.id} className="rounded-2xl border bg-card p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h2 className="font-semibold">{log.action.replaceAll("_", " ")}</h2>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {log.actorName || log.actorEmail || log.actorType} · {log.entityType}
-                      </p>
+              {logs.data.items.map((log) => {
+                const actor =
+                  log.actorName ||
+                  log.actorEmail ||
+                  auditT(`actors.${log.actorType}`, { defaultValue: auditT("actors.unknown") });
+                const channelValue =
+                  log.metadata && typeof log.metadata === "object" && !Array.isArray(log.metadata)
+                    ? Object.entries(log.metadata as Record<string, unknown>).find(
+                        ([name]) => name.toLowerCase() === "channel",
+                      )?.[1]
+                    : undefined;
+                const channel = typeof channelValue === "string" ? channelValue.toUpperCase() : "";
+                const channelLabel =
+                  channel === "SMS" || channel === "EMAIL"
+                    ? auditT(`channels.${channel}`)
+                    : undefined;
+
+                return (
+                  <article key={log.id} className="rounded-2xl border bg-card p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h2 className="font-semibold">
+                          {auditT(`actions.${log.action}`, {
+                            defaultValue: auditT("unknownAction"),
+                          })}
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {actor}
+                          {channelLabel ? ` · ${channelLabel}` : null}
+                          {log.weddingTitle ? ` · ${t("weddingLabel", { title: log.weddingTitle })}` : null}
+                        </p>
+                      </div>
+                      <time className="text-sm text-muted-foreground" dateTime={log.createdAt}>
+                        {formatDate(log.createdAt, language, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </time>
                     </div>
-                    <time className="text-sm text-muted-foreground" dateTime={log.createdAt}>
-                      {formatDate(log.createdAt, language, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </time>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-                    {log.weddingTitle && (
-                      <span>{t("weddingLabel", { title: log.weddingTitle })}</span>
-                    )}
-                    {log.weddingId && <span>{t("weddingIdLabel", { id: log.weddingId })}</span>}
-                    {log.entityId && <span>{t("recordIdLabel", { id: log.entityId })}</span>}
-                  </div>
-                  {log.metadata != null && (
-                    <details className="mt-3 border-t pt-3">
-                      <summary className="min-h-10 cursor-pointer py-2 text-sm font-medium">
-                        {t("eventDetails")}
-                      </summary>
-                      <pre className="overflow-x-auto rounded-lg bg-muted/60 p-3 text-xs leading-5">
-                        {JSON.stringify(log.metadata, null, 2) ?? ""}
-                      </pre>
-                    </details>
-                  )}
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-muted-foreground">
