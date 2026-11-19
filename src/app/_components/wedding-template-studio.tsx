@@ -132,6 +132,12 @@ function StudioSession({
         throw new Error(
           "Hộp quà mừng chưa được cấu hình. Thêm ít nhất một mã QR hoặc ẩn widget trước khi lưu hoặc xuất bản.",
         );
+      if (error instanceof ApiError && error.backendCode === "INVITATION_GIFT_BANK_INVALID")
+        throw new Error(
+          "Ngân hàng đã chọn không có trong danh sách VietQR hiện tại. Vui lòng chọn lại ngân hàng trong cấu hình hộp quà.",
+        );
+      if (error instanceof ApiError && error.backendCode === "BANK_DIRECTORY_UNAVAILABLE")
+        throw new Error("Chưa tải được danh sách ngân hàng. Vui lòng thử lại sau.");
       throw error;
     }
     acceptDesign(saved);

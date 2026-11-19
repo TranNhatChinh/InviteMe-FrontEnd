@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- Album images are DOM targets inside the scaled editor widget. */
 
 import { useEditor, useNode } from "@craftjs/core";
-import { useContext, useState, type CSSProperties, type ReactNode } from "react";
+import { useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { PhotoFocusContext } from "./photo-focus";
 import { createPortal } from "react-dom";
 import { GiftPreview } from "./gift-preview";
@@ -166,12 +166,17 @@ StudioAlbum.craft = {
 
 export function StudioMap(props: ItemProps) {
   const { enabled } = useEditor((state) => ({ enabled: state.options.enabled }));
-  const address = props.address ?? "194 Hoàng Văn Thụ, Phú Nhuận, TP. Hồ Chí Minh";
+  const address = (props.address ?? "").trim();
+  const [mapAddress, setMapAddress] = useState(address);
+  useEffect(() => {
+    const timer = setTimeout(() => setMapAddress(address), enabled ? 450 : 0);
+    return () => clearTimeout(timer);
+  }, [address, enabled]);
   return (
     <WidgetBox {...props} baseHeight={350}>
       <strong>{props.title ?? "Tiệc cưới sẽ tổ chức tại"}</strong>
       <p style={{ fontSize: 13 }}>{address}</p>
-      {enabled ? (
+      {!mapAddress ? (
         <div
           style={{
             flex: 1,
@@ -183,18 +188,32 @@ export function StudioMap(props: ItemProps) {
               "linear-gradient(35deg, transparent 40%, #fff7 41%, #fff7 44%, transparent 45%), linear-gradient(125deg, transparent 50%, #fff7 51%, #fff7 54%, transparent 55%)",
           }}
         >
-          <span>⌖ Bản đồ địa điểm</span>
+          <span style={{ padding: 16, textAlign: "center", fontSize: 13 }}>
+            Nhập địa chỉ trong bảng thuộc tính để hiển thị bản đồ.
+          </span>
         </div>
       ) : (
         <iframe
           title="Bản đồ địa điểm"
           loading="lazy"
-          src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
-          style={{ flex: 1, width: "100%", minHeight: 0, border: 0, borderRadius: 8 }}
+          src={`https://maps.google.com/maps?q=${encodeURIComponent(mapAddress)}&output=embed`}
+          tabIndex={enabled ? -1 : 0}
+          style={{
+            flex: 1,
+            width: "100%",
+            minHeight: 0,
+            border: 0,
+            borderRadius: 8,
+            pointerEvents: enabled ? "none" : "auto",
+          }}
         />
       )}
       <a
-        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`}
+        href={
+          address
+            ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
+            : undefined
+        }
         target="_blank"
         rel="noopener noreferrer"
         tabIndex={enabled ? -1 : 0}
@@ -202,7 +221,7 @@ export function StudioMap(props: ItemProps) {
           ...buttonStyle,
           color: "#fff",
           background: props.accent ?? defaults.accent,
-          pointerEvents: enabled ? "none" : undefined,
+          pointerEvents: enabled || !address ? "none" : undefined,
         }}
       >
         Chỉ đường ↗

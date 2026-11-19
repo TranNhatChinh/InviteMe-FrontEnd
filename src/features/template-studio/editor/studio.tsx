@@ -1481,17 +1481,6 @@ function Workspace({
               </section>
             )}
             <h2>{t("properties.title")}</h2>
-            {props.action !== "gift" &&
-              giftPanel &&
-              items.some(
-                (id) =>
-                  query.getNodes()[id]?.data.props.action === "gift" &&
-                  !query.getNodes()[id]?.data.hidden,
-              ) && (
-                <button type="button" className="mb-4 w-full" onClick={showGiftConfiguration}>
-                  Cấu hình hộp quà mừng
-                </button>
-              )}
             {!selection ? (
               <p>{t("properties.selectItem")}</p>
             ) : (
@@ -1791,14 +1780,32 @@ function Workspace({
                       </>
                     )}
                     {selected?.node?.data.name === "StudioMap" && (
-                      <label>
-                        {t("properties.location")}
-                        <textarea
-                          maxLength={500}
-                          value={props.address ?? ""}
-                          onChange={(event) => update({ address: event.target.value })}
-                        />
-                      </label>
+                      <div className="space-y-2">
+                        <label>
+                          Địa chỉ địa điểm
+                          <textarea
+                            aria-label="Địa chỉ địa điểm"
+                            maxLength={500}
+                            rows={3}
+                            placeholder="Nhập tên địa điểm, địa chỉ hoặc tọa độ"
+                            value={props.address ?? ""}
+                            onChange={(event) => update({ address: event.target.value })}
+                          />
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          Bản đồ trên thiệp sẽ cập nhật theo địa chỉ bạn nhập.
+                        </p>
+                        {props.address?.trim() && (
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(props.address.trim())}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+                          >
+                            <MapPin size={15} /> Xem địa điểm trên Google Maps ↗
+                          </a>
+                        )}
+                      </div>
                     )}
                     {selected?.node?.data.name === "StudioAction" && (
                       <>
