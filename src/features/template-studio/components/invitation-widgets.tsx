@@ -5,6 +5,7 @@ import { useEditor, useNode } from "@craftjs/core";
 import { useContext, useState, type CSSProperties, type ReactNode } from "react";
 import { PhotoFocusContext } from "./photo-focus";
 import { createPortal } from "react-dom";
+import { GiftPreview } from "./gift-preview";
 import { WidgetBox } from "./date-widgets";
 import { eventTimestamp } from "./date-utils";
 import type { ItemProps } from "./items";
@@ -324,7 +325,7 @@ export function StudioAction(props: ItemProps) {
           close={() => setOpen(false)}
         >
           {kind === "gift" ? (
-            <p>{props.message ?? "Sự hiện diện và lời chúc của bạn là món quà quý giá nhất."}</p>
+            <GiftPreview />
           ) : submitted ? (
             <p role="status">Đã ghi nhận phản hồi trong bản xem thử. Chưa gửi đến máy chủ.</p>
           ) : (
@@ -419,13 +420,24 @@ export function StudioWishes(props: ItemProps) {
             aria-label="Tên người gửi lời chúc"
             placeholder="Nhập tên*"
             disabled
-            style={{ padding: 10, border: "1px solid #d5c9bc", borderRadius: 6, cursor: "not-allowed" }}
+            style={{
+              padding: 10,
+              border: "1px solid #d5c9bc",
+              borderRadius: 6,
+              cursor: "not-allowed",
+            }}
           />
           <textarea
             aria-label="Lời chúc"
             placeholder="Nhập lời chúc*"
             disabled
-            style={{ padding: 10, height: 80, border: "1px solid #d5c9bc", borderRadius: 6, cursor: "not-allowed" }}
+            style={{
+              padding: 10,
+              height: 80,
+              border: "1px solid #d5c9bc",
+              borderRadius: 6,
+              cursor: "not-allowed",
+            }}
           />
           <button
             disabled

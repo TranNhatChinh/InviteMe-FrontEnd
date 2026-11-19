@@ -5,6 +5,15 @@ const mediaOrigin = new URL(process.env.NEXT_PUBLIC_API_URL ?? "https://localhos
 const config: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  outputFileTracingIncludes: {
+    "/api/invitation-pdf-assets/**": [
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+      "./node_modules/pdfjs-dist/cmaps/**/*",
+      "./node_modules/pdfjs-dist/standard_fonts/**/*",
+      "./node_modules/pdfjs-dist/wasm/**/*",
+      "./node_modules/pdfjs-dist/iccs/**/*",
+    ],
+  },
   images: {
     // Local API media resolves to loopback/private IPs, which Next's optimizer rejects.
     // In development, let the browser load media directly from the local API.

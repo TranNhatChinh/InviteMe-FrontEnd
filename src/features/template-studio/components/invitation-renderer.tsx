@@ -17,6 +17,7 @@ import { useAudioPreview } from "@/shared/lib/use-audio-preview";
 import { Volume2, VolumeX } from "lucide-react";
 import { FallingParticles } from "./falling-particles";
 import { resolveParticles } from "./particle-settings";
+import { ImportedPages } from "../imported/pages";
 
 export function InvitationRenderer({
   document,
@@ -77,7 +78,7 @@ export function InvitationRenderer({
           </button>
         </div>
       )}
-      <InvitationGuestContext value={token}>
+      {document.kind === "IMPORTED" ? <ImportedPages pages={document.pages ?? []} widgets={document.widgets} token={token}/> : <InvitationGuestContext value={token}>
         <WordingPreviewContext value={content}>
           <Editor
             enabled={false}
@@ -122,7 +123,7 @@ export function InvitationRenderer({
             />
           )}
         </WordingPreviewContext>
-      </InvitationGuestContext>
+      </InvitationGuestContext>}
     </div>
   );
 }

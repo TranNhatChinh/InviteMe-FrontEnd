@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Modal } from "@/shared/ui/modal";
 
-const BANK_HUB_ORIGIN = "https://bankhub.sepay.vn";
+const BANK_HUB_ORIGINS = new Set(["https://bankhub.sepay.vn", "https://bankhub-sandbox.sepay.vn"]);
 
 /** Events SePay's hosted page posts to the window that frames it. */
 type BankHubEvent =
@@ -36,7 +36,7 @@ export function BankHubLinkDialog({
   useEffect(() => {
     if (!url) return;
     const listen = (message: MessageEvent) => {
-      if (message.origin !== BANK_HUB_ORIGIN) return;
+      if (!BANK_HUB_ORIGINS.has(message.origin) || message.origin !== new URL(url).origin) return;
       const data = typeof message.data === "string" ? safeParse(message.data) : message.data;
       const event =
         data && typeof data === "object" && "event" in data ? (data.event as BankHubEvent) : null;

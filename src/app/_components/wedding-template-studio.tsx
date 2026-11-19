@@ -1,9 +1,12 @@
 "use client";
+import { ApiError } from "@/core/api/api-error";
+import { GiftSettingsPanel, GiftPreviewPanel } from "@/features/gifts";
 import { AuthGuard, useCurrentUser } from "@/features/auth";
 import { WeddingAccessProvider } from "@/features/weddings";
 import { InvitationWording } from "@/features/guests";
 import {
   TemplateStudio,
+  ImportedStudio,
   getInvitationDesign,
   saveInvitationDesign,
   publishInvitationDesign,
@@ -25,11 +28,13 @@ export function WeddingTemplateStudio({
   template,
   preview = false,
   wording = false,
+  imported = false,
 }: {
   weddingId: string;
   template?: string;
   preview?: boolean;
   wording?: boolean;
+  imported?: boolean;
 }) {
   const { t } = useTranslation("screens");
   return (
@@ -46,6 +51,7 @@ export function WeddingTemplateStudio({
         >
           <ConnectedStudio
             weddingId={weddingId}
+            importMode={imported}
             initialTemplate={template ?? false}
             initialPreview={preview}
             initialWording={wording}
@@ -96,7 +102,11 @@ function StudioSession({
   const cache = useQueryClient();
   const [version, setVersion] = useState(snapshot.version);
   const [initial, setInitial] = useState(
-    !props.initialTemplate && snapshot.document ? JSON.stringify(snapshot.document) : undefined,
+    !props.initialTemplate &&
+      snapshot.document &&
+      (!props.importMode || snapshot.document.kind === "IMPORTED")
+      ? JSON.stringify(snapshot.document)
+      : undefined,
   );
   const [generation, setGeneration] = useState(0);
   const remoteChanged = version !== snapshot.version;
@@ -107,7 +117,23 @@ function StudioSession({
   }
 
   async function saveDraft(serialized: string) {
-    const saved = await saveInvitationDesign(api, weddingId, version, serialized);
+    let saved;
+    try {
+      saved = await saveInvitationDesign(api, weddingId, version, serialized);
+    } catch (error) {
+      if (error instanceof ApiError && error.backendCode === "INVITATION_GIFT_ACCOUNT_NOT_LINKED")
+        throw new Error(
+          "Hộp quà mừng: tài khoản đã chọn chưa liên kết hoặc không còn khả dụng. Liên kết ngân hàng hoặc chọn QR có sẵn rồi thử lại.",
+        );
+      if (
+        error instanceof ApiError &&
+        error.backendCode === "INVITATION_GIFT_CONFIGURATION_REQUIRED"
+      )
+        throw new Error(
+          "Hộp quà mừng chưa được cấu hình. Thêm ít nhất một mã QR hoặc ẩn widget trước khi lưu hoặc xuất bản.",
+        );
+      throw error;
+    }
     acceptDesign(saved);
     return saved;
   }
@@ -123,6 +149,10 @@ function StudioSession({
     acceptDesign(published);
   }
 
+  const Studio =
+    props.importMode || (initial && JSON.parse(initial).kind === "IMPORTED")
+      ? ImportedStudio
+      : TemplateStudio;
   return (
     <>
       {remoteChanged && (
@@ -143,7 +173,12 @@ function StudioSession({
           </button>
         </div>
       )}
-      <TemplateStudio
+      <Studio
+        weddingId={weddingId}
+        giftPreview={(settings) => <GiftPreviewPanel settings={settings} weddingId={weddingId} />}
+        giftPanel={({ value, onChange }) => (
+          <GiftSettingsPanel value={value} onChange={onChange} weddingId={weddingId} />
+        )}
         key={generation}
         {...props}
         resolvedMusic={snapshot.music}

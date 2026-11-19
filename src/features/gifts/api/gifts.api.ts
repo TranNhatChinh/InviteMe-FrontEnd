@@ -10,6 +10,7 @@ export const giftBankAccountSchema = z.object({
   label: z.string().nullable(),
   /** Linked through SePay Bank Hub: transfers into it are confirmed automatically. */
   bankHubLinked: z.boolean().optional().default(false),
+  showInInvitation: z.boolean().optional().default(true),
 });
 export type GiftBankAccount = z.infer<typeof giftBankAccountSchema>;
 const bank = giftBankAccountSchema;
@@ -29,6 +30,25 @@ const guestGift = z.object({
   notice: z.string().nullable(),
 });
 export const guestGiftPageSchema = z.object({
+  manualQrCards: z
+    .array(
+      z.object({
+        role: z.enum(["BRIDE", "GROOM"]),
+        bankBin: z.string(),
+        bankName: z.string(),
+        accountNumber: z.string(),
+        accountName: z.string(),
+        qrImageUrl: z.string(),
+      }),
+    )
+    .nullish()
+    .transform((v) => v ?? []),
+  mode: z.enum(["UPLOADED", "LINKED", "MANUAL"]).optional().default("LINKED"),
+  uploadedQrCards: z
+    .array(z.object({ role: z.enum(["BRIDE", "GROOM"]), imageUrl: z.string() }))
+    .nullable()
+    .optional()
+    .transform((v) => v ?? []),
   recipientName: z.string(),
   weddingTitle: z.string(),
   accounts: z.array(bank),
@@ -36,6 +56,11 @@ export const guestGiftPageSchema = z.object({
   minAmount: z.number(),
   maxAmount: z.number(),
   myGifts: z.array(guestGift),
+  qrEnabled: z.boolean().optional().default(true),
+  qrCards: z
+    .array(z.object({ account: bank, qrImageUrl: z.string(), transferContent: z.string() }))
+    .optional()
+    .default([]),
 });
 export type GuestGiftPage = z.infer<typeof guestGiftPageSchema>;
 export type GuestGift = z.infer<typeof guestGift>;
@@ -83,6 +108,18 @@ export const giftLedgerSchema = z.object({
 });
 export type GiftLedger = z.infer<typeof giftLedgerSchema>;
 const host = (id: string) => `/weddings/${encodeURIComponent(id)}/gifts`;
+export function setGiftAccountDisplay(
+  api: ApiClient,
+  weddingId: string,
+  accountId: string,
+  body: { showInInvitation: boolean; label?: string | null },
+) {
+  return api.request(`${host(weddingId)}/accounts/${encodeURIComponent(accountId)}/display`, {
+    method: "PUT",
+    body,
+    schema: bank,
+  });
+}
 export function getGiftAccounts(api: ApiClient, weddingId: string, signal?: AbortSignal) {
   return api.request(`${host(weddingId)}/accounts`, { signal, schema: z.array(bank) });
 }

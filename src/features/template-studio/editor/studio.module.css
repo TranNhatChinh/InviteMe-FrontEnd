@@ -25,7 +25,7 @@
   margin: 0;
   white-space: nowrap;
 }
-.studio .historyButton {
+:is(.studio, .studioToolbar) .historyButton {
   display: inline-grid;
   place-items: center;
   width: 34px;
@@ -49,11 +49,11 @@
 .wordingPanel input[type="checkbox"] {
   width: auto;
 }
-.studio .wordingInsert {
+:is(.studio, .studioToolbar) .wordingInsert {
   width: 100%;
   margin-bottom: 12px;
 }
-.studio button {
+:is(.studio, .studioToolbar) button {
   padding: 9px 13px;
   border: 1px solid #e7d5dc;
   border-radius: 7px;
@@ -61,11 +61,11 @@
   cursor: pointer;
   font-size: 13px;
 }
-.studio button:disabled {
+:is(.studio, .studioToolbar) button:disabled {
   opacity: 0.4;
   cursor: default;
 }
-.studio button:hover:not(:disabled) {
+:is(.studio, .studioToolbar) button:hover:not(:disabled) {
   background: #faedf1;
 }
 .status {
@@ -149,13 +149,13 @@
   gap: 3px;
   justify-content: center;
 }
-.studio .textTools button {
+:is(.studio, .studioToolbar) .textTools button {
   padding: 6px 8px;
   border: 0;
   border-radius: 4px;
   font-family: Georgia, serif;
 }
-.studio .textTools button[aria-pressed="true"] {
+:is(.studio, .studioToolbar) .textTools button[aria-pressed="true"] {
   background: #cf7892;
   color: white;
 }
@@ -243,7 +243,7 @@
 .layerControls {
   margin-bottom: 18px;
 }
-.studio .deleteButton {
+:is(.studio, .studioToolbar) .deleteButton {
   width: 100%;
   margin-bottom: 12px;
   color: #af3945;
@@ -305,7 +305,7 @@
   border-right: 1px solid #eedfe3;
   padding: 8px 0;
 }
-.studio .rail button {
+:is(.studio, .studioToolbar) .rail button {
   width: 100%;
   border: 0;
   border-radius: 0;
@@ -317,7 +317,7 @@
   font-size: 10px;
   color: #785660;
 }
-.studio .rail button[aria-pressed="true"] {
+:is(.studio, .studioToolbar) .rail button[aria-pressed="true"] {
   color: #cf7892;
   background: #fbeaf0;
 }
@@ -341,7 +341,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
-.studio .utilityGrid button {
+:is(.studio, .studioToolbar) .utilityGrid button {
   min-height: 98px;
   display: flex;
   flex-direction: column;
@@ -358,14 +358,14 @@
   color: #cf7892;
   stroke-width: 1.7;
 }
-.studio .utilityGrid button:disabled {
+:is(.studio, .studioToolbar) .utilityGrid button:disabled {
   opacity: 0.65;
 }
 .utilityGrid small {
   font-size: 9px;
   color: #927780;
 }
-.studio .addCard {
+:is(.studio, .studioToolbar) .addCard {
   width: 100%;
   min-height: 90px;
   display: flex;
@@ -398,7 +398,7 @@
   background: white;
   border-top: 1px solid #eedfe3;
 }
-.studio .dockToggle {
+:is(.studio, .studioToolbar) .dockToggle {
   border: 0;
   border-radius: 0;
   font-size: 12px;
@@ -416,7 +416,7 @@
   padding: 6px 12px 4px;
   height: 92px;
 }
-.studio .photoStrip button {
+:is(.studio, .studioToolbar) .photoStrip button {
   position: relative;
   flex-shrink: 0;
   padding: 0;
@@ -442,8 +442,8 @@
   padding: 0 4px;
   border-radius: 2px;
 }
-.studio .photoStrip button[aria-pressed="true"],
-.studio .albumSlots button[aria-pressed="true"] {
+:is(.studio, .studioToolbar) .photoStrip button[aria-pressed="true"],
+:is(.studio, .studioToolbar) .albumSlots button[aria-pressed="true"] {
   border-color: #cf7892;
 }
 .albumSlots {
@@ -452,7 +452,7 @@
   gap: 6px;
   margin-bottom: 12px;
 }
-.studio .albumSlots button {
+:is(.studio, .studioToolbar) .albumSlots button {
   position: relative;
   padding: 0;
   width: 44px;
@@ -590,7 +590,7 @@
 }
 
 /* InviteMe editor surfaces and controls. Canvas artwork keeps its own styling. */
-.studio {
+:is(.studio, .studioToolbar) {
   --studio-accent: #cf7892;
   --studio-border: #eedfe3;
 }
@@ -640,7 +640,7 @@
 .backLink:hover {
   color: #a94e6b;
 }
-.studio button {
+:is(.studio, .studioToolbar) button {
   min-height: 38px;
   border-radius: 10px;
   font-weight: 500;
@@ -649,25 +649,25 @@
     border-color 150ms,
     box-shadow 150ms;
 }
-.studio button:focus-visible,
-.studio input:focus-visible,
-.studio select:focus-visible,
-.studio textarea:focus-visible {
+:is(.studio, .studioToolbar) button:focus-visible,
+:is(.studio, .studioToolbar) input:focus-visible,
+:is(.studio, .studioToolbar) select:focus-visible,
+:is(.studio, .studioToolbar) textarea:focus-visible {
   outline: 2px solid #cf7892;
   outline-offset: 3px;
 }
-.studio .saveButton {
+:is(.studio, .studioToolbar) .saveButton {
   background: #cf7892;
   border-color: #cf7892;
   color: white;
   padding-inline: 20px;
   box-shadow: 0 3px 8px #cf78921a;
 }
-.studio .saveButton:hover:not(:disabled) {
+:is(.studio, .studioToolbar) .saveButton:hover:not(:disabled) {
   background: #ba637e;
   border-color: #ba637e;
 }
-.studio .historyButton {
+:is(.studio, .studioToolbar) .historyButton {
   width: 38px;
   height: 38px;
 }
@@ -676,7 +676,7 @@
   flex-wrap: nowrap;
   align-items: center;
 }
-.studio .header .buttons > button {
+:is(.studio, .studioToolbar) .header .buttons > button {
   font-family: Arial, sans-serif;
   min-height: 30px;
   height: 30px;
@@ -687,11 +687,11 @@
   flex-shrink: 0;
   white-space: nowrap;
 }
-.studio .header .saveButton {
+:is(.studio, .studioToolbar) .header .saveButton {
   padding-inline: 12px;
   box-shadow: none;
 }
-.studio .header .historyButton {
+:is(.studio, .studioToolbar) .header .historyButton {
   width: 30px;
   min-width: 30px;
   padding: 0;
@@ -700,7 +700,7 @@
   width: 14px;
   height: 14px;
 }
-.studio .header .menuTrigger {
+:is(.studio, .studioToolbar) .header .menuTrigger {
   display: grid;
   place-items: center;
   width: 30px;
@@ -745,7 +745,7 @@
 .rail {
   padding: 12px 6px;
 }
-.studio .rail button {
+:is(.studio, .studioToolbar) .rail button {
   border-radius: 12px;
   margin-bottom: 5px;
   padding: 12px 3px;
@@ -801,7 +801,7 @@
   border-radius: 12px;
   padding: 14px;
 }
-.studio .textTools button {
+:is(.studio, .studioToolbar) .textTools button {
   border-radius: 8px;
 }
 .workspace {
@@ -816,11 +816,11 @@
   border: 1px solid var(--studio-border);
   box-shadow: 0 -4px 20px #422e3506;
 }
-.studio .dockToggle {
+:is(.studio, .studioToolbar) .dockToggle {
   border-radius: 15px 15px 0 0;
   color: #785660;
 }
-.studio .photoStrip button {
+:is(.studio, .studioToolbar) .photoStrip button {
   border-radius: 8px;
 }
 .advanced {
@@ -1005,7 +1005,7 @@
   box-shadow: 0 2px 10px #30202b16;
 }
 
-.studio .zoomControls button {
+:is(.studio, .studioToolbar) .zoomControls button {
   display: grid;
   place-items: center;
   width: 31px;
@@ -1064,7 +1064,7 @@
   padding: 14px 0 8px;
 }
 
-.studio .heightHandle {
+:is(.studio, .studioToolbar) .heightHandle {
   position: absolute;
   top: -12px;
   display: grid;
@@ -1099,7 +1099,7 @@
   font-size: 13px;
 }
 
-.studio .heightStepper button {
+:is(.studio, .studioToolbar) .heightStepper button {
   width: 30px;
   min-height: 30px;
   padding: 0;

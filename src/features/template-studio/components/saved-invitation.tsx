@@ -2,10 +2,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { ChevronRight, LayoutTemplate, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRuntime } from "@/core/config/runtime";
 import { usePermission } from "@/shared/components/permission-guard";
 import { Button } from "@/shared/ui/button";
+import { Modal } from "@/shared/ui/modal";
 import { LoadingState } from "@/shared/feedback/loading-state";
 import { ErrorState } from "@/shared/feedback/error-state";
 import { getInvitationDesign, publishInvitationDesign } from "../api/design.api";
@@ -20,6 +22,7 @@ export function SavedInvitation({ weddingId }: { weddingId: string }) {
   const cache = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [startOpen, setStartOpen] = useState(false);
   const design = useQuery({
     queryKey: ["invitation-design", weddingId],
     queryFn: ({ signal }) => getInvitationDesign(api, weddingId, signal),
@@ -162,35 +165,55 @@ export function SavedInvitation({ weddingId }: { weddingId: string }) {
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.65fr)] lg:items-center lg:gap-10 lg:p-8">
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground">{t("saved.design")}</p>
-              <h2 className="mt-1 font-display text-2xl">{t("saved.emptyTitle")}</h2>
-            </div>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              {t("saved.emptyDescription")}
-            </p>
-            {can("WEDDING_EDIT") && (
-              <Button asChild>
-                <Link href={`/weddings/${encodeURIComponent(weddingId)}/invitation-templates`}>
-                  {t("saved.chooseTemplate")}
-                </Link>
-              </Button>
-            )}
-          </div>
-          <ol className="grid gap-3 border-t pt-5 text-sm sm:grid-cols-3 lg:grid-cols-1 lg:border-l lg:border-t-0 lg:py-1 lg:pl-7 lg:pt-1">
-            {["stepChoose", "stepEdit", "stepPublish"].map((step, index) => (
-              <li key={step} className="flex items-start gap-3">
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold">
-                  {index + 1}
-                </span>
-                <span className="pt-1 leading-5">{t(`saved.${step}`)}</span>
-              </li>
-            ))}
-          </ol>
+        <div className="p-5 sm:p-7 lg:p-8">
+          {can("WEDDING_EDIT") && (
+            <Button onClick={() => setStartOpen(true)}>
+              {t("saved.startDesign")}
+            </Button>
+          )}
         </div>
       )}
+      <Modal
+        open={startOpen}
+        onClose={() => setStartOpen(false)}
+        title={t("saved.startDesign")}
+        size="small"
+      >
+        <div className="grid gap-3">
+          {[
+            {
+              title: "saved.fromTemplate",
+              description: "saved.fromTemplateDescription",
+              href: `/weddings/${encodeURIComponent(weddingId)}/invitation-templates`,
+              Icon: LayoutTemplate,
+            },
+            {
+              title: "saved.haveDesign",
+              description: "saved.haveDesignDescription",
+              href: `/weddings/${encodeURIComponent(weddingId)}/studio?import=1`,
+              Icon: Upload,
+            },
+          ].map(({ title, description, href, Icon }) => (
+            <Link
+              key={title}
+              href={href}
+              onClick={() => setStartOpen(false)}
+              className="flex items-center gap-4 rounded-xl border p-4 transition-colors hover:border-primary hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-muted text-primary">
+                <Icon className="size-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{t(title)}</span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  {t(description)}
+                </span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      </Modal>
     </section>
   );
 }

@@ -34,7 +34,7 @@ function guestError(error: unknown, t: (key: string) => string) {
   return t("rsvp.errors.generic");
 }
 
-export function GuestRsvp({ token }: { token: string }) {
+export function GuestRsvp({ token, embedded = false }: { token: string; embedded?: boolean }) {
   const { t } = useTranslation("guests");
   const { api } = useRuntime();
   const [notice, setNotice] = useState("");
@@ -47,6 +47,7 @@ export function GuestRsvp({ token }: { token: string }) {
   const seats = useQuery({
     queryKey: ["guest-seats", token],
     queryFn: ({ signal }) => getGuestSeats(api, token, signal),
+    enabled: !embedded,
   });
   if (query.isPending) return <LoadingState label={t("rsvp.loading")} />;
   if (query.isError) {
@@ -65,8 +66,9 @@ export function GuestRsvp({ token }: { token: string }) {
         notice={notice}
         setNotice={setNotice}
         t={t}
+        embedded={embedded}
       />
-      {seats.data?.published && (
+      {!embedded && seats.data?.published && (
         <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-7">
           <h2 className="text-xl font-semibold">{t("yourTable")}</h2>
           <div className="mt-3 space-y-2">
@@ -86,7 +88,7 @@ export function GuestRsvp({ token }: { token: string }) {
           </div>
         </section>
       )}
-      {seats.data && !seats.data.published && (
+      {!embedded && seats.data && !seats.data.published && (
         <p className="text-center text-sm text-muted-foreground">{t("rsvp.seatingNotPublished")}</p>
       )}
     </div>
@@ -100,6 +102,7 @@ function RsvpForm({
   notice,
   setNotice,
   t,
+  embedded,
 }: {
   token: string;
   rsvp: Rsvp;
@@ -107,6 +110,7 @@ function RsvpForm({
   notice: string;
   setNotice: (message: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
+  embedded: boolean;
 }) {
   const { api } = useRuntime();
   const { language } = useLocale();
@@ -164,21 +168,23 @@ function RsvpForm({
 
   return (
     <div className="space-y-5">
-      <Link
-        href={`/invite/${encodeURIComponent(token)}`}
-        className="text-sm underline underline-offset-4"
-      >
-        {t("rsvp.backToInvitation")}
-      </Link>
+      {!embedded && (
+        <Link
+          href={`/invite/${encodeURIComponent(token)}`}
+          className="text-sm underline underline-offset-4"
+        >
+          {t("rsvp.backToInvitation")}
+        </Link>
+      )}
       <header className="text-center">
-        <h1 className="text-3xl">{t("rsvp.title")}</h1>
+        {!embedded && <h1 className="text-3xl">{t("rsvp.title")}</h1>}
         <p className="mt-2 text-sm text-muted-foreground">
           {t("rsvp.invitationFor", { name: rsvp.recipientName })}
         </p>
       </header>
       <form
         onSubmit={(event) => void submit(event)}
-        className="space-y-5 rounded-2xl bg-card p-5 shadow-sm sm:p-7"
+        className={embedded ? "space-y-5" : "space-y-5 rounded-2xl bg-card p-5 shadow-sm sm:p-7"}
       >
         {rsvp.rsvpDeadline && (
           <p className="text-sm text-muted-foreground">

@@ -1,4 +1,5 @@
 export { TemplateStudio } from "./editor/entry";
+export { ImportedStudio } from "./imported/entry";
 export { templateCatalog, storyTemplateCatalog } from "./templates/catalog";
 export { TemplateThumbnail } from "./components/template-thumbnail";
 export {

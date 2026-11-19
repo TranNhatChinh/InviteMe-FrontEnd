@@ -1,12 +1,13 @@
 "use client";
-
+import { GiftCardsPreview } from "./gift-settings-panel";
 import { useState } from "react";
 import Image from "next/image";
+import { Copy } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRuntime } from "@/core/config/runtime";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
-import { claimGuestGift, createGuestGift, getGuestGiftPage } from "../api/gifts.api";
+import { claimGuestGift, getGuestGiftPage } from "../api/gifts.api";
 import { useLocale } from "@/i18n/language-context";
 import { formatCurrency } from "@/i18n/format";
 
@@ -14,46 +15,28 @@ export function GuestGiftPanel({ token }: { token: string }) {
   const { t } = useTranslation("gifts");
   const { language } = useLocale();
   const { api } = useRuntime();
-  const queryClient = useQueryClient();
-  const [amount, setAmount] = useState(200_000);
-  const [accountId, setAccountId] = useState("");
-  const [message, setMessage] = useState("");
-  const [messagePublic, setMessagePublic] = useState(true);
+  const cache = useQueryClient();
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const queryKey = ["guest-gifts", token];
   const page = useQuery({
     queryKey,
     queryFn: ({ signal }) => getGuestGiftPage(api, token, signal),
-    refetchInterval: 10_000,
-  });
-  const create = useMutation({
-    mutationFn: () =>
-      createGuestGift(
-        api,
-        token,
-        {
-          amount,
-          message: message.trim() || undefined,
-          accountId: accountId || undefined,
-          messagePublic,
-        },
-        crypto.randomUUID(),
-      ),
-    onSuccess: async () => {
-      setError("");
-      setMessage("");
-      await queryClient.invalidateQueries({ queryKey });
-    },
-    onError: () => setError(t("createError")),
+    refetchInterval: 10000,
   });
   const claim = useMutation({
     mutationFn: (id: string) => claimGuestGift(api, token, id),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey });
-    },
+    onSuccess: () => cache.invalidateQueries({ queryKey }),
     onError: () => setError(t("claimError")),
   });
-
+  async function copy(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice(t("copied"));
+    } catch {
+      setError(t("copyFailed"));
+    }
+  }
   if (page.isPending) return <p role="status">{t("loadingAccounts")}</p>;
   if (page.isError)
     return (
@@ -62,148 +45,139 @@ export function GuestGiftPanel({ token }: { token: string }) {
       </p>
     );
   const data = page.data;
+  if (data.mode === "MANUAL")
+    return (
+      <GiftCardsPreview
+        settings={{
+          mode: "MANUAL",
+          recipients: data.manualQrCards.map((r) => ({
+            role: r.role,
+            enabled: true,
+            bankBin: r.bankBin,
+            accountNumber: r.accountNumber,
+            accountName: r.accountName,
+          })),
+        }}
+        banks={data.manualQrCards.map((r) => ({ bin: r.bankBin, name: r.bankName }))}
+      />
+    );
+  if (data.mode === "UPLOADED")
+    return (
+      <GiftCardsPreview
+        settings={{
+          mode: "UPLOADED",
+          recipients: data.uploadedQrCards.map((r) => ({ ...r, enabled: true })),
+        }}
+      />
+    );
   return (
     <div className="space-y-4 text-left">
-      <p className="text-sm text-muted-foreground">{t("intro", { wedding: data.weddingTitle })}</p>
-      {data.accounts.length === 0 ? (
+      <p className="text-sm text-muted-foreground">{t("instantQrHelp")}</p>
+      {!data.qrEnabled ? (
+        <p className="rounded-lg bg-muted p-3 text-sm">{t("qrUnavailable")}</p>
+      ) : !data.qrCards.length ? (
         <p className="rounded-lg bg-muted p-3 text-sm">{t("noAccounts")}</p>
       ) : (
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setError("");
-            create.mutate();
-          }}
+        <div
+          className={`grid gap-4 ${data.qrCards.length > 1 ? "sm:grid-cols-2" : ""}`}
+          data-gift-qr-cards
         >
-          <label className="block text-sm font-medium">
-            {t("amount")}
-            <div className="mt-2 flex flex-wrap gap-2">
-              {data.suggestedAmounts.map((value) => (
+          {data.qrCards.map((card) => (
+            <article
+              key={card.account.id}
+              data-gift-qr-account={card.account.id}
+              className="mx-auto w-full max-w-sm rounded-2xl border bg-card p-4 text-center"
+            >
+              <h3 className="text-lg font-semibold">
+                {card.account.label || card.account.accountName}
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">{card.account.bankName}</p>
+              <Image
+                src={card.qrImageUrl}
+                alt={t("giftQrAlt")}
+                width={270}
+                height={320}
+                unoptimized
+                className="mx-auto my-3 h-auto w-full max-w-[270px] rounded-lg bg-white"
+              />
+              <p className="text-sm font-medium">{card.account.accountName}</p>
+              <div className="mt-2 flex items-center justify-center gap-2 break-all text-sm">
+                <span>{card.account.accountNumber}</span>
                 <button
-                  key={value}
                   type="button"
-                  onClick={() => setAmount(value)}
-                  aria-pressed={amount === value}
-                  className={`rounded-full border px-3 py-1.5 text-sm ${amount === value ? "border-primary bg-primary text-primary-foreground" : "bg-background"}`}
+                  className="shrink-0 rounded border p-2"
+                  aria-label={t("copyAccount", { name: card.account.accountName })}
+                  onClick={() => void copy(card.account.accountNumber)}
                 >
-                  {formatCurrency(value, language)}
+                  <Copy size={14} />
                 </button>
-              ))}
-            </div>
-            <input
-              className="mt-2 w-full rounded-md border bg-background px-3 py-2"
-              type="number"
-              min={data.minAmount}
-              max={data.maxAmount}
-              step={10_000}
-              value={amount}
-              onChange={(event) => setAmount(Number(event.target.value))}
-              required
-            />
-          </label>
-          {data.accounts.length > 1 && (
-            <label className="block text-sm font-medium">
-              {t("recipientAccount")}
-              <select
-                className="mt-1 w-full rounded-md border bg-background px-3 py-2"
-                value={accountId}
-                onChange={(event) => setAccountId(event.target.value)}
-                required
-              >
-                <option value="">{t("chooseAccount")}</option>
-                {data.accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.label || account.bankName} · {account.accountName} ·{" "}
-                    {account.accountNumber}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label className="block text-sm font-medium">
-            {t("wish")}
-            <textarea
-              className="mt-1 min-h-24 w-full rounded-md border bg-background px-3 py-2"
-              maxLength={500}
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder={t("wishPlaceholder")}
-            />
-          </label>
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={messagePublic}
-              onChange={(event) => setMessagePublic(event.target.checked)}
-            />
-            <span>{t("showWish")}</span>
-          </label>
-          {error && (
-            <p role="alert" className="text-sm text-red-700">
-              {error}
-            </p>
-          )}
-          <Button type="submit" disabled={create.isPending}>
-            {create.isPending ? t("creating") : t("createQr")}
-          </Button>
-        </form>
-      )}
-      {data.myGifts.length > 0 && (
-        <div className="space-y-3 border-t pt-4">
-          <h3 className="font-semibold">{t("myTransfers")}</h3>
-          {data.myGifts.map((gift) => (
-            <article key={gift.id} className="rounded-xl border p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <strong>{formatCurrency(gift.amount ?? 0, language)}</strong>
-                <span className="rounded-full bg-muted px-2 py-1 text-xs">
-                  {gift.status === "PENDING"
-                    ? t("pending")
-                    : gift.status === "CLAIMED"
-                      ? t("claimed")
-                      : gift.status === "PAID"
-                        ? t("paid")
-                        : gift.status}
-                </span>
               </div>
-              {gift.account && (
-                <p className="mt-2 text-sm">
-                  {gift.account.bankName} · {gift.account.accountName} ·{" "}
-                  {gift.account.accountNumber}
-                </p>
-              )}
-              {gift.transferContent && (
-                <p className="mt-1 break-all text-sm">
-                  {t("transferContent")}
-                  <strong>{gift.transferContent}</strong>
-                </p>
-              )}
-              {gift.qrImageUrl && (
-                <Image
-                  src={gift.qrImageUrl}
-                  alt={t("giftQrAlt")}
-                  width={220}
-                  height={220}
-                  unoptimized
-                  className="mx-auto mt-3 rounded-lg border bg-white p-2"
-                />
-              )}
-              {gift.notice && <p className="mt-2 text-xs text-muted-foreground">{gift.notice}</p>}
-              {gift.status === "PENDING" && (
-                <Button
+              <p className="mt-3 text-xs text-muted-foreground">{t("transferContent")}</p>
+              <div className="mt-1 flex items-center justify-center gap-2">
+                <strong className="break-all text-sm tracking-wide">{card.transferContent}</strong>
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  disabled={claim.isPending}
-                  onClick={() => claim.mutate(gift.id)}
+                  className="shrink-0 rounded border p-2"
+                  aria-label={t("copyContent", { name: card.account.accountName })}
+                  onClick={() => void copy(card.transferContent)}
                 >
-                  {t("markTransferred")}
-                </Button>
-              )}
+                  <Copy size={14} />
+                </button>
+              </div>
             </article>
           ))}
         </div>
+      )}
+      {notice && (
+        <p role="status" className="text-sm text-emerald-700">
+          {notice}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      {!!data.myGifts.length && (
+        <details className="border-t pt-3">
+          <summary className="cursor-pointer text-sm font-medium">{t("myTransfers")}</summary>
+          <div className="mt-3 grid gap-3">
+            {data.myGifts.map((gift) => (
+              <article key={gift.id} className="rounded-xl border p-3 text-sm">
+                <div className="flex justify-between gap-2">
+                  <strong>{formatCurrency(gift.amount ?? 0, language)}</strong>
+                  <span>
+                    {gift.status === "PAID"
+                      ? t("paid")
+                      : gift.status === "PENDING"
+                        ? t("pending")
+                        : gift.status === "CLAIMED"
+                          ? t("claimed")
+                          : gift.status}
+                  </span>
+                </div>
+                {gift.account && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {gift.account.label || gift.account.accountName} · {gift.account.bankName}
+                  </p>
+                )}
+                {gift.transferContent && <p className="mt-1 text-xs">{gift.transferContent}</p>}
+                {gift.status === "PENDING" && (
+                  <Button
+                    className="mt-2"
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={claim.isPending}
+                    onClick={() => claim.mutate(gift.id)}
+                  >
+                    {t("markTransferred")}
+                  </Button>
+                )}
+              </article>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import { WordingPreviewContext } from "./wording-preview";
 import { resolveStudioText } from "./wording-text";
 
 export type ItemProps = {
+  gift?: import("../schemas/document").GiftSettings;
   particles?: import("./particle-settings").ParticleEffect;
   music?: import("@/shared/api/music.api").MusicSettings;
   cover?: import("./invitation-cover").CoverConfig;

@@ -15,15 +15,7 @@ import {
   type CSSProperties,
 } from "react";
 import { flushSync } from "react-dom";
-import {
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  AlignJustify,
-  Pencil,
-  Undo2,
-  Redo2,
-} from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, AlignJustify, Undo2, Redo2 } from "lucide-react";
 import {
   Type,
   ImageIcon,
@@ -60,13 +52,16 @@ import {
   StudioAction,
   StudioWishes,
 } from "../components/invitation-widgets";
+import { Modal } from "@/shared/ui/modal";
+import { GiftPreviewContext } from "../components/gift-preview";
+import { PreviewViewport } from "../components/preview-viewport";
 import { InvitationCover } from "../components/invitation-cover";
 import { FallingParticles } from "../components/falling-particles";
 import { resolveParticles } from "../components/particle-settings";
 import { TemplateThumbnail } from "../components/template-thumbnail";
 import { studioTemplates as templateCatalog, findTemplate } from "../templates/catalog";
 import { isValidEventDate } from "../components/date-utils";
-import { parseStudioDocument } from "../schemas/document";
+import { giftConfigurationError, parseStudioDocument } from "../schemas/document";
 import { resolveInvitationDocument } from "../api/design.api";
 import { PhotoFocusContext, type PhotoFocus } from "../components/photo-focus";
 import styles from "./studio.module.css";
@@ -79,12 +74,7 @@ import { ActionMenu } from "@/shared/ui/action-menu";
 import type { TemplateStudioProps } from "./studio.types";
 import { WordingPreviewContext } from "../components/wording-preview";
 import { defaultWordingText, resolveCoverGreeting } from "../components/wording-text";
-import {
-  StudioReveal,
-  RevealReplayContext,
-  RevealPausedContext,
-  type RevealPreset,
-} from "../components/reveal";
+import { StudioReveal, RevealReplayContext, RevealPausedContext } from "../components/reveal";
 import { useRuntime } from "@/core/config/runtime";
 import { z } from "zod";
 import { useTranslation } from "react-i18next";
@@ -92,6 +82,8 @@ import { formatNumber } from "@/i18n/format";
 import { useLanguage } from "@/i18n/language-context";
 
 function Workspace({
+  giftPanel,
+  giftPreview,
   initialTemplate = false,
   initialPreview = false,
   initialWording = false,
@@ -121,7 +113,6 @@ function Workspace({
     serialized,
     frameHeight,
     revealPreset,
-    revealDuration,
   } = useEditor((state, query) => {
     const id = Array.from(state.events.selected)[0];
     return {
@@ -131,13 +122,11 @@ function Workspace({
       items: state.nodes.ROOT?.data.nodes ?? [],
       serialized: query.serialize(),
       revealPreset: state.nodes.ROOT?.data.props.revealPreset ?? "none",
-      revealDuration: state.nodes.ROOT?.data.props.revealDuration ?? 800,
       frameHeight: state.nodes.ROOT ? Number(state.nodes.ROOT.data.props.height ?? 760) : null,
       background: (state.nodes.ROOT?.data.props.background as string | undefined) ?? "#fffaf1",
     };
   });
   const { replay } = useContext(RevealReplayContext);
-  const [json, setJson] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState<"draft" | "publish" | null>(null);
   const [templateId, setTemplateId] = useState<string | undefined>(() =>
@@ -147,6 +136,7 @@ function Workspace({
         (typeof initialTemplate === "string" ? initialTemplate : undefined)),
   );
   const [coverOpen, setCoverOpen] = useState(false);
+  const [giftWarning, setGiftWarning] = useState("");
   const [preview, setPreview] = useState(initialPreview);
   const [category, setCategory] = useState(
     adminLayout ? "page" : initialWording ? "presets" : initialTemplate ? "templates" : "utilities",
@@ -243,8 +233,8 @@ function Workspace({
   } | null>(null);
   const workspace = useRef<HTMLElement>(null);
   const [previewWidth, setPreviewWidth] = useState(480);
-  useEffect(() => {
-    const element = workspace.current;
+  const observeWorkspace = useCallback((element: HTMLElement | null) => {
+    workspace.current = element;
     if (!element) return;
     const observer = new ResizeObserver(() => setPreviewWidth(element.clientWidth));
     observer.observe(element);
@@ -555,15 +545,30 @@ function Workspace({
       actions.move(selection, "ROOT", layerIndex - 1);
     }
   }
-  function exportJson() {
-    const value = JSON.stringify(
-      { schemaVersion: 1, templateId, nodes: JSON.parse(query.serialize()) },
-      null,
-      2,
-    );
-    setJson(value);
-    setMessage(t("status.jsonExported"));
-    return value;
+  function showGiftConfiguration() {
+    const giftId = items.find((id) => {
+      const node = query.getNodes()[id];
+      return (
+        node?.data.name === "StudioAction" && node.data.props.action === "gift" && !node.data.hidden
+      );
+    });
+    if (!giftId) return;
+    setGiftWarning("");
+    setPreview(false);
+    setCategory("utilities");
+    actions.setOptions((options) => {
+      options.enabled = true;
+    });
+    actions.selectNode(giftId);
+    requestAnimationFrame(() => {
+      const element = Array.from(
+        stage.current?.querySelectorAll<HTMLElement>("[data-studio-node]") ?? [],
+      ).find((item) => item.dataset.studioNode === giftId);
+      element?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      propertyPanel.current
+        ?.querySelector('[aria-label="Cấu hình hộp quà mừng"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
   async function saveDesign(publish = false) {
     const persist = publish ? onPublish : onSave;
@@ -573,10 +578,22 @@ function Workspace({
       const doc = parseStudioDocument(
         JSON.stringify({ schemaVersion: 1, templateId, nodes: JSON.parse(query.serialize()) }),
       );
+      const giftError = giftConfigurationError(doc);
+      if (giftError) {
+        setMessage(giftError);
+        setGiftWarning(giftError);
+        return;
+      }
       await persist(JSON.stringify(doc));
       setMessage(publish ? t("invitations:saved.publishSuccess") : t("status.draftSaved"));
-    } catch {
-      setMessage(publish ? t("invitations:saved.publishFailed") : t("status.saveFailed"));
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : publish
+            ? t("invitations:saved.publishFailed")
+            : t("status.saveFailed"),
+      );
     } finally {
       setSaving(null);
     }
@@ -587,7 +604,6 @@ function Workspace({
       setTemplateId(document.templateId);
       actions.deserialize(JSON.stringify(document.nodes));
       actions.selectNode();
-      setJson(value);
       setMessage(t("status.jsonOpened"));
     } catch {
       setMessage(t("status.jsonOpenFailed"));
@@ -643,7 +659,86 @@ function Workspace({
     />
   );
 
-  return (
+  const toolbar = (
+    <header className={`${styles.header} ${styles.studioToolbar}`}>
+      {adminLayout && backHref ? (
+        <div className={styles.studioIdentity}>
+          {navigationMenu}
+          <Link href={backHref} aria-label={adminLayout.backLabel} title={adminLayout.backLabel}>
+            <ArrowLeft size={20} />
+          </Link>
+          <BrandLogo size="sm" className={styles.studioBrand} />
+          <h1 className="sr-only">InviteMe Studio</h1>
+          <div className={styles.buttons}>{historyButtons}</div>
+        </div>
+      ) : (
+        <div className={styles.studioIdentity}>
+          {navigationMenu}
+          <BrandLogo size="sm" className={styles.studioBrand} />
+          <h1 className="sr-only">{t("header.title")}</h1>
+        </div>
+      )}
+      <p className={styles.status} role="status">
+        {adminLayout?.status || message}
+      </p>
+      <div className={styles.buttons}>
+        {backup && onSave && !initialPreview && (
+          <StudioBackups
+            key={backup.scope}
+            scope={backup.scope}
+            title={backup.title}
+            document={
+              frameHeight === null
+                ? null
+                : JSON.stringify({
+                    schemaVersion: 1,
+                    templateId,
+                    nodes: JSON.parse(serialized),
+                  })
+            }
+            onRestore={importJson}
+          />
+        )}
+        {onSave && (
+          <button
+            className={styles.saveButton}
+            disabled={saving !== null}
+            onClick={() => void saveDesign()}
+          >
+            {saving === "draft"
+              ? t("header.saving")
+              : t(adminLayout ? "adminLayout.saveDraft" : "header.saveDraft")}
+          </button>
+        )}
+        {!adminLayout && historyButtons}
+        <button
+          onClick={() => {
+            actions.selectNode();
+            actions.setOptions((options) => {
+              options.enabled = preview;
+            });
+            if (!preview) replay();
+            setCoverOpen(false);
+            stage.current?.parentElement?.scrollTo({ top: 0 });
+            setPreview(!preview);
+          }}
+        >
+          {preview ? t("header.edit") : t("header.preview")}
+        </button>
+        {onPublish && (
+          <button
+            className={styles.saveButton}
+            disabled={saving !== null}
+            onClick={() => void saveDesign(true)}
+          >
+            {t(saving === "publish" ? "invitations:saved.publishing" : "invitations:saved.publish")}
+          </button>
+        )}
+        {adminLayout?.toolbarAction}
+      </div>
+    </header>
+  );
+  const content = (
     <WordingPreviewContext value={wordingPreview}>
       <main
         id="main-content"
@@ -659,105 +754,7 @@ function Workspace({
         }
       >
         <FallingParticles effect={particles} />
-        <header className={styles.header} hidden={preview}>
-          {adminLayout && backHref ? (
-            <div className={styles.studioIdentity}>
-              {navigationMenu}
-              <Link
-                href={backHref}
-                aria-label={adminLayout.backLabel}
-                title={adminLayout.backLabel}
-              >
-                <ArrowLeft size={20} />
-              </Link>
-              <BrandLogo size="sm" className={styles.studioBrand} />
-              <h1 className="sr-only">InviteMe Studio</h1>
-              <div className={styles.buttons}>{historyButtons}</div>
-            </div>
-          ) : (
-            <div className={styles.studioIdentity}>
-              {navigationMenu}
-              <BrandLogo size="sm" className={styles.studioBrand} />
-              <h1 className="sr-only">{t("header.title")}</h1>
-            </div>
-          )}
-          <p className={styles.status} role="status">
-            {adminLayout?.status || message}
-          </p>
-          <div className={styles.buttons}>
-            {backup && onSave && !initialPreview && (
-              <StudioBackups
-                key={backup.scope}
-                scope={backup.scope}
-                title={backup.title}
-                document={
-                  frameHeight === null
-                    ? null
-                    : JSON.stringify({
-                        schemaVersion: 1,
-                        templateId,
-                        nodes: JSON.parse(serialized),
-                      })
-                }
-                onRestore={importJson}
-              />
-            )}
-            {onSave && (
-              <button
-                className={styles.saveButton}
-                disabled={saving !== null}
-                onClick={() => void saveDesign()}
-              >
-                {saving === "draft"
-                  ? t("header.saving")
-                  : t(adminLayout ? "adminLayout.saveDraft" : "header.saveDraft")}
-              </button>
-            )}
-            {!adminLayout && historyButtons}
-            <button
-              onClick={() => {
-                actions.selectNode();
-                actions.setOptions((options) => {
-                  options.enabled = preview;
-                });
-                if (!preview) replay();
-                setCoverOpen(false);
-                stage.current?.parentElement?.scrollTo({ top: 0 });
-                setPreview(!preview);
-              }}
-            >
-              {preview ? t("header.backEditor") : t("header.preview")}
-            </button>
-            {onPublish && (
-              <button
-                className={styles.saveButton}
-                disabled={saving !== null}
-                onClick={() => void saveDesign(true)}
-              >
-                {t(
-                  saving === "publish"
-                    ? "invitations:saved.publishing"
-                    : "invitations:saved.publish",
-                )}
-              </button>
-            )}
-            {adminLayout?.toolbarAction}
-          </div>
-        </header>
-        {preview && !initialPreview && (
-          <button
-            className={styles.demoEdit}
-            onClick={() => {
-              actions.setOptions((options) => {
-                options.enabled = true;
-              });
-              setCoverOpen(false);
-              setPreview(false);
-            }}
-          >
-            <Pencil size={15} aria-hidden="true" /> {t("header.edit")}
-          </button>
-        )}
+        {!preview && toolbar}
         <div className={styles.layout}>
           <aside className={styles.library} aria-label={t("categories.libraryAria")}>
             <nav className={styles.rail} aria-label={t("categories.navAria")}>
@@ -915,7 +912,9 @@ function Workspace({
                       : t("library.selectCanvasImage")}
                   </p>
                   <h3>
-                    {t("library.uploadedFiles", { count: formatNumber(uploads.length, language) })}
+                    {t("library.uploadedFiles", {
+                      count: formatNumber(uploads.length, language),
+                    })}
                   </h3>
                   <div className={styles.uploadGrid}>
                     {uploads.map((image) => (
@@ -1232,24 +1231,6 @@ function Workspace({
                       </button>
                     ))}
                   </div>
-                  <label>
-                    {t("library.effectDuration")}
-                    <input
-                      type="number"
-                      min={100}
-                      max={3000}
-                      disabled={preview}
-                      value={revealDuration}
-                      onChange={(event) =>
-                        actions.setProp("ROOT", (props: ItemProps) => {
-                          props.revealDuration = Math.max(
-                            100,
-                            Math.min(3000, Number(event.target.value)),
-                          );
-                        })
-                      }
-                    />
-                  </label>
                   <p>{t("library.effectHelp")}</p>
                 </EffectsPanel>
               )}
@@ -1287,7 +1268,7 @@ function Workspace({
             </div>
           </aside>
           <section
-            ref={workspace}
+            ref={observeWorkspace}
             className={`template-canvas ${styles.workspace}`}
             aria-label={t("library.workspaceAria")}
           >
@@ -1500,6 +1481,17 @@ function Workspace({
               </section>
             )}
             <h2>{t("properties.title")}</h2>
+            {props.action !== "gift" &&
+              giftPanel &&
+              items.some(
+                (id) =>
+                  query.getNodes()[id]?.data.props.action === "gift" &&
+                  !query.getNodes()[id]?.data.hidden,
+              ) && (
+                <button type="button" className="mb-4 w-full" onClick={showGiftConfiguration}>
+                  Cấu hình hộp quà mừng
+                </button>
+              )}
             {!selection ? (
               <p>{t("properties.selectItem")}</p>
             ) : (
@@ -1534,39 +1526,6 @@ function Workspace({
                     </button>
                   </div>
                 </div>
-                <label>
-                  {t("properties.itemEffect")}
-                  <select
-                    value={props.revealPreset ?? "inherit"}
-                    onChange={(event) => {
-                      if (selection)
-                        actions.setProp(selection, (value: ItemProps) => {
-                          if (event.target.value === "inherit") delete value.revealPreset;
-                          else value.revealPreset = event.target.value as RevealPreset;
-                        });
-                    }}
-                  >
-                    <option value="inherit">{t("properties.inheritEffect")}</option>
-                    <option value="none">{t("properties.noEffect")}</option>
-                    <option value="fade">{t("properties.fadeIn")}</option>
-                    <option value="slide-up">{t("properties.slideUp")}</option>
-                    <option value="scale-in">{t("properties.scaleIn")}</option>
-                  </select>
-                </label>
-                <label>
-                  {t("properties.effectDelay")}
-                  <input
-                    type="number"
-                    min={0}
-                    max={3000}
-                    value={props.revealDelay ?? 0}
-                    onChange={(event) =>
-                      update({
-                        revealDelay: Math.max(0, Math.min(3000, Number(event.target.value))),
-                      })
-                    }
-                  />
-                </label>
                 {selected?.node?.data.name === "StudioAlbum" && (
                   <>
                     <h2>
@@ -1605,7 +1564,9 @@ function Workspace({
                     <button
                       disabled={albumImages.length <= 1}
                       onClick={() => {
-                        update({ images: albumImages.filter((_, index) => index !== albumIndex) });
+                        update({
+                          images: albumImages.filter((_, index) => index !== albumIndex),
+                        });
                         selectPhoto(selection, Math.max(0, albumIndex - 1));
                       }}
                     >
@@ -1841,27 +1802,24 @@ function Workspace({
                     )}
                     {selected?.node?.data.name === "StudioAction" && (
                       <>
-                        <label>
-                          {t("properties.action")}
-                          <select
-                            value={props.action ?? "rsvp"}
-                            onChange={(event) =>
-                              update({ action: event.target.value as ItemProps["action"] })
-                            }
-                          >
-                            <option value="rsvp">{t("properties.rsvp")}</option>
-                            <option value="calendar">{t("properties.addToCalendar")}</option>
-                            <option value="gift">{t("properties.giftBox")}</option>
-                          </select>
-                        </label>
-                        <label>
-                          {t("properties.content")}
-                          <textarea
-                            maxLength={2000}
-                            value={props.message ?? ""}
-                            onChange={(event) => update({ message: event.target.value })}
-                          />
-                        </label>
+                        {props.action !== "gift" && (
+                          <label>
+                            {t("properties.content")}
+                            <textarea
+                              maxLength={2000}
+                              value={props.message ?? ""}
+                              onChange={(event) => update({ message: event.target.value })}
+                            />
+                          </label>
+                        )}
+                        {props.action === "gift" &&
+                          giftPanel?.({
+                            value: query.getNodes().ROOT?.data.props.gift,
+                            onChange: (gift) =>
+                              actions.setProp("ROOT", (props) => {
+                                props.gift = gift;
+                              }),
+                          })}
                         {props.action === "calendar" && (
                           <>
                             <label>
@@ -2066,7 +2024,11 @@ function Workspace({
                                 label: t("properties.alignCenter"),
                                 icon: AlignCenter,
                               },
-                              { key: "right", label: t("properties.alignRight"), icon: AlignRight },
+                              {
+                                key: "right",
+                                label: t("properties.alignRight"),
+                                icon: AlignRight,
+                              },
                               {
                                 key: "justify",
                                 label: t("properties.justify"),
@@ -2202,36 +2164,6 @@ function Workspace({
                 ))}
               </fieldset>
             )}
-            <details className={styles.advanced}>
-              <summary>{t("properties.advanced")}</summary>
-              <h2>{t("properties.documentJson")}</h2>
-              <button onClick={exportJson}>{t("properties.exportJson")}</button>
-              <textarea
-                aria-label={t("properties.documentJson")}
-                className={styles.json}
-                value={json}
-                onChange={(event) => setJson(event.target.value)}
-                placeholder={t("properties.jsonPlaceholder")}
-              />
-              <button disabled={preview || !json} onClick={() => importJson(json)}>
-                {t("properties.openJson")}
-              </button>
-              <label className={styles.file}>
-                {t("properties.openJsonFile")}
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  disabled={preview}
-                  onChange={async (event) => {
-                    const input = event.currentTarget;
-                    const file = event.target.files?.[0];
-                    if (file && file.size <= 500000) importJson(await file.text());
-                    else if (file) setMessage(t("properties.jsonTooLarge"));
-                    input.value = "";
-                  }}
-                />
-              </label>
-            </details>
           </aside>
         </div>
         {!preview && !editingCover && (
@@ -2243,7 +2175,9 @@ function Workspace({
             >
               {t("properties.quickReplace")} {quickPhotosOpen ? "⌄" : "⌃"}{" "}
               <small>
-                {t("properties.imageCount", { count: formatNumber(photoEntries.length, language) })}
+                {t("properties.imageCount", {
+                  count: formatNumber(photoEntries.length, language),
+                })}
               </small>
             </button>
             {quickPhotosOpen && (
@@ -2273,6 +2207,27 @@ function Workspace({
         )}
       </main>
     </WordingPreviewContext>
+  );
+  return (
+    <GiftPreviewContext value={giftPreview?.(query.getNodes().ROOT?.data.props.gift)}>
+      <Modal
+        open={!!giftWarning}
+        onClose={() => setGiftWarning("")}
+        title="Cần cấu hình hộp quà mừng"
+      >
+        <p>{giftWarning}</p>
+        <button
+          type="button"
+          className="mt-4 rounded-lg bg-primary px-4 py-2 text-primary-foreground"
+          onClick={showGiftConfiguration}
+        >
+          Cấu hình ngay
+        </button>
+      </Modal>
+      <PreviewViewport active={preview} toolbar={toolbar}>
+        {content}
+      </PreviewViewport>
+    </GiftPreviewContext>
   );
 }
 
@@ -2349,6 +2304,9 @@ function ColorControl({
 }
 
 export function TemplateStudio({
+  weddingId,
+  giftPanel,
+  giftPreview,
   initialTemplate = false,
   initialPreview = false,
   initialWording = false,
@@ -2391,6 +2349,9 @@ export function TemplateStudio({
           }}
         >
           <Workspace
+            weddingId={weddingId}
+            giftPanel={giftPanel}
+            giftPreview={giftPreview}
             initialTemplate={initialTemplate}
             initialPreview={initialPreview}
             initialWording={initialWording}

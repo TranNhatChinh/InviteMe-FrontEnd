@@ -17,12 +17,11 @@ export function StudioReveal({ render }: { render: ReactElement }) {
   const { revision } = useContext(RevealReplayContext);
   const wrapper = useRef<HTMLDivElement>(null);
   const { id, props } = useNode((node) => ({ props: node.data.props }));
-  const { enabled, globalPreset, duration } = useEditor((state) => ({
+  const { enabled, globalPreset } = useEditor((state) => ({
     enabled: state.options.enabled,
     globalPreset: state.nodes.ROOT?.data.props.revealPreset ?? "none",
-    duration: state.nodes.ROOT?.data.props.revealDuration ?? 800,
   }));
-  const preset = props.revealPreset ?? globalPreset;
+  const preset = globalPreset;
   const active = !paused && (!enabled || revision > 0) && id !== "ROOT" && preset !== "none";
   useEffect(() => {
     const element = wrapper.current;
@@ -54,7 +53,7 @@ export function StudioReveal({ render }: { render: ReactElement }) {
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [active, preset, duration, revision, enabled]);
+  }, [active, preset, revision, enabled]);
   return (
     <div
       ref={wrapper}
@@ -63,8 +62,8 @@ export function StudioReveal({ render }: { render: ReactElement }) {
       data-explicit={revision > 0 ? "true" : "false"}
       style={
         {
-          "--reveal-duration": `${props.revealDuration ?? duration}ms`,
-          "--reveal-delay": `${props.revealDelay ?? 0}ms`,
+          "--reveal-duration": "800ms",
+          "--reveal-delay": "0ms",
           "--reveal-opacity": props.opacity ?? 1,
         } as CSSProperties
       }
