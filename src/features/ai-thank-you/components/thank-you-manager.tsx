@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
-  CheckCheck,
   ChevronDown,
   Eye,
   HeartHandshake,
@@ -28,6 +27,7 @@ import { usePermission } from "@/shared/components/permission-guard";
 import { ApiError } from "@/core/api/api-error";
 import { useRuntime } from "@/core/config/runtime";
 import { Button } from "@/shared/ui/button";
+import { Modal } from "@/shared/ui/modal";
 import { EmptyState } from "@/shared/feedback/empty-state";
 import { MessageRecipientPicker } from "@/shared/components/message-recipient-picker";
 import { MAX_MESSAGE_RECIPIENTS, missingRecipientContacts } from "@/shared/lib/message-recipients";
@@ -35,6 +35,8 @@ import {
   approveThankYouTemplate,
   editThankYouTemplate,
   generateThankYouTemplateOptions,
+  generateThankYouSms,
+  previewThankYouSms,
   getThankYouBatch,
   listAllThankYouGuests,
   listThankYouTemplates,
@@ -44,7 +46,7 @@ import {
   type ThankYouTemplate,
 } from "../api/thank-you.api";
 
-type SendAttempt = { templateId: string; guestIds: string[]; channels: string[]; key: string };
+type SendAttempt = { templateId: string; guestIds: string[]; channels: string[]; key: string; smsContent?: string };
 type Preview = { templateId: string; version: number; guestId: string; content: string };
 
 export function ThankYouPermissionFallback() {
@@ -65,6 +67,12 @@ function niceError(error: unknown, t: (key: string) => string) {
     return t("errors.channelUnavailable");
   if (error instanceof ApiError && error.backendCode === "PLAN_LIMIT_REACHED")
     return t("errors.planLimit");
+  if (error instanceof ApiError && error.backendCode === "AI_SMS_COPY_INVALID")
+    return t("smsAiInvalid");
+  if (error instanceof ApiError && error.backendCode === "THANK_YOU_SMS_TOO_LONG")
+    return t("smsTooLong");
+  if (error instanceof ApiError && error.backendCode?.startsWith("AI_"))
+    return t("smsAiUnavailable");
   return t("errors.generic");
 }
 
@@ -79,6 +87,10 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
   const [selectedGuestIds, setSelectedGuestIds] = useState<string[]>([]);
   const [includeGiftAmount, setIncludeGiftAmount] = useState(false);
   const [sendChannels, setSendChannels] = useState<string[]>(["EMAIL"]);
+  const [editorChannel, setEditorChannel] = useState<"EMAIL" | "SMS">("EMAIL");
+  const [smsContent, setSmsContent] = useState("Cảm ơn bạn đã dành tình cảm cho chúng mình!");
+  const [smsGuestId, setSmsGuestId] = useState("");
+  const [smsShownPreview, setSmsShownPreview] = useState<{ content: string; guestId: string; rendered?: { content: string; encoding: string; units: number; segments: number } } | null>(null);
   const [activeTemplateId, setActiveTemplateId] = useState("");
   const [edits, setEdits] = useState<{ id: string; content: string } | null>(null);
   const [previewGuestId, setPreviewGuestId] = useState("");
@@ -88,6 +100,8 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
   const [batchId, setBatchId] = useState("");
   const [visibleJobs, setVisibleJobs] = useState(50);
   const [uncertainSend, setUncertainSend] = useState<SendAttempt | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [preparingSend, setPreparingSend] = useState(false);
   const templateKey = ["thank-you-templates", weddingId] as const;
 
   const guests = useQuery({
@@ -115,13 +129,14 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
     edits && edits.id === activeTemplate?.id ? edits.content : (activeTemplate?.content ?? "");
   const dirty = Boolean(activeTemplate && content !== activeTemplate.content);
   const previewGuests = selectedGuests.length ? selectedGuests : recipients;
+  const effectiveSmsGuest = previewGuests.some((guest) => guest.id === smsGuestId) ? smsGuestId : "";
   const recipientById = useMemo(
     () => new Map(recipients.map((guest) => [guest.id, guest])),
     [recipients],
   );
   const effectivePreviewGuest = previewGuests.some((guest) => guest.id === previewGuestId)
     ? previewGuestId
-    : (previewGuests[0]?.id ?? "");
+    : "";
   const currentPreview =
     previewContent?.templateId === activeTemplate?.id &&
     previewContent?.version === activeTemplate?.version
@@ -132,6 +147,13 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
     queryFn: ({ signal }) => getThankYouBatch(api, weddingId, batchId, signal),
     enabled: Boolean(batchId),
     refetchInterval: (query) => (query.state.data?.pendingCount ? 2500 : false),
+  });
+  const smsPreview = useQuery({
+    queryKey: ["thank-you-sms-preview", weddingId, selectedGuestIds, smsContent],
+    queryFn: ({ signal }) => previewThankYouSms(api, weddingId, selectedGuestIds, smsContent, signal),
+    enabled: (sendChannels.includes("SMS") || editorChannel === "SMS") && selectedGuestIds.length > 0 && smsContent.trim().length > 0,
+    retry: false,
+    staleTime: 0,
   });
   const refreshTemplates = () => client.invalidateQueries({ queryKey: templateKey });
   function showError(reason: unknown) {
@@ -158,6 +180,20 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
         await client.invalidateQueries({ queryKey: ["wedding-plan", weddingId] });
     },
   });
+  const generateSms = useMutation({
+    mutationFn: () => generateThankYouSms(api, weddingId, selectedGuestIds),
+    onSuccess: (result) => { setSmsContent(result.content); setError(""); },
+    onError: showError,
+  });
+  const previewSingleSms = useMutation({
+    mutationFn: ({ guestId, content }: { guestId: string; content: string }) =>
+      previewThankYouSms(api, weddingId, [guestId], content),
+    onSuccess: (items, input) => {
+      if (items[0]) setSmsShownPreview({ content: input.content, guestId: input.guestId, rendered: items[0] });
+      setError("");
+    },
+    onError: showError,
+  });
   const save = useMutation({
     mutationFn: ({ template, value }: { template: ThankYouTemplate; value: string }) =>
       editThankYouTemplate(api, weddingId, template.id, {
@@ -169,15 +205,6 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
       await refreshTemplates();
       setEdits(null);
       setPreviewContent(null);
-      setError("");
-    },
-    onError: showError,
-  });
-  const approve = useMutation({
-    mutationFn: (template: ThankYouTemplate) =>
-      approveThankYouTemplate(api, weddingId, template.id, template.version),
-    onSuccess: async () => {
-      await refreshTemplates();
       setError("");
     },
     onError: showError,
@@ -205,6 +232,7 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
         attempt.guestIds,
         attempt.channels,
         attempt.key,
+        attempt.smsContent,
       ),
     onSuccess: (result) => {
       setError("");
@@ -217,7 +245,7 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
         setError(t("uncertainSend"));
       else {
         setUncertainSend(null);
-        setError(niceError(reason, t));
+        setError(`${t("approvedSendFailed")} ${niceError(reason, t)}`);
       }
     },
   });
@@ -227,7 +255,7 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
       client.invalidateQueries({ queryKey: ["thank-you-batch", weddingId, batchId] }),
     onError: showError,
   });
-  const busy = generate.isPending || save.isPending || approve.isPending || send.isPending;
+  const busy = generate.isPending || generateSms.isPending || save.isPending || preparingSend || send.isPending;
   const locked = busy || Boolean(uncertainSend);
   const planUnavailable = plan.isError || (!plan.isPending && !plan.data);
   const generationGate =
@@ -246,14 +274,14 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
       : null;
   const missingContacts = missingRecipientContacts(recipients, selectedGuestIds, sendChannels);
   const canSend =
-    activeTemplate?.status === "APPROVED" &&
-    !dirty &&
+    Boolean(activeTemplate) &&
     !conflict &&
     !locked &&
     guests.isSuccess &&
     selectedGuestIds.length > 0 &&
     selectedGuestIds.length <= MAX_MESSAGE_RECIPIENTS &&
     sendChannels.length > 0 &&
+    (!sendChannels.includes("SMS") || (Boolean(smsContent.trim()) && !smsPreview.isFetching && smsPreview.isSuccess && smsPreview.data.length === selectedGuestIds.length && smsPreview.data.every((item) => item.hasPhone && item.segments <= 3))) &&
     !missingContacts.length;
 
   function selectTemplate(template: ThankYouTemplate) {
@@ -264,23 +292,45 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
     setError("");
     setConflict(false);
   }
-  function beginSend() {
-    if (
-      !canSend ||
-      !activeTemplate ||
-      !window.confirm(
-        t("confirmSend", { count: selectedGuestIds.length, channels: sendChannels.join(" + ") }),
-      )
-    )
-      return;
+  async function confirmAndSend() {
+    if (!canSend || !activeTemplate) return;
     const attempt = {
       templateId: activeTemplate.id,
       guestIds: [...selectedGuestIds],
       channels: [...sendChannels],
       key: crypto.randomUUID(),
+      smsContent: sendChannels.includes("SMS") ? smsContent : undefined,
     };
-    setUncertainSend(attempt);
-    send.mutate(attempt);
+    setPreparingSend(true);
+    setError("");
+    try {
+      let template = activeTemplate;
+      if (dirty) {
+        template = await editThankYouTemplate(api, weddingId, template.id, {
+          content,
+          expectedVersion: template.version,
+          includeGiftAmount: template.includesGiftAmount,
+        });
+        setEdits(null);
+      }
+      if (template.status === "DRAFT") {
+        await approveThankYouTemplate(api, weddingId, template.id, template.version);
+      }
+      await refreshTemplates();
+      setConfirmOpen(false);
+      setUncertainSend(attempt);
+      send.mutate(attempt);
+    } catch (reason) {
+      await refreshTemplates();
+      setConfirmOpen(false);
+      if (!(reason instanceof ApiError) || reason.code === "network" || reason.status >= 500) {
+        setError(t("approvalUncertain"));
+      } else {
+        showError(reason);
+      }
+    } finally {
+      setPreparingSend(false);
+    }
   }
   async function reloadTemplate() {
     if (dirty && !window.confirm(t("discardEdits"))) return;
@@ -363,6 +413,18 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
       )}
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.9fr)]">
         <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div className="border-b p-4 sm:px-6">
+            <div role="group" aria-label={t("composeChannel")} className="inline-flex w-full rounded-xl bg-muted/50 p-1 sm:w-auto">
+              {(["EMAIL", "SMS"] as const).map((channel) => (
+                <button key={channel} type="button" aria-pressed={editorChannel === channel} onClick={() => setEditorChannel(channel)} className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-colors sm:flex-none ${editorChannel === channel ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                  {channel === "EMAIL" ? <Mail className="size-4" /> : <MessageSquareText className="size-4" />}
+                  {channel === "EMAIL" ? "Email" : "SMS"}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{t("composeChannelHint")}</p>
+          </div>
+          <div hidden={editorChannel !== "EMAIL"}>
           <div className="border-b bg-muted/30 p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -372,8 +434,6 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
               <Button
                 type="button"
                 disabled={
-                  !selectedGuestIds.length ||
-                  !guests.isSuccess ||
                   locked ||
                   conflict ||
                   plan.isPending ||
@@ -456,29 +516,36 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
                     <span className="text-xs text-muted-foreground">{t("fallback")}</span>
                   )}
                 </div>
-                <label className="block">
-                  <span className="sr-only">{t("templateContent")}</span>
-                  <textarea
-                    className="min-h-72 w-full resize-y rounded-xl border bg-background/40 p-4 text-sm leading-8 focus:border-primary-hover focus:outline-none focus:ring-2 focus:ring-primary/20 sm:min-h-80"
-                    maxLength={3000}
-                    value={content}
-                    readOnly={activeTemplate.status === "APPROVED" || locked}
-                    onChange={(event) => {
-                      setEdits({ id: activeTemplate.id, content: event.target.value });
-                      setPreviewContent(null);
-                    }}
-                  />
-                </label>
+                <div className="rounded-xl border bg-background/40 p-4 text-sm leading-8" aria-label={t("templateContent")}>
+                  {content.split(/(\{\{GuestName\}\}|\{\{GiftThanks\}\})/).map((part, index, parts) =>
+                    part === "{{GuestName}}" || part === "{{GiftThanks}}" ? (
+                      <span key={index} className="inline-block rounded-md bg-primary/15 px-2 text-xs font-medium text-primary-hover">
+                        {t(part === "{{GuestName}}" ? "guestNameLabel" : "giftThanksLabel")}
+                      </span>
+                    ) : (
+                      <textarea
+                        key={index}
+                        aria-label={t("letterPart", { number: Math.floor(index / 2) + 1 })}
+                        className="block min-h-12 w-full resize-y border-0 bg-transparent p-0 text-sm leading-8 focus:outline-none focus:ring-0"
+                        rows={Math.max(1, Math.min(12, part.split("\n").length + Math.floor(part.length / 90)))}
+                        value={part}
+                        readOnly={activeTemplate.status === "APPROVED" || locked}
+                        onChange={(event) => {
+                          const next = [...parts];
+                          next[index] = event.target.value;
+                          setEdits({ id: activeTemplate.id, content: next.join("") });
+                          setPreviewContent(null);
+                        }}
+                      />
+                    ),
+                  )}
+                </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span>
-                    {t("personalizationHint")} <code>{"{{GuestName}}"}</code>.
-                  </span>
+                  <span>{t("personalizationHint")}</span>
                   <span>{content.length}/3.000</span>
                 </div>
                 {activeTemplate.includesGiftAmount && (
-                  <p className="rounded-xl bg-muted p-3 text-xs leading-relaxed text-muted-foreground">
-                    {t("giftPlaceholderHint")} <code>{"{{GiftThanks}}"}</code>.
-                  </p>
+                  <p className="rounded-xl bg-muted p-3 text-xs leading-relaxed text-muted-foreground">{t("giftPlaceholderHint")}</p>
                 )}
                 {activeTemplate.status === "DRAFT" ? (
                   <div className="flex flex-wrap items-center gap-2">
@@ -491,24 +558,8 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
                       {save.isPending ? <LoaderCircle className="animate-spin" /> : <Save />}
                       {t("saveChanges")}
                     </Button>
-                    <Button
-                      type="button"
-                      disabled={dirty || !currentPreview || locked || conflict}
-                      onClick={() => approve.mutate(activeTemplate)}
-                    >
-                      {approve.isPending ? (
-                        <LoaderCircle className="animate-spin" />
-                      ) : (
-                        <CheckCheck />
-                      )}
-                      {t("approveTemplate")}
-                    </Button>
                     <span className="text-xs text-muted-foreground">
-                      {dirty
-                        ? t("saveBeforeReview")
-                        : !currentPreview
-                          ? t("previewBeforeApprove")
-                          : t("approveOnce")}
+                      {t("approvalOnSend")}
                     </span>
                   </div>
                 ) : (
@@ -527,13 +578,13 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
                       className="h-11 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm"
                       aria-label={t("previewGuest")}
                       value={effectivePreviewGuest}
-                      disabled={locked || !recipients.length}
+                      disabled={locked}
                       onChange={(event) => {
                         setPreviewGuestId(event.target.value);
                         setPreviewContent(null);
                       }}
                     >
-                      {!recipients.length && <option value="">{t("selectLoadedGuest")}</option>}
+                      <option value="">{t("illustrativeGuest")}</option>
                       {previewGuests.map((guest) => (
                         <option key={guest.id} value={guest.id}>
                           {guest.recipientName}
@@ -544,11 +595,22 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
                       type="button"
                       variant="outline"
                       disabled={
-                        !effectivePreviewGuest || dirty || locked || conflict || preview.isPending
+                        dirty || locked || conflict || preview.isPending
                       }
-                      onClick={() =>
-                        preview.mutate({ template: activeTemplate, guestId: effectivePreviewGuest })
-                      }
+                      onClick={() => {
+                        if (effectivePreviewGuest) {
+                          preview.mutate({ template: activeTemplate, guestId: effectivePreviewGuest });
+                        } else {
+                          setPreviewContent({
+                            templateId: activeTemplate.id,
+                            version: activeTemplate.version,
+                            guestId: "",
+                            content: activeTemplate.content
+                              .replaceAll("{{GuestName}}", t("illustrativeGuest"))
+                              .replaceAll("{{GiftThanks}}", ""),
+                          });
+                        }
+                      }}
                     >
                       {preview.isPending ? <LoaderCircle className="animate-spin" /> : <Eye />}
                       {t("preview")}
@@ -559,6 +621,7 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
                       aria-live="polite"
                       className="mt-4 whitespace-pre-wrap rounded-xl border border-primary/20 bg-muted/30 p-5 text-sm leading-8"
                     >
+                      {!currentPreview.guestId && <p className="mb-2 text-xs font-medium text-primary-hover">{t("illustrativePreview")}</p>}
                       {currentPreview.content}
                     </div>
                   )}
@@ -597,7 +660,7 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
                         })}
                       </span>
                       <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">
-                        {template.content.replace("{{GuestName}}", "…")}
+                        {template.content.replaceAll("{{GuestName}}", t("guestNameLabel")).replaceAll("{{GiftThanks}}", t("giftThanksLabel"))}
                       </span>
                     </button>
                   ))}
@@ -605,6 +668,43 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
               </details>
             )}
           </div>
+          </div>
+            {editorChannel === "SMS" && (
+              <div>
+                <div className="border-b bg-muted/30 p-5 sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><h2 className="font-display text-2xl">{t("smsTitle")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("smsComposeDescription")}</p></div>
+                  <Button type="button" disabled={locked || plan.isPending || planUnavailable || Boolean(generationGate?.locked)} onClick={() => generateSms.mutate()}>
+                    {generateSms.isPending ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{t("smsGenerate")}
+                  </Button>
+                  </div>
+                  {aiQuotaText && <p className="mt-3 text-xs text-muted-foreground">{aiQuotaText}</p>}
+                </div>
+                <div className="space-y-4 p-5 sm:p-6">
+                <label htmlFor="thank-you-sms" className="text-sm font-medium">{t("smsTitle")}</label>
+                <textarea id="thank-you-sms" value={smsContent} maxLength={500} disabled={locked} onChange={(event) => { setSmsContent(event.target.value); setSmsShownPreview(null); }} className="min-h-24 w-full rounded-xl border bg-background p-3 text-sm" />
+                <p className="text-right text-xs text-muted-foreground">{t("smsDraftLength", { count: smsContent.length })}</p>
+                <p className="text-xs text-muted-foreground">{t("smsHint")}</p>
+                <div className="border-t pt-4">
+                  <h3 className="flex items-center gap-2 text-sm font-medium"><Eye className="size-4 text-primary-hover" />{t("smsPreviewTitle")}</h3>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <select aria-label={t("smsPreviewGuest")} className="h-11 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm" value={effectiveSmsGuest} disabled={locked} onChange={(event) => { setSmsGuestId(event.target.value); setSmsShownPreview(null); }}>
+                      <option value="">{t("illustrativeGuest")}</option>
+                      {previewGuests.map(guest => <option key={guest.id} value={guest.id}>{guest.recipientName}</option>)}
+                    </select>
+                    <Button type="button" variant="outline" disabled={locked || !smsContent.trim() || previewSingleSms.isPending} onClick={() => { if (effectiveSmsGuest) previewSingleSms.mutate({ guestId: effectiveSmsGuest, content: smsContent }); else setSmsShownPreview({ content: smsContent, guestId: "" }); }}>{previewSingleSms.isPending ? <LoaderCircle className="animate-spin" /> : <Eye />}{t("preview")}</Button>
+                  </div>
+                  {smsPreview.isFetching && <p role="status" className="mt-2 text-xs">{t("smsChecking")}</p>}
+                  {smsPreview.isError && <p role="alert" className="mt-2 text-xs text-destructive">{t("smsPreviewError")}</p>}
+                  {smsShownPreview && smsShownPreview.content === smsContent && smsShownPreview.guestId === effectiveSmsGuest && (() => {
+                    const item = smsShownPreview.rendered;
+                    return <div className="mt-4 whitespace-pre-wrap break-words rounded-xl border border-primary/20 bg-muted/30 p-5 text-sm leading-7">{!effectiveSmsGuest && <p className="mb-2 text-xs font-medium text-primary-hover">{t("illustrativePreview")}</p>}{item?.content ?? `${t("illustrativeGuest")} ${t("smsIllustrativeGreeting")} ${smsContent}\n— ${t("smsWeddingTitle")}`} {item && <p className="mt-2 text-xs">{item.encoding} · {item.units} · {t("smsSegments", { count: item.segments })}</p>}</div>;
+                  })()}
+                  {smsPreview.data?.some(item => item.segments > 3 || !item.hasPhone) && <p role="alert" className="mt-2 text-xs text-destructive">{t("smsInvalidGuests", { names: smsPreview.data.filter(item => item.segments > 3 || !item.hasPhone).map(item => item.guestName).join(", ") })}</p>}
+                </div>
+                </div>
+              </div>
+            )}
         </section>
         <aside className="space-y-5 xl:sticky xl:top-6">
           <section
@@ -701,18 +801,33 @@ export function ThankYouManager({ weddingId }: { weddingId: string }) {
                 </Button>
               </div>
             )}
-            <Button type="button" className="w-full" disabled={!canSend} onClick={beginSend}>
-              {send.isPending ? <LoaderCircle className="animate-spin" /> : <Send />}
-              {send.isPending ? t("queueing") : t("sendButton", { count: selectedGuestIds.length })}
+            <Button type="button" className="w-full" disabled={!canSend} onClick={() => setConfirmOpen(true)}>
+              {send.isPending || preparingSend ? <LoaderCircle className="animate-spin" /> : <Send />}
+              {send.isPending || preparingSend ? t("queueing") : t("sendButton", { count: selectedGuestIds.length })}
             </Button>
-            {activeTemplate?.status !== "APPROVED" && (
+            {!activeTemplate && (
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                {t("approveBeforeSend")}
+                {sendChannels.includes("SMS") ? t("smsNeedsLetter") : t("approveBeforeSend")}
               </p>
             )}
           </section>
         </aside>
       </div>
+      <Modal open={confirmOpen} onClose={() => { if (!preparingSend) setConfirmOpen(false); }} title={t("reviewSendTitle")} description={t("reviewSendDescription")}>
+        <div className="space-y-4">
+          <p className="text-sm">{t("confirmSend", { count: selectedGuestIds.length, channels: sendChannels.join(" + ") })}</p>
+          <div className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl border bg-muted/30 p-4 text-sm leading-7">
+            {content.replaceAll("{{GuestName}}", t("illustrativeGuest")).replaceAll("{{GiftThanks}}", t("giftThanksPreview"))}
+          </div>
+          <p className="text-xs text-muted-foreground">{t("reviewPersonalization")}</p>
+          {sendChannels.includes("SMS") && smsPreview.data && <div className="rounded-xl border p-3 text-sm"><strong>{t("smsTitle")}</strong><p className="mt-2 whitespace-pre-wrap break-all">{(smsPreview.data.find(x => x.guestId === smsGuestId) ?? smsPreview.data[0])?.content}</p><p className="mt-2 text-xs">{t("smsMaxSegments", { count: Math.max(...smsPreview.data.map(x => x.segments)) })}</p></div>}
+          <div className="max-h-28 overflow-y-auto rounded-xl border p-3 text-sm">{selectedGuests.map((guest) => guest.recipientName).join(", ")}</div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" disabled={preparingSend} onClick={() => setConfirmOpen(false)}>{t("cancelSend")}</Button>
+            <Button type="button" disabled={preparingSend} onClick={() => void confirmAndSend()}>{preparingSend ? <LoaderCircle className="animate-spin" /> : <Send />}{t("confirmApproveAndSend")}</Button>
+          </div>
+        </div>
+      </Modal>
       {batchId && (
         <section className="space-y-4 rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
