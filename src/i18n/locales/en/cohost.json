@@ -1,6 +1,6 @@
 {
   "title": "Co-hosts & access",
-  "description": "Invite trusted people and limit access to the whole wedding or selected guest groups.",
+  "description": "Invite trusted people to help manage the wedding, with access limited to the whole wedding or selected guest groups.",
   "ownerOnlyTitle": "Only the wedding owner can manage co-hosts",
   "ownerOnlyDescription": "You don't have permission to invite members or change their access scope.",
   "loadingMembers": "Loading members and access…",
@@ -35,10 +35,10 @@
   "keepInvite": "Keep invitation",
   "revoking": "Revoking…",
   "revoke": "Revoke",
-  "scopesUpdated": "Co-host permissions and scopes have been updated.",
+  "scopesUpdated": "Permissions and access scopes have been updated.",
   "accessRevoked": "Co-host access has been revoked.",
   "inviteSent": "An invitation was sent to {{email}}. The link expires in 72 hours.",
-  "inviteQueuedButEmailFailed": "An invitation was created for {{email}}, but the email could not be sent. Check the backend email service.",
+  "inviteQueuedButEmailFailed": "An invitation was created for {{email}}, but the email could not be sent. Please try again later or contact support.",
   "closeEditor": "Close editor",
   "editScope": "Edit scope",
   "revokeAccess": "Revoke access",
@@ -47,7 +47,7 @@
   "cancel": "Cancel",
   "saveScope": "Save scope",
   "noPermissions": "No permissions assigned.",
-  "legacyScope": "Legacy scope — not accepted by the backend",
+  "legacyScope": "This permission scope is outdated and is no longer supported",
   "wholeWedding": "Entire wedding",
   "deletedGroup": "Deleted group",
   "scopeIntro": "Each permission can apply to the entire wedding or selected guest groups.",
@@ -116,7 +116,7 @@
     "unsupportedGroupScope": "Guest-group scope isn't supported",
     "groupCount": "{{count}} guest groups",
     "noPermissions": "No permissions have been granted.",
-    "legacyCheckInScope": "This invitation has an older group-scoped check-in permission. The backend requires check-in access for the entire wedding. Contact the owner to update it before accepting.",
+    "legacyCheckInScope": "This invitation has an older group-scoped check-in permission. The system now requires check-in access for the entire wedding. Contact the owner to update it before accepting.",
     "permissionDisclaimer": "The server checks every action. The wedding owner can change or revoke access.",
     "accepting": "Accepting…",
     "waitForScopeUpdate": "Waiting for the owner to update check-in access",
@@ -134,7 +134,7 @@
   "areas": {
     "guests": "Guests",
     "seating": "Seating plan",
-    "reception": "Reception desk"
+    "reception": "Guest reception"
   },
   "permissionHints": {
     "GUEST_VIEW": "See guest names, party sizes and groups.",
@@ -146,9 +146,9 @@
     "WALK_IN_MANAGE": "Create and check in guests not on the list when the couple enables walk-ins. Always applies to the whole wedding.",
     "GIFT_RECORD": "Record envelopes and presents at the desk, without seeing totals. Always applies to the whole wedding."
   },
-  "seatingViewLocked": "On because this co-host can edit seating.",
+  "seatingViewLocked": "Enabled because this member can edit the seating plan.",
   "scopeFor": "Scope of {{permission}}",
   "groupsFor": "Guest groups for {{permission}}",
-  "selectedCount": "Permissions selected: {{count}}",
-  "summaryLine": "{{members}} co-hosts helping · {{invites}} invitations not accepted yet"
+  "selectedCount": "{{count}} permissions selected",
+  "summaryLine": "{{members}} co-hosts helping · {{invites}} invitations awaiting a response"
 }

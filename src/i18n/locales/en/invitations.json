@@ -274,12 +274,12 @@
   "picker": {
     "back": "Back to invitations",
     "backToTemplates": "Back to templates",
-    "description": "Explore a template demo, or edit and apply it to your wedding.",
+    "description": "Preview a template, or edit and apply it to your wedding.",
     "filters": "Filter styles",
     "all": "All",
     "minimalism": "Minimalism",
     "song-hy": "Double happiness",
-    "demo": "View demo",
+    "demo": "Preview",
     "editApply": "Edit & apply",
     "changeTemplate": "Change template"
   },

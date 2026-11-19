@@ -208,7 +208,7 @@
   "rsvpDeadline": "Hạn xác nhận tham dự",
   "plannedUrl": "Đường dẫn dự kiến",
   "publicPageMustBePublished": "Trang công khai cần được xuất bản riêng trước khi khách có thể xem.",
-  "cohostWorkspace": "Không gian Co-host",
+  "cohostWorkspace": "Không gian người đồng quản lý",
   "assignedWork": "Công việc được giao",
   "assignedWorkDescription": "Mở trực tiếp khu vực bạn được chủ tiệc phân quyền. Máy chủ kiểm tra mỗi thao tác theo phạm vi đã cấp.",
   "noAssignedWork": "Tài khoản này mới có quyền vào workspace. Hãy nhờ chủ tiệc cấp quyền khách mời, RSVP, sơ đồ chỗ ngồi hoặc check-in để bắt đầu công việc.",
