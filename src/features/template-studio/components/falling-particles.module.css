@@ -1,0 +1,17 @@
+.particles {
+  --site-accent: #c65879;
+  z-index: 55;
+  user-select: none;
+}
+
+.particles[data-falling-effect="leaves"] {
+  --site-accent: #547d53;
+}
+
+.particles[data-falling-effect="happiness"] {
+  --site-accent: #b98c33;
+}
+
+.particles[data-falling-effect] .particle[data-symbol]::before {
+  content: attr(data-symbol);
+}

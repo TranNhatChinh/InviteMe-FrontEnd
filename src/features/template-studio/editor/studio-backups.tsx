@@ -99,10 +99,21 @@ export function StudioBackups({ scope, title, document, onRestore }: Props) {
   }
 
   const selected = entries.find((entry) => entry.id === preview);
+  const statusLabel = t(
+    failed
+      ? "backup.unavailable"
+      : enabled === undefined
+        ? "backup.title"
+        : enabled
+          ? "backup.on"
+          : "backup.off",
+  );
   return (
     <>
       <button
         type="button"
+        className="inline-flex items-center gap-2"
+        aria-label={statusLabel}
         title={
           entries[0]
             ? t("backup.lastSaved", {
@@ -111,22 +122,19 @@ export function StudioBackups({ scope, title, document, onRestore }: Props) {
                   timeStyle: "short",
                 }),
               })
-            : undefined
+            : statusLabel
         }
         onClick={() => {
           setOpen(true);
           void change();
         }}
       >
-        {t(
-          failed
-            ? "backup.unavailable"
-            : enabled === undefined
-              ? "backup.title"
-              : enabled
-                ? "backup.on"
-                : "backup.off",
-        )}
+        <span
+          aria-hidden="true"
+          data-backup-status={failed ? "error" : enabled ? "on" : "off"}
+          className={`size-2 shrink-0 rounded-full ${failed ? "bg-amber-500" : enabled ? "bg-emerald-500" : "bg-stone-300"}`}
+        />
+        {t("backup.shortTitle")}
       </button>
       <Modal
         open={open}

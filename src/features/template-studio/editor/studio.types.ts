@@ -6,6 +6,14 @@ export type StudioWordingPanel = (controls: {
 }) => ReactNode;
 
 export type TemplateStudioProps = {
+  weddingId?: string;
+  giftPanel?: (controls: {
+    value?: import("@/shared/api/invitation-gift-settings").GiftSettings;
+    onChange: (gift: import("@/shared/api/invitation-gift-settings").GiftSettings) => void;
+  }) => ReactNode;
+  giftPreview?: (gift?: import("@/shared/api/invitation-gift-settings").GiftSettings) => ReactNode;
+  importMode?: boolean;
+  resolvedMusic?: import("@/shared/api/music.api").InvitationMusic | null;
   initialTemplate?: boolean | string;
   initialPreview?: boolean;
   initialWording?: boolean;

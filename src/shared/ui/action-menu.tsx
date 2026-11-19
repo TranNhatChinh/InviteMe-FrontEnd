@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useId, useRef, useState } from "react";
+import { useLayoutEffect, useId, useRef, useState, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/shared/lib/utils";
@@ -9,10 +9,16 @@ export function ActionMenu({
   label,
   disabled = false,
   items,
+  icon,
+  triggerClassName,
+  align = "end",
 }: {
   label: string;
   disabled?: boolean;
   items: { label: string; onSelect: () => void; disabled?: boolean; destructive?: boolean }[];
+  icon?: ReactNode;
+  triggerClassName?: string;
+  align?: "start" | "end";
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -29,7 +35,8 @@ export function ActionMenu({
     const menu = menuRef.current;
     if (trigger && menu) {
       const bounds = menu.getBoundingClientRect();
-      menu.style.left = `${Math.max(8, Math.min(trigger.right - bounds.width, window.innerWidth - bounds.width - 8))}px`;
+      const left = align === "start" ? trigger.left : trigger.right - bounds.width;
+      menu.style.left = `${Math.max(8, Math.min(left, window.innerWidth - bounds.width - 8))}px`;
       menu.style.top = `${Math.max(8, Math.min(trigger.bottom + 4, window.innerHeight - bounds.height - 8))}px`;
     }
     menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
@@ -43,7 +50,7 @@ export function ActionMenu({
       document.removeEventListener("pointerdown", outside);
       window.removeEventListener("scroll", scroll, true);
     };
-  }, [open]);
+  }, [open, align]);
   return (
     <div
       ref={rootRef}
@@ -58,7 +65,7 @@ export function ActionMenu({
         type="button"
         variant="ghost"
         size="icon"
-        className="size-11 text-muted-foreground hover:bg-foreground/5"
+        className={cn("size-11 text-muted-foreground hover:bg-foreground/5", triggerClassName)}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -72,7 +79,7 @@ export function ActionMenu({
           }
         }}
       >
-        <MoreHorizontal aria-hidden="true" />
+        {icon ?? <MoreHorizontal aria-hidden="true" />}
       </Button>
       {open && (
         <div

@@ -4,6 +4,7 @@ import type { parseStudioDocument } from "../schemas/document";
 import { imageShapeStyle, itemStyle, studioTextStyle } from "./items";
 import { resolveStudioText } from "./wording-text";
 import { WordingPreviewContext } from "./wording-preview";
+import { ImportedPages } from "../imported/pages";
 export function TemplateThumbnail({
   document,
   scale = 0.43,
@@ -30,6 +31,7 @@ export function TemplateThumbnail({
     return () => observer.disconnect();
   }, [fluid]);
   const root = document.nodes.ROOT;
+  if (document.kind === "IMPORTED") return <div style={{height,overflow:"hidden"}}><ImportedPages pages={document.pages ?? []} widgets={document.widgets}/></div>;
   if (!root) return null;
   const frameWidth = full ? (root.props.width ?? 480) : 480;
   const frameHeight = full ? (root.props.height ?? 760) : fluid ? 1400 : 700;
@@ -48,7 +50,7 @@ export function TemplateThumbnail({
         overflow: "hidden",
         position: "relative",
         background: root.props.background,
-        backgroundImage: root.props.src ? `url(${root.props.src})` : undefined,
+        backgroundImage: root.props.src ? `url(${root.props.src})` : root.props.backgroundGradient,
         backgroundSize: "100% auto",
         marginBottom: fluid ? 0 : 12,
       }}

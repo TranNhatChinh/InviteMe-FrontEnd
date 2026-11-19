@@ -1,0 +1,235 @@
+.preview {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.switch,
+.edit {
+  position: absolute;
+  top: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #e7d5dc;
+  border-radius: 12px;
+  padding: 4px;
+  background: #fffafc;
+  box-shadow: 0 2px 8px #0000000a;
+  color: #422e35;
+  font:
+    13px Arial,
+    sans-serif;
+}
+.switch {
+  left: 14px;
+}
+.switch button,
+.edit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.switch button {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.switch button[aria-pressed="true"] {
+  background: #f5dce5;
+  color: #9c3558;
+}
+.edit {
+  right: 16px;
+  padding: 11px 14px;
+}
+.area {
+  width: 100%;
+  height: 100%;
+}
+.device,
+.shell,
+.frame {
+  width: 100%;
+  height: 100%;
+}
+.frame {
+  display: block;
+  border: 0;
+  background: #fff;
+}
+.screen {
+  width: 100%;
+  height: 100%;
+}
+.statusBar,
+.home,
+.silentButton,
+.volumeButtons,
+.powerButton {
+  display: none;
+}
+.area[data-mobile="true"] {
+  padding: 72px 12px 20px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  align-items: center;
+  justify-content: center;
+}
+.area[data-mobile="true"] .device {
+  flex-shrink: 0;
+}
+.area[data-mobile="true"] .shell {
+  position: relative;
+  box-sizing: border-box;
+  width: 428px;
+  height: 889px;
+  padding: 7px;
+  transform-origin: top left;
+  border-radius: 54px;
+  background: #0c0c0e;
+  box-shadow:
+    0 0 0 1.5px #2b2b2f,
+    0 0 0 3.5px #b9b9bf,
+    0 0 0 4.5px #6f6f75,
+    0 36px 70px -24px #18181b73,
+    0 14px 28px -10px #18181b40;
+}
+.area[data-mobile="true"] .screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 47px;
+  background: white;
+  isolation: isolate;
+}
+.area[data-mobile="true"] .frame {
+  flex: 1;
+  min-height: 0;
+  height: 829px;
+}
+.area[data-mobile="true"] .statusBar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  height: 46px;
+  box-sizing: border-box;
+  padding: 6px 26px 0 30px;
+  background: #fff;
+  color: #111;
+  font:
+    600 15px Arial,
+    sans-serif;
+  user-select: none;
+}
+.island {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 31%;
+  height: 28px;
+  border-radius: 30px;
+  background: #000;
+}
+.statusIcons {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.statusIcons svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.6;
+}
+.area[data-mobile="true"] .home {
+  display: block;
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 4px;
+  border-radius: 4px;
+  background: #17171780;
+  pointer-events: none;
+}
+.area[data-mobile="true"] .silentButton,
+.area[data-mobile="true"] .volumeButtons,
+.area[data-mobile="true"] .powerButton {
+  display: block;
+  position: absolute;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #747479, #c6c6cb, #55555b);
+}
+.silentButton {
+  left: -6px;
+  top: 110px;
+  height: 24px;
+}
+.volumeButtons {
+  left: -6px;
+  top: 166px;
+  height: 44px;
+  box-shadow: 0 59px 0 #8c8c92;
+}
+.powerButton {
+  right: -6px;
+  top: 230px;
+  height: 90px;
+}
+.desktopLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: #626269;
+  cursor: pointer;
+  font:
+    600 13px Arial,
+    sans-serif;
+  padding: 4px;
+}
+.desktopLink span {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.desktopLink:hover {
+  color: #1f1f24;
+}
+@media (max-width: 440px) {
+  .switch {
+    left: 8px;
+  }
+  .switch button {
+    padding: 8px;
+  }
+  .edit {
+    right: 8px;
+    padding: 12px 8px;
+  }
+}
+
+.viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}

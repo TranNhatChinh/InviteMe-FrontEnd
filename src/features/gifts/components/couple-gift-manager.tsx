@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -19,6 +20,8 @@ import {
   removeGiftAccount,
   syncGiftBankHub,
   unlinkGiftBankHub,
+  setGiftAccountDisplay,
+  type GiftBankAccount,
 } from "../api/gifts.api";
 import { useLocale } from "@/i18n/language-context";
 import { formatCurrency, formatDate, formatNumber } from "@/i18n/format";
@@ -34,9 +37,10 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
   const { can, isWeddingWide, isOwner } = usePermission();
   const editable = can("GIFT_EDIT") && isWeddingWide("GIFT_EDIT");
   const weddingPlan = useWeddingPlan(weddingId, can("GIFT_VIEW"));
-  const giftQrGate = weddingPlan.data && !weddingPlan.isError
-    ? planEntitlementState(weddingPlan.data, "giftQr")
-    : null;
+  const giftQrGate =
+    weddingPlan.data && !weddingPlan.isError
+      ? planEntitlementState(weddingPlan.data, "giftQr")
+      : null;
   const [pageNumber, setPageNumber] = useState(1);
   const [search, setSearch] = useState("");
   const [bankBin, setBankBin] = useState("");
@@ -90,6 +94,35 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
     mutationFn: (id: string) => removeGiftAccount(api, weddingId, id),
     onSuccess: refresh,
     onError: () => setError(t("deleteAccountFailed")),
+  });
+  const display = useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      showInInvitation: boolean;
+      label?: string | null;
+    }) => setGiftAccountDisplay(api, weddingId, id, body),
+    onMutate: async (input) => {
+      const queryKey = ["gift-accounts", weddingId];
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<GiftBankAccount[]>(queryKey);
+      queryClient.setQueryData<GiftBankAccount[]>(queryKey, (current) =>
+        current?.map((account) =>
+          account.id === input.id
+            ? { ...account, showInInvitation: input.showInInvitation, label: input.label ?? null }
+            : account,
+        ),
+      );
+      return { previous };
+    },
+    onSuccess: refresh,
+    onError: (_error, _input, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(["gift-accounts", weddingId], context.previous);
+      setError(t("displaySaveFailed"));
+    },
   });
   const bankHubError = (cause: unknown) =>
     setError(
@@ -206,6 +239,12 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
         <div>
           <h2 className="font-semibold">{t("accountsTitle")}</h2>
           <p className="text-sm text-muted-foreground">{t("accountLimit")}</p>
+          <Link
+            className="mt-2 inline-block text-sm text-primary underline"
+            href={`/weddings/${weddingId}/studio`}
+          >
+            {t("configureInStudio")}
+          </Link>
         </div>
         {editable && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-3">
@@ -243,7 +282,27 @@ export function CoupleGiftManager({ weddingId }: { weddingId: string }) {
               )}
             </span>
             {editable && (
-              <span className="flex gap-2">
+              <span className="flex flex-wrap items-center gap-2">
+                <select
+                  aria-label={t("accountDisplayLabel", { name: account.accountName })}
+                  className="max-w-36 rounded border bg-background p-2 text-xs"
+                  value={account.label ?? ""}
+                  disabled={display.isPending}
+                  onChange={(event) =>
+                    display.mutate({
+                      id: account.id,
+                      showInInvitation: account.showInInvitation,
+                      label: event.target.value || null,
+                    })
+                  }
+                >
+                  <option value="">{account.accountName}</option>
+                  <option value={t("bride")}>{t("bride")}</option>
+                  <option value={t("groom")}>{t("groom")}</option>
+                  {account.label && ![t("bride"), t("groom")].includes(account.label) && (
+                    <option value={account.label}>{account.label}</option>
+                  )}
+                </select>
                 {account.bankHubLinked && (
                   <Button
                     type="button"

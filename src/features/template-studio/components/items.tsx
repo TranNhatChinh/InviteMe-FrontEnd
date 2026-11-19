@@ -7,6 +7,9 @@ import { WordingPreviewContext } from "./wording-preview";
 import { resolveStudioText } from "./wording-text";
 
 export type ItemProps = {
+  gift?: import("../schemas/document").GiftSettings;
+  particles?: import("./particle-settings").ParticleEffect;
+  music?: import("@/shared/api/music.api").MusicSettings;
   cover?: import("./invitation-cover").CoverConfig;
   revealPreset?: "none" | "fade" | "slide-up" | "scale-in";
   revealDuration?: number;
@@ -26,6 +29,7 @@ export type ItemProps = {
   timezone?: "Asia/Ho_Chi_Minh" | "UTC";
   fontFamily?: "Arial" | "Georgia" | "EB Garamond";
   background?: string;
+  backgroundGradient?: string;
   accent?: string;
   title?: string;
   bold?: boolean;
@@ -215,12 +219,14 @@ export function StudioFrame({
   width = 480,
   height = 760,
   src,
+  backgroundGradient,
 }: {
   children?: ReactNode;
   background?: string;
   width?: number;
   height?: number;
   src?: string;
+  backgroundGradient?: string;
 }) {
   const {
     connectors: { connect },
@@ -236,9 +242,9 @@ export function StudioFrame({
         width,
         height,
         background,
-        backgroundImage: src ? `url(${src})` : undefined,
+        backgroundImage: src ? `url(${src})` : backgroundGradient,
         backgroundSize: "100% auto",
-        backgroundBlendMode: "multiply",
+        backgroundBlendMode: src ? "multiply" : "normal",
         boxShadow: "0 12px 50px #00000012",
         flexShrink: 0,
       }}

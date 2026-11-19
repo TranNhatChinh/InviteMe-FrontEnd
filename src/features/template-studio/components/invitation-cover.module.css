@@ -20,20 +20,6 @@
   background: linear-gradient(90deg, transparent, #ffffff60, transparent);
   animation: shine 3s ease-in-out infinite;
 }
-.particles {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  color: #d4b776;
-}
-.particles span {
-  position: absolute;
-  top: -12%;
-  font-size: 18px;
-  animation: drift 10s linear infinite;
-  opacity: 0;
-}
 .symbolLeft,
 .symbolRight {
   position: absolute;
@@ -84,21 +70,6 @@
     translate: 400% 0;
   }
 }
-@keyframes drift {
-  0% {
-    translate: 0 0;
-    opacity: 0;
-  }
-  15%,
-  80% {
-    opacity: 0.35;
-  }
-  100% {
-    translate: var(--drift) 650px;
-    rotate: 160deg;
-    opacity: 0;
-  }
-}
 @keyframes sealBreak {
   30% {
     scale: 1.2;
@@ -137,7 +108,6 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .particles,
   .button::after {
     display: none;
   }

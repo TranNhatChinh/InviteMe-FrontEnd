@@ -15,6 +15,7 @@ export type WorkspaceNavigationIcon =
   | "users"
   | "weddings"
   | "templates"
+  | "music"
   | "permissions"
   | "audit"
   | "plans"

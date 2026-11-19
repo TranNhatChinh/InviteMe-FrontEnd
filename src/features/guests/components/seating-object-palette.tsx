@@ -1,16 +1,15 @@
 "use client";
 
 import {
-  Armchair,
   DoorOpen,
   Gift,
   Layers,
   Music2,
   PanelTop,
-  RectangleHorizontal,
   MoveVertical,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
 
@@ -28,6 +27,30 @@ export type SeatingCanvasObject = {
   point?: { x: number; y: number };
   kind: SeatingObjectKind | "brideArea" | "groomArea";
 };
+
+const paletteImages = {
+  table: "round-table",
+  brideArea: "bride-area",
+  groomArea: "groom-area",
+  aisle: "aisle",
+  stage: "stage",
+  danceFloor: "dance-floor",
+  giftTable: "gift-table",
+  entrance: "entrance",
+} as const;
+
+function PaletteIllustration({ kind }: { kind: keyof typeof paletteImages }) {
+  return (
+    <Image
+      src={`/images/seating/palette/${paletteImages[kind]}.webp`}
+      alt=""
+      width={64}
+      height={64}
+      draggable={false}
+      className="size-14 shrink-0 object-contain"
+    />
+  );
+}
 
 export function SeatingObjectPalette({
   onTable,
@@ -49,7 +72,7 @@ export function SeatingObjectPalette({
     },
   });
   const tile =
-    "flex min-h-20 min-w-0 flex-col items-center justify-center gap-2 rounded-lg p-1 text-center text-xs hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50";
+    "flex min-h-24 min-w-0 flex-col items-center justify-start gap-2 rounded-lg p-1 text-center text-xs leading-4 hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50";
   return (
     <section className="space-y-6 bg-card p-5 sm:p-6 " aria-label={t("addObjects")}>
       <div className="flex items-center justify-between gap-2">
@@ -74,9 +97,7 @@ export function SeatingObjectPalette({
             disabled={tableDisabled}
             onClick={onTable}
           >
-            <span className="grid size-12 place-items-center rounded-xl bg-rose-100 text-rose-800">
-              <Armchair className="size-7" />
-            </span>
+            <PaletteIllustration kind="table" />
             {t("roundTable")}
           </button>
         </div>
@@ -92,7 +113,7 @@ export function SeatingObjectPalette({
               {...dragItem(kind)}
               onClick={() => onObject(kind)}
             >
-              <RectangleHorizontal aria-hidden="true" className="size-6 text-primary" />
+              <PaletteIllustration kind={kind} />
               {t(kind)}
             </button>
           ))}
@@ -100,17 +121,11 @@ export function SeatingObjectPalette({
       </div>
       <div className="space-y-2">
         {(["danceFloor", "giftTable", "entrance"] as const).map((kind) => {
-          const Icon = seatingObjectIcons[kind];
           const heading = {
             danceFloor: "entertainment",
             giftTable: "eventTables",
             entrance: "entrances",
           } as const;
-          const color = {
-            danceFloor: "bg-sky-100 text-sky-900",
-            giftTable: "bg-amber-100 text-amber-900",
-            entrance: "bg-emerald-100 text-emerald-900",
-          };
           return (
             <div key={kind} className="space-y-2 pb-3">
               <h3 className="text-sm font-medium">{t(heading[kind])}</h3>
@@ -121,9 +136,7 @@ export function SeatingObjectPalette({
                   {...dragItem(kind)}
                   onClick={() => onObject(kind)}
                 >
-                  <span className={`grid size-12 place-items-center rounded-xl ${color[kind]}`}>
-                    <Icon className="size-7" />
-                  </span>
+                  <PaletteIllustration kind={kind} />
                   {t(kind)}
                 </button>
               </div>

@@ -1,5 +1,5 @@
 "use client";
-import { useContext, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import styles from "./invitation-cover.module.css";
 import { WordingPreviewContext } from "./wording-preview";
 import { resolveCoverGreeting } from "./wording-text";
@@ -19,10 +19,12 @@ export function InvitationCover({
   config,
   onOpen,
   editing = false,
+  onStart,
 }: {
   config: CoverConfig;
   onOpen: () => void;
   editing?: boolean;
+  onStart?: () => void;
 }) {
   const [opening, setOpening] = useState(false);
   const wordingPreview = useContext(WordingPreviewContext);
@@ -42,11 +44,11 @@ export function InvitationCover({
   }
   function start() {
     if (opening || editing) return;
+    onStart?.();
     setOpening(true);
     timer.current = setTimeout(finish, 1500);
   }
   const variant = config.style ?? "floral";
-  const particle = config.particles ?? "hearts";
   return (
     <section
       aria-label="Bìa thiệp"
@@ -63,25 +65,6 @@ export function InvitationCover({
         overflow: "auto",
       }}
     >
-      {particle !== "none" && (
-        <div className={styles.particles} aria-hidden="true">
-          {Array.from({ length: 16 }, (_, i) => (
-            <span
-              key={i}
-              style={
-                {
-                  left: `${(i * 37) % 100}%`,
-                  "--drift": `${(i % 2 ? 1 : -1) * (20 + i * 3)}px`,
-                  animationDelay: `-${i * 0.9}s`,
-                  animationDuration: `${8 + (i % 5)}s`,
-                } as CSSProperties
-              }
-            >
-              {particle === "happiness" ? "囍" : particle === "leaves" ? "❧" : "♥"}
-            </span>
-          ))}
-        </div>
-      )}
       <div
         className={`${styles.card} ${opening ? styles.opening : ""}`}
         data-mode={config.opening ?? "seal"}
