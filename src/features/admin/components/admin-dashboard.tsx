@@ -25,6 +25,7 @@ type Metric = { label: string; value: number; detail: string; icon: LucideIcon }
 
 export function AdminDashboard() {
   const { t } = useTranslation("admin");
+  const { t: auditT } = useTranslation("audit");
   const { language } = useLocale();
   const { api } = useRuntime();
   const dashboard = useQuery({
@@ -150,10 +151,17 @@ export function AdminDashboard() {
                         className="flex flex-wrap items-center justify-between gap-3 p-4"
                       >
                         <div>
-                          <p className="font-medium">{item.action.replaceAll("_", " ")}</p>
+                          <p className="font-medium">
+                            {auditT(`actions.${item.action}`, {
+                              defaultValue: auditT("unknownAction"),
+                            })}
+                          </p>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            {item.actorName || item.actorEmail || item.actorType} ·{" "}
-                            {item.entityType}
+                            {item.actorName ||
+                              item.actorEmail ||
+                              auditT(`actors.${item.actorType}`, {
+                                defaultValue: auditT("actors.unknown"),
+                              })}
                             {item.weddingTitle ? ` · ${item.weddingTitle}` : ""}
                           </p>
                         </div>

@@ -135,6 +135,7 @@
   "invalidTemplateJson": "Cấu hình phải là một đối tượng JSON hợp lệ.",
   "auditAction": "Hành động",
   "auditActionPlaceholder": "Ví dụ: GUEST_IMPORTED",
+  "auditAdvancedFilters": "Bộ lọc nâng cao",
   "auditRecordType": "Loại dữ liệu",
   "auditRecordPlaceholder": "Ví dụ: planning_guests",
   "from": "Từ ngày",
@@ -251,8 +252,8 @@
     "ADMIN_RBAC_MANAGE": "Gán bộ quyền nền tảng cho vai trò Admin.",
     "ADMIN_PLANS_MANAGE": "Sửa gói, xử lý đơn, thanh toán, cấp gói và xem doanh thu."
   },
-  "platformAuditTitle": "Nhật ký kiểm toán nền tảng",
-  "platformAuditDescription": "Tra cứu thao tác nhạy cảm. Thông tin cá nhân, token và nội dung riêng tư được lọc khỏi metadata.",
+  "platformAuditTitle": "Lịch sử hoạt động nền tảng",
+  "platformAuditDescription": "Theo dõi các thay đổi quan trọng do quản trị viên và InviteMe thực hiện.",
   "templateManagementTitle": "Mẫu thiệp",
   "templateManagementDescription": "Quản lý danh mục mẫu thiệp. Ẩn mẫu không làm mất các thiệp hiện có."
 }
