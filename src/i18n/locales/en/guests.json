@@ -117,8 +117,11 @@
     }
   },
   "checkIn": {
-    "permissionTitle": "Guest check-in access required",
-    "permissionDescription": "You need permission to manage guest arrivals for this wedding. Opening this screen or looking up a QR code does not record an arrival.",
+    "permissionTitle": "Guest reception access required",
+    "permissionDescription": "You need permission to manage guest arrivals or view the arrival overview for this wedding.",
+    "viewsLabel": "Guest reception views",
+    "deskTab": "Guest check-in",
+    "overviewTab": "Overview",
     "loading": "Loading check-in overview…",
     "title": "Check-in overview",
     "description": "Arrival counts update periodically and when check-in activity changes.",

@@ -117,8 +117,11 @@
     }
   },
   "checkIn": {
-    "permissionTitle": "Cần quyền quản lý đón khách",
-    "permissionDescription": "Bạn cần được cấp quyền quản lý quầy đón khách trong đám cưới này. Tra cứu mã QR chỉ xem thông tin, không tự ghi nhận khách đã đến.",
+    "permissionTitle": "Cần quyền truy cập mục đón khách",
+    "permissionDescription": "Bạn cần được cấp quyền quản lý quầy đón khách hoặc xem tổng quan khách đã đến trong đám cưới này.",
+    "viewsLabel": "Các mục đón khách",
+    "deskTab": "Quầy đón khách",
+    "overviewTab": "Tổng quan",
     "loading": "Đang tải tổng quan đón khách…",
     "title": "Tổng quan đón khách",
     "description": "Số lượng khách đã đến được cập nhật định kỳ và sau mỗi lượt ghi nhận.",
