@@ -146,6 +146,7 @@ function StudioSession({
       <TemplateStudio
         key={generation}
         {...props}
+        resolvedMusic={snapshot.music}
         onUploadImage={async (file) => {
           const media = await uploadWeddingMedia(api, weddingId, file);
           return { src: mediaUrl(media.url) ?? media.url, name: file.name };

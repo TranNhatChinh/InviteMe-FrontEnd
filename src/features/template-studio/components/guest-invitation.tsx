@@ -50,9 +50,11 @@ export function GuestInvitation({ token }: { token: string }) {
     );
   return (
     <Invitation
+      key={JSON.stringify(invitation.data.music ?? null)}
       document={resolveInvitationDocument(invitation.data.document)}
       content={invitation.data.content}
       token={token}
+      music={invitation.data.music}
     />
   );
 }

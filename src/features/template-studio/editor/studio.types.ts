@@ -6,6 +6,7 @@ export type StudioWordingPanel = (controls: {
 }) => ReactNode;
 
 export type TemplateStudioProps = {
+  resolvedMusic?: import("@/shared/api/music.api").InvitationMusic | null;
   initialTemplate?: boolean | string;
   initialPreview?: boolean;
   initialWording?: boolean;

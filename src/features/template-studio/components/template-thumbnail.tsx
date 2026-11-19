@@ -48,7 +48,7 @@ export function TemplateThumbnail({
         overflow: "hidden",
         position: "relative",
         background: root.props.background,
-        backgroundImage: root.props.src ? `url(${root.props.src})` : undefined,
+        backgroundImage: root.props.src ? `url(${root.props.src})` : root.props.backgroundGradient,
         backgroundSize: "100% auto",
         marginBottom: fluid ? 0 : 12,
       }}

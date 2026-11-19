@@ -3,6 +3,7 @@ import type { ApiClient } from "@/core/api/api-client";
 import { studioDocumentSchema } from "../schemas/document";
 import { resolveMediaUrl } from "@/core/config/media-url";
 import { env } from "@/core/config/env";
+import { invitationMusicSchema } from "@/shared/api/music.api";
 
 type StudioDocument = z.infer<typeof studioDocumentSchema>;
 function mapMedia(document: StudioDocument, mapper: (src: string) => string): StudioDocument {
@@ -36,6 +37,7 @@ const resolveDesign = <T extends { document: StudioDocument | null }>(design: T)
   ({ ...design, document: design.document ? resolveInvitationDocument(design.document) : null });
 
 export const invitationDesignSchema = z.object({
+  music: invitationMusicSchema.nullish(),
   version: z.number().int().nonnegative(), document: studioDocumentSchema.nullable(),
   status: z.enum(["DRAFT", "PUBLISHED"]), hasUnpublishedChanges: z.boolean(),
   wordingVersion: z.number().int().nonnegative(),
@@ -60,6 +62,7 @@ export function saveInvitationDesign(
   }).then(resolveDesign);
 }
 export const publicInvitationSchema = z.object({
+  music: invitationMusicSchema.nullish(),
   document: studioDocumentSchema,
   content: z.string(),
 });

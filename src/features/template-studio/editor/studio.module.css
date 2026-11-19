@@ -595,22 +595,47 @@
   --studio-border: #eedfe3;
 }
 .header {
-  min-height: 68px;
+  min-height: 50px;
   background: #fffdfb;
-  padding: 12px 24px;
+  padding: 8px 16px;
+  gap: 14px;
 }
 .header h1 {
-  font-size: 19px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
   font-weight: 650;
-  letter-spacing: -0.4px;
+  letter-spacing: -0.2px;
+  line-height: 20px;
 }
-.status {
-  font-size: 12px;
+.header .status {
+  font-family: Arial, sans-serif;
+  font-size: 10px;
 }
-.backLink {
+.studioBrand {
+  gap: 7px;
+}
+.studioBrand > span:first-child {
+  width: 24px;
+  height: 24px;
+}
+.studioBrand > span:last-child {
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+@media (max-width: 600px) {
+  .studioBrand > span:last-child {
+    display: none;
+  }
+}
+.header .backLink {
+  font-family: Arial, sans-serif;
   text-decoration: none;
   color: #927780;
-  padding: 8px;
+  padding: 4px 6px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 .backLink:hover {
   color: #a94e6b;
@@ -645,6 +670,72 @@
 .studio .historyButton {
   width: 38px;
   height: 38px;
+}
+.header > .buttons {
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.studio .header .buttons > button {
+  font-family: Arial, sans-serif;
+  min-height: 30px;
+  height: 30px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 20px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.studio .header .saveButton {
+  padding-inline: 12px;
+  box-shadow: none;
+}
+.studio .header .historyButton {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+}
+.header .historyButton svg {
+  width: 14px;
+  height: 14px;
+}
+.studio .header .menuTrigger {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+}
+.header .menuTrigger svg {
+  width: 16px;
+  height: 16px;
+}
+@media (max-width: 900px) {
+  .header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .header h1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .header > .status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+  }
+  .header > .buttons {
+    max-width: min(75vw, calc(100vw - 110px));
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
 }
 .library,
 .panel,
@@ -764,21 +855,21 @@
 }
 
 .studio[data-admin-layout="true"] .header {
-  min-height: 64px;
-  padding: 10px 20px;
+  min-height: 50px;
+  padding: 8px 16px;
   border-color: var(--studio-border);
 }
 
 .studioIdentity {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .studioIdentity a {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   place-items: center;
   border-radius: 8px;
 }
@@ -789,7 +880,7 @@
 
 .studio[data-admin-layout="true"] .header h1 {
   font-family: inherit;
-  font-size: 17px;
+  font-size: 14px;
 }
 
 .studio[data-admin-layout="true"] .header .saveButton {

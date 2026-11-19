@@ -3,8 +3,8 @@
 import { Editor, Element, Frame, useEditor } from "@craftjs/core";
 import Moveable from "react-moveable";
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowLeft, FileText, ZoomIn, ZoomOut } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, FileText, Menu, ZoomIn, ZoomOut } from "lucide-react";
 import {
   useCallback,
   useContext,
@@ -27,7 +27,6 @@ import {
 import {
   Type,
   ImageIcon,
-  Library,
   Shapes,
   Paintbrush,
   Music,
@@ -62,6 +61,8 @@ import {
   StudioWishes,
 } from "../components/invitation-widgets";
 import { InvitationCover } from "../components/invitation-cover";
+import { FallingParticles } from "../components/falling-particles";
+import { resolveParticles } from "../components/particle-settings";
 import { TemplateThumbnail } from "../components/template-thumbnail";
 import { studioTemplates as templateCatalog, findTemplate } from "../templates/catalog";
 import { isValidEventDate } from "../components/date-utils";
@@ -70,6 +71,11 @@ import { resolveInvitationDocument } from "../api/design.api";
 import { PhotoFocusContext, type PhotoFocus } from "../components/photo-focus";
 import styles from "./studio.module.css";
 import { StudioBackups } from "./studio-backups";
+import { BackgroundPanel } from "./background-panel";
+import { EffectsPanel } from "./effects-panel";
+import { MusicPanel } from "./music-panel";
+import { BrandLogo } from "@/shared/components/brand-logo";
+import { ActionMenu } from "@/shared/ui/action-menu";
 import type { TemplateStudioProps } from "./studio.types";
 import { WordingPreviewContext } from "../components/wording-preview";
 import { defaultWordingText, resolveCoverGreeting } from "../components/wording-text";
@@ -99,8 +105,10 @@ function Workspace({
   onPublish,
   onUploadImage,
   loadImages,
+  resolvedMusic,
 }: TemplateStudioProps) {
   const { api } = useRuntime();
+  const router = useRouter();
   const { t } = useTranslation("templateStudio");
   const { language } = useLanguage();
   const {
@@ -111,7 +119,6 @@ function Workspace({
     canRedo,
     items,
     serialized,
-    background,
     frameHeight,
     revealPreset,
     revealDuration,
@@ -131,7 +138,7 @@ function Workspace({
   });
   const { replay } = useContext(RevealReplayContext);
   const [json, setJson] = useState("");
-  const [message, setMessage] = useState(() => t("status.initial"));
+  const [message, setMessage] = useState("");
   const [saving, setSaving] = useState<"draft" | "publish" | null>(null);
   const [templateId, setTemplateId] = useState<string | undefined>(() =>
     initialDocument
@@ -245,6 +252,7 @@ function Workspace({
   }, []);
   const moveable = useRef<Moveable>(null);
   const cover = query.getNodes().ROOT?.data.props.cover as ItemProps["cover"];
+  const particles = resolveParticles(query.getNodes().ROOT?.data.props as ItemProps);
   const editingCover = !preview && category === "cover";
   const showingCover = editingCover || (preview && !!cover?.enabled && !coverOpen);
   const props = (selected?.node?.data.props ?? {}) as ItemProps;
@@ -611,6 +619,30 @@ function Workspace({
     </>
   );
 
+  const navigationMenu = (
+    <ActionMenu
+      label={t("header.navigationMenu")}
+      icon={<Menu size={16} aria-hidden="true" />}
+      triggerClassName={styles.menuTrigger}
+      align="start"
+      items={[
+        ...(backHref
+          ? [
+              {
+                label: adminLayout?.backLabel ?? t("header.backWedding"),
+                onSelect: () => router.push(backHref),
+              },
+            ]
+          : []),
+        {
+          label: adminLayout ? t("header.adminHome") : t("library.weddingList"),
+          onSelect: () => router.push(adminLayout ? "/admin" : "/weddings"),
+        },
+        { label: t("header.home"), onSelect: () => router.push("/") },
+      ]}
+    />
+  );
+
   return (
     <WordingPreviewContext value={wordingPreview}>
       <main
@@ -626,9 +658,11 @@ function Workspace({
           } as CSSProperties
         }
       >
+        <FallingParticles effect={particles} />
         <header className={styles.header} hidden={preview}>
           {adminLayout && backHref ? (
             <div className={styles.studioIdentity}>
+              {navigationMenu}
               <Link
                 href={backHref}
                 aria-label={adminLayout.backLabel}
@@ -636,22 +670,21 @@ function Workspace({
               >
                 <ArrowLeft size={20} />
               </Link>
-              <Image src="/images/brand/inviteme-mark.png" width={30} height={30} alt="" />
-              <h1>InviteMe Studio</h1>
+              <BrandLogo size="sm" className={styles.studioBrand} />
+              <h1 className="sr-only">InviteMe Studio</h1>
               <div className={styles.buttons}>{historyButtons}</div>
             </div>
           ) : (
-            <h1>{t("header.title")}</h1>
+            <div className={styles.studioIdentity}>
+              {navigationMenu}
+              <BrandLogo size="sm" className={styles.studioBrand} />
+              <h1 className="sr-only">{t("header.title")}</h1>
+            </div>
           )}
           <p className={styles.status} role="status">
             {adminLayout?.status || message}
           </p>
           <div className={styles.buttons}>
-            {backHref && !adminLayout && (
-              <Link href={backHref} className={styles.backLink}>
-                {t("header.backWedding")}
-              </Link>
-            )}
             {backup && onSave && !initialPreview && (
               <StudioBackups
                 key={backup.scope}
@@ -732,12 +765,10 @@ function Workspace({
                 { id: "cover", icon: Mail },
                 { id: "text", icon: Type },
                 { id: "image", icon: ImageIcon },
-                { id: "stock", icon: Library },
                 { id: "shapes", icon: Shapes },
                 { id: "background", icon: Paintbrush },
                 { id: "music", icon: Music },
                 { id: "utilities", icon: CalendarDays },
-                { id: "presets", icon: Mail },
                 { id: "templates", icon: LayoutTemplate },
                 { id: "effects", icon: WandSparkles },
                 { id: "layers", icon: Layers },
@@ -921,20 +952,14 @@ function Workspace({
                 </>
               )}
               {category === "background" && (
-                <>
-                  <h2>{t("library.designBackground")}</h2>
-                  <ColorControl
-                    key={`background-${background}`}
-                    label={t("library.frameBackground")}
-                    value={background}
-                    disabled={preview}
-                    onChange={(color) =>
-                      actions.setProp("ROOT", (value) => {
-                        value.background = color;
-                      })
-                    }
-                  />
-                </>
+                <BackgroundPanel
+                  value={query.getNodes().ROOT?.data.props as ItemProps}
+                  disabled={preview}
+                  onUpload={onUploadImage}
+                  onChange={(patch) =>
+                    actions.setProp("ROOT", (value: ItemProps) => Object.assign(value, patch))
+                  }
+                />
               )}
               {category === "templates" && (
                 <>
@@ -1069,9 +1094,10 @@ function Workspace({
                       <label>
                         {t("library.backgroundEffect")}
                         <select
-                          value={cover.particles ?? "hearts"}
+                          value={particles}
                           onChange={(event) =>
                             actions.setProp("ROOT", (value: ItemProps) => {
+                              value.particles = event.target.value as ItemProps["particles"];
                               if (value.cover)
                                 value.cover.particles = event.target.value as NonNullable<
                                   ItemProps["cover"]
@@ -1163,7 +1189,23 @@ function Workspace({
                 )}
               </div>
               {category === "effects" && (
-                <>
+                <EffectsPanel
+                  cover={cover}
+                  particles={particles}
+                  onParticlesChange={(effect) =>
+                    actions.setProp("ROOT", (value: ItemProps) => {
+                      value.particles = effect;
+                      if (value.cover) value.cover.particles = effect;
+                    })
+                  }
+                  disabled={preview}
+                  onOpenCover={() => setCategory("cover")}
+                  onCoverChange={(patch) =>
+                    actions.setProp("ROOT", (value: ItemProps) => {
+                      if (value.cover) Object.assign(value.cover, patch);
+                    })
+                  }
+                >
                   <h2>{t("library.wholePageEffects")}</h2>
                   <p>{t("library.wholePageEffectsHelp")}</p>
                   <div className={styles.uploadGrid}>
@@ -1209,9 +1251,21 @@ function Workspace({
                     />
                   </label>
                   <p>{t("library.effectHelp")}</p>
-                </>
+                </EffectsPanel>
               )}
-              {["stock", "shapes", "music"].includes(category) && (
+              {category === "music" && (
+                <MusicPanel
+                  value={query.getNodes().ROOT?.data.props.music}
+                  resolved={resolvedMusic}
+                  disabled={preview}
+                  onChange={(music) =>
+                    actions.setProp("ROOT", (value: ItemProps) => {
+                      value.music = music;
+                    })
+                  }
+                />
+              )}
+              {["stock", "shapes"].includes(category) && (
                 <>
                   <h2>
                     {
@@ -2308,6 +2362,7 @@ export function TemplateStudio({
   onPublish,
   onUploadImage,
   loadImages,
+  resolvedMusic,
 }: TemplateStudioProps) {
   const [focus, setFocus] = useState<PhotoFocus>(null);
   const [revision, setRevision] = useState(initialPreview ? 1 : 0);
@@ -2349,6 +2404,7 @@ export function TemplateStudio({
             onPublish={onPublish}
             onUploadImage={onUploadImage}
             loadImages={loadImages}
+            resolvedMusic={resolvedMusic}
           />
         </Editor>
       </RevealReplayContext.Provider>

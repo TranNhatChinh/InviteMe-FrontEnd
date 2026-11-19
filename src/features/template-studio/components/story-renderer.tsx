@@ -11,6 +11,8 @@ import { StudioInterview, StudioTimeline } from "./story-widgets";
 import { InvitationCover } from "./invitation-cover";
 import { StudioReveal, RevealPausedContext } from "./reveal";
 import { StudioModeContext } from "./studio-mode-context";
+import { FallingParticles } from "./falling-particles";
+import { resolveParticles } from "./particle-settings";
 
 export function WebsiteStoryRenderer({
   document,
@@ -34,6 +36,7 @@ export function WebsiteStoryRenderer({
   if (!root) return null;
   const cover = root.props.cover;
   const showingCover = !!cover?.enabled && !opened;
+  const particles = resolveParticles(root.props);
 
   return (
     <div
@@ -41,6 +44,7 @@ export function WebsiteStoryRenderer({
       className="template-canvas min-h-screen w-full overflow-x-hidden overflow-y-auto bg-background"
       aria-label="Website đám cưới"
     >
+      <FallingParticles effect={particles} />
       <StudioModeContext.Provider value="website">
         <Editor
           enabled={false}

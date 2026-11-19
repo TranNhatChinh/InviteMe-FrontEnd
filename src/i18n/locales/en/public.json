@@ -1,4 +1,7 @@
 {
+  "musicPlayFailed": "Tap play music to try again.",
+  "musicOn": "Play music",
+  "musicOff": "Pause music",
   "templates": "Templates",
   "features": "Features",
   "pricing": "Pricing",

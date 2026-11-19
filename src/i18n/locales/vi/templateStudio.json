@@ -1,4 +1,50 @@
 {
+  "music": {
+    "cancelLoading": "Dừng tải {{name}}",
+    "retry": "Tải lại thư viện",
+    "enabled": "Bật nhạc trên thiệp",
+    "hidden": "Đã ẩn khỏi thư viện",
+    "pauseTrack": "Tạm dừng {{name}}",
+    "unavailable": "Bài nhạc không khả dụng",
+    "current": "Nhạc đang dùng",
+    "empty": "Chưa có bài nhạc phù hợp.",
+    "remove": "Bỏ nhạc",
+    "playTrack": "Nghe thử {{name}}",
+    "library": "Thư viện nhạc",
+    "use": "Dùng",
+    "search": "Tìm bài hát",
+    "used": "Đang dùng",
+    "loop": "Phát lặp lại",
+    "playFailed": "Không phát được bài này. Thử lại hoặc chọn bài khác.",
+    "volume": "Âm lượng",
+    "loading": "Đang tải thư viện…"
+  },
+  "effectsPanel": {
+    "fallingScope": "Hiệu ứng hiển thị trên thiệp, kể cả sau khi mở bìa.",
+    "showOnInvitation": "Hiện trên thiệp",
+    "effectType": "Kiểu hiệu ứng",
+    "help": "Chọn loại hiệu ứng cho thiệp",
+    "motionHelp": "Chuyển động của phần tử khi cuộn trang",
+    "enableCover": "Bật bìa thiệp để cấu hình hiệu ứng này.",
+    "openingHelp": "Màn chào khách trước khi vào thiệp",
+    "opening": "Hiệu ứng mở màn",
+    "motion": "Hiệu ứng động",
+    "fallingHelp": "Tuyết, hoa, trái tim rơi trên thiệp",
+    "coverScope": "Áp dụng trên bìa thiệp trước khi mở.",
+    "falling": "Hiệu ứng rơi"
+  },
+  "backgroundPanel": {
+    "image": "Hình nền",
+    "solid": "Màu trơn",
+    "transparent": "Trong suốt",
+    "removeImage": "Xóa hình nền",
+    "gradientEnd": "Màu kết thúc",
+    "customColor": "Màu tùy chỉnh",
+    "customGradient": "Gradient tùy chỉnh",
+    "color": "Màu nền",
+    "current": "Nền đang dùng",
+    "gradientStart": "Màu bắt đầu"
+  },
   "status": {
     "initial": "Dữ liệu thử nghiệm · chưa lưu vào máy chủ",
     "imagesLoadFailed": "Không tải được thư viện ảnh.",
@@ -28,6 +74,7 @@
     "zoomOut": "Thu nhỏ"
   },
   "backup": {
+    "shortTitle": "Lưu tạm",
     "title": "Bản sao lưu",
     "description": "Xem lại và khôi phục thiết kế đã lưu trong trình duyệt này.",
     "on": "Lưu tạm: Bật",
@@ -52,6 +99,9 @@
     "lastSaved": "Lưu gần nhất: {{time}}"
   },
   "header": {
+    "home": "Trang chủ",
+    "adminHome": "Trang quản trị",
+    "navigationMenu": "Menu điều hướng",
     "backWedding": "Về đám cưới",
     "saving": "Đang lưu…",
     "saveDraft": "Lưu bản nháp",

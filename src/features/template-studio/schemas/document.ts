@@ -1,15 +1,26 @@
 import { z } from "zod";
 import { isValidEventDate } from "../components/date-utils";
+import { musicSettingsSchema } from "@/shared/api/music.api";
+import { particleEffects } from "../components/particle-settings";
 
 const builtinAssetSource = z
   .string()
   .regex(
     /^(?:\/images\/templates\/(?:invite-portrait|story-meadow)\.png|\/images\/template-studio\/minimalism-brown\/[a-z0-9-]+\.webp|\/images\/template-studio\/minimalism-burgundy\/(?:photo\.png|(?:envelope|paper|botanical)\.svg)|\/images\/template-studio\/collection\/[a-z0-9-]+\.(?:webp|svg)|\/images\/template-studio\/story-collection\/[a-z0-9-]+\.(?:webp|svg)|\/images\/template-studio\/story-red-velvet\/photo\.png|\/api\/template-studio\/assets\?id=[a-f0-9-]{36})$/,
   );
-const assetSource = z.string().refine((source) => builtinAssetSource.safeParse(source).success ||
-  source.startsWith("/media/") || /^https?:\/\//.test(source), "Nguồn ảnh không hợp lệ.");
+const assetSource = z
+  .string()
+  .refine(
+    (source) =>
+      builtinAssetSource.safeParse(source).success ||
+      source.startsWith("/media/") ||
+      /^https?:\/\//.test(source),
+    "Nguồn ảnh không hợp lệ.",
+  );
 const props = z
   .object({
+    music: musicSettingsSchema.optional(),
+    particles: z.enum(particleEffects).optional(),
     cover: z
       .object({
         enabled: z.boolean(),
@@ -88,7 +99,11 @@ const props = z
       .optional(),
     background: z
       .string()
-      .regex(/^#[0-9a-f]{6}$/i)
+      .regex(/^(?:#[0-9a-f]{6}|transparent)$/i)
+      .optional(),
+    backgroundGradient: z
+      .string()
+      .regex(/^linear-gradient\(135deg, #[0-9a-f]{6}, #[0-9a-f]{6}\)$/i)
       .optional(),
     src: assetSource.optional(),
   })
@@ -152,6 +167,8 @@ export const studioDocumentSchema = z
     )
       invalid();
     for (const [id, item] of Object.entries(nodes)) {
+      if (item.props.music && id !== "ROOT") invalid();
+      if (item.props.particles !== undefined && id !== "ROOT") invalid();
       if (item.props.textBinding && item.type.resolvedName !== "StudioText") invalid();
       if (id === "ROOT") continue;
       if (

@@ -1,4 +1,50 @@
 {
+  "music": {
+    "cancelLoading": "Cancel loading {{name}}",
+    "retry": "Reload library",
+    "enabled": "Enable invitation music",
+    "hidden": "Hidden from the library",
+    "pauseTrack": "Pause {{name}}",
+    "unavailable": "Track unavailable",
+    "current": "Current music",
+    "empty": "No matching tracks.",
+    "remove": "Remove music",
+    "playTrack": "Preview {{name}}",
+    "library": "Music library",
+    "use": "Use",
+    "search": "Search songs",
+    "used": "Selected",
+    "loop": "Loop playback",
+    "playFailed": "Unable to play this track. Try again or choose another.",
+    "volume": "Volume",
+    "loading": "Loading music…"
+  },
+  "effectsPanel": {
+    "fallingScope": "Effects stay visible on the invitation after opening the cover.",
+    "showOnInvitation": "Show on invitation",
+    "effectType": "Effect type",
+    "help": "Choose an effect for your invitation",
+    "motionHelp": "Animate elements while scrolling",
+    "enableCover": "Enable the invitation cover to configure this effect.",
+    "openingHelp": "Welcome guests before opening the invitation",
+    "opening": "Opening effects",
+    "motion": "Motion effects",
+    "fallingHelp": "Snow, flowers and hearts falling over the invitation",
+    "coverScope": "Applies to the cover before opening.",
+    "falling": "Falling effects"
+  },
+  "backgroundPanel": {
+    "image": "Background image",
+    "solid": "Solid color",
+    "transparent": "Transparent",
+    "removeImage": "Remove background image",
+    "gradientEnd": "End color",
+    "customColor": "Custom color",
+    "customGradient": "Custom gradient",
+    "color": "Background color",
+    "current": "Current background",
+    "gradientStart": "Start color"
+  },
   "status": {
     "initial": "Sample data · not saved to the server",
     "imagesLoadFailed": "Couldn't load the image library.",
@@ -28,6 +74,7 @@
     "zoomOut": "Zoom out"
   },
   "backup": {
+    "shortTitle": "Local backup",
     "title": "Backups",
     "description": "Review and restore designs saved in this browser.",
     "on": "Local autosave: On",
@@ -53,6 +100,9 @@
     "count_one": "{{count}} backup"
   },
   "header": {
+    "home": "Home",
+    "adminHome": "Administration",
+    "navigationMenu": "Navigation menu",
     "backWedding": "Back to wedding",
     "saving": "Saving…",
     "saveDraft": "Save draft",

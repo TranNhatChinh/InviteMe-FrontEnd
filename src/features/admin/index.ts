@@ -8,3 +8,4 @@ export { adminApi } from "./api/admin.api";
 export { AdminStoryTemplates } from "./components/admin-story-templates";
 export { AdminUsers } from "./components/admin-users";
 export { AdminWeddings } from "./components/admin-weddings";
+export { AdminMusic } from "./components/admin-music";
