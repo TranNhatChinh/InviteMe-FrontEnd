@@ -68,18 +68,34 @@
     "backHome": "Về trang chủ",
     "eyebrow": "BỘ SƯU TẬP THIẾT KẾ",
     "titleInvite": "Các mẫu thiệp mời",
-    "titleStory": "Các mẫu Wedding Story",
+    "titleStory": "Mẫu website đám cưới",
     "titleAll": "Khám phá mẫu thiết kế",
     "subtitleStory": "Kể chuyện của hai bạn qua ảnh và những chương kỷ niệm.",
     "subtitle": "Xem trước thiết kế, chọn cách thể hiện ngày vui của hai bạn.",
     "tabsAria": "Nhóm mẫu thiết kế",
     "all": "Tất cả",
-    "note": "Ảnh AI hư cấu · Thiết kế chỉnh được trong editor · Demo không lưu phản hồi.",
+    "inviteTab": "Thiệp cưới",
+    "note": "Bản xem trước sử dụng dữ liệu minh họa. Chọn đám cưới để chỉnh sửa mẫu website.",
     "viewTemplateAria": "Xem mẫu {{name}}",
     "customizable": "Tùy chỉnh",
-    "viewDemo": "Xem demo",
+    "viewDemo": "Xem thử",
     "useTemplate": "Dùng mẫu",
-    "count": "{{count}} mẫu có thể chỉnh trong editor. Lưu thiết kế vào tài khoản chưa được kết nối."
+    "count": "{{count}} mẫu có thể chỉnh trong editor. Lưu thiết kế vào tài khoản chưa được kết nối.",
+    "websiteTab": "Mẫu website đám cưới",
+    "loadError": "Không tải được mẫu thiệp. Vui lòng tải lại trang.",
+    "websiteLoadError": "Không tải được mẫu website.",
+    "retry": "Thử lại",
+    "loadingWebsites": "Đang tải mẫu website…",
+    "loadingInvitations": "Đang tải mẫu thiệp…",
+    "totalTemplates": "{{count}} mẫu thiết kế",
+    "chooseWedding": "Chọn đám cưới",
+    "websitePreviewNote": "Bản xem trước dùng thông tin minh họa. Chọn đám cưới rồi chọn mẫu trong Website Builder.",
+    "previewError": "Không thể hiển thị bản xem trước của mẫu này.",
+    "noWebsites": "Chưa có mẫu website được xuất bản.",
+    "previewSample": "Đây là bản xem thử với thông tin minh họa.",
+    "previewViewport": "Kích thước xem thử",
+    "desktop": "Máy tính",
+    "mobile": "Điện thoại"
   },
   "storyTemplates": {
     "actionFailed": "Thao tác thất bại.",
@@ -125,9 +141,15 @@
     "libraryArea": "Thư viện đang dùng",
     "archiveArea": "Kho lưu trữ",
     "archiveCategoriesLabel": "Phân loại trong kho lưu trữ",
-    "archiveCategories": { "archived": "Mẫu đã lưu trữ", "draft": "Bản nháp" },
+    "archiveCategories": {
+      "archived": "Mẫu đã lưu trữ",
+      "draft": "Bản nháp"
+    },
     "emptyLibrary": "Chưa có mẫu được xuất bản trong thư viện.",
-    "emptyArchive": { "archived": "Chưa có mẫu lưu trữ.", "draft": "Chưa có bản nháp." },
+    "emptyArchive": {
+      "archived": "Chưa có mẫu lưu trữ.",
+      "draft": "Chưa có bản nháp."
+    },
     "exportSelected": "Xuất mẫu ({{count}})",
     "import": "Nhập mẫu",
     "importFile": "Chọn file JSON mẫu website",
@@ -149,7 +171,11 @@
     "categoryLabel": "Phong cách",
     "categoryPlaceholder": "Ví dụ: Vườn hoa, Tối giản",
     "accessLabel": "Quyền lợi gói",
-    "access": { "unclassified": "Chưa phân loại", "free": "Miễn phí", "premium": "Premium" },
+    "access": {
+      "unclassified": "Chưa phân loại",
+      "free": "Miễn phí",
+      "premium": "Premium"
+    },
     "newTemplate": "Mẫu mới",
     "untitled": "Mẫu chưa có tên",
     "draft": "Bản nháp",
@@ -159,19 +185,49 @@
     "guestExperienceTitle": "Trải nghiệm khách mời mặc định",
     "guestExperienceHelp": "Đây là thiết lập ban đầu cho website mới dùng mẫu. Chủ tiệc có thể thay đổi cho từng đám cưới.",
     "guestToolsLabel": "Nút tiện ích (tối đa 4)",
-    "guestTools": { "rsvp": "Xác nhận tham dự", "calendar": "Thêm vào lịch", "gift": "Quà mừng", "wishes": "Gửi lời chúc", "share": "Chia sẻ website" },
+    "guestTools": {
+      "rsvp": "Xác nhận tham dự",
+      "calendar": "Thêm vào lịch",
+      "gift": "Quà mừng",
+      "wishes": "Gửi lời chúc",
+      "share": "Chia sẻ website"
+    },
     "guestDecorationLabel": "Hiệu ứng trang trí mặc định",
-    "guestDecorations": { "none": "Không hiệu ứng", "petals": "Cánh hoa rơi", "sparkles": "Ánh sáng lấp lánh", "hearts": "Trái tim bay nhẹ", "fireflies": "Đom đóm phát sáng" },
+    "guestDecorations": {
+      "none": "Không hiệu ứng",
+      "petals": "Cánh hoa rơi",
+      "sparkles": "Ánh sáng lấp lánh",
+      "hearts": "Trái tim bay nhẹ",
+      "fireflies": "Đom đóm phát sáng"
+    },
     "guestIntensityLabel": "Mức độ hiệu ứng",
-    "guestIntensities": { "light": "Nhẹ", "medium": "Vừa", "vivid": "Nổi bật" },
+    "guestIntensities": {
+      "light": "Nhẹ",
+      "medium": "Vừa",
+      "vivid": "Nổi bật"
+    },
     "sectionStyleTitle": "Cách trình bày phần này",
     "sectionStyleHelp": "Điều chỉnh nền, khoảng cách và hiệu ứng riêng để mỗi phần có cá tính phù hợp với mẫu.",
     "sectionBackground": "Nền của phần",
-    "sectionBackgrounds": { "default": "Theo nền chung", "soft": "Hồng dịu", "accent": "Màu nhấn nhẹ" },
+    "sectionBackgrounds": {
+      "default": "Theo nền chung",
+      "soft": "Hồng dịu",
+      "accent": "Màu nhấn nhẹ"
+    },
     "sectionSpacing": "Khoảng cách",
-    "sectionSpacings": { "compact": "Gọn", "normal": "Tiêu chuẩn", "spacious": "Thoáng" },
+    "sectionSpacings": {
+      "compact": "Gọn",
+      "normal": "Tiêu chuẩn",
+      "spacious": "Thoáng"
+    },
     "sectionAnimation": "Hiệu ứng xuất hiện",
-    "sectionAnimations": { "none": "Không dùng", "fade": "Mờ dần nhẹ", "rise": "Hiện nhẹ khi cuộn", "stagger": "Hiện lần lượt", "zoom": "Thu phóng nhẹ" },
+    "sectionAnimations": {
+      "none": "Không dùng",
+      "fade": "Mờ dần nhẹ",
+      "rise": "Hiện nhẹ khi cuộn",
+      "stagger": "Hiện lần lượt",
+      "zoom": "Thu phóng nhẹ"
+    },
     "defaultsTitle": "Nội dung mặc định",
     "defaultContentHelp": "Mẫu lưu nội dung mặc định và cách hiển thị. Tên, ngày giờ, địa điểm, ảnh và thông tin quà riêng do Couple cung cấp.",
     "defaultTitleLabel": "Tiêu đề mặc định",
@@ -181,7 +237,12 @@
     "defaultSubmitLabel": "Nhãn nút RSVP",
     "heroCtaLabel": "Nhãn nút chính",
     "heroOverlayLabel": "Độ phủ ảnh nền",
-    "heroOverlayOptions": { "template": "Theo bố cục mẫu", "none": "Không phủ", "soft": "Nhẹ", "strong": "Đậm" },
+    "heroOverlayOptions": {
+      "template": "Theo bố cục mẫu",
+      "none": "Không phủ",
+      "soft": "Nhẹ",
+      "strong": "Đậm"
+    },
     "countdownOptionsTitle": "Tùy chọn đếm ngược",
     "countdownOptionsHelp": "Mặc định cho website mới; ngày đích vẫn lấy từ sự kiện của đám cưới.",
     "countdownShowSeconds": "Hiện số giây",
@@ -198,8 +259,16 @@
     "removeSection": "Xóa section khỏi mẫu",
     "addSectionPrompt": "Chọn section",
     "themeHelp": "Màu nền và màu chữ được kiểm tra tương phản khi lưu.",
-    "colors": { "primary": "Màu chính", "background": "Nền", "accent": "Điểm nhấn", "text": "Chữ" },
-    "fonts": { "fontHeading": "Phông chữ tiêu đề", "fontBody": "Phông chữ nội dung" },
+    "colors": {
+      "primary": "Màu chính",
+      "background": "Nền",
+      "accent": "Điểm nhấn",
+      "text": "Chữ"
+    },
+    "fonts": {
+      "fontHeading": "Phông chữ tiêu đề",
+      "fontBody": "Phông chữ nội dung"
+    },
     "paletteName": "Tên bảng màu",
     "removePalette": "Xóa bảng màu",
     "newPalette": "Bảng màu mới",
@@ -209,7 +278,11 @@
     "previewImage": "Ảnh đại diện mẫu",
     "previewImageHelp": "Đường dẫn ảnh trong thư viện website; để trống nếu không dùng.",
     "previewFor": "Đang xem {{version}}",
-    "viewports": { "desktop": "Desktop", "tablet": "Tablet", "mobile": "Điện thoại" },
+    "viewports": {
+      "desktop": "Desktop",
+      "tablet": "Tablet",
+      "mobile": "Điện thoại"
+    },
     "previewSize": "Kích thước xem trước",
     "previewExpand": "Mở rộng xem trước",
     "previewModalDescription": "Cuộn để xem toàn bộ trang và đổi thiết bị ngay tại đây.",

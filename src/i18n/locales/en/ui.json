@@ -68,18 +68,34 @@
     "backHome": "Back to home",
     "eyebrow": "DESIGN COLLECTION",
     "titleInvite": "Invitation templates",
-    "titleStory": "Wedding Story templates",
+    "titleStory": "Wedding website templates",
     "titleAll": "Explore designs",
     "subtitleStory": "Tell your story through photos and memorable chapters.",
     "subtitle": "Preview designs and choose how to present your big day.",
     "tabsAria": "Template categories",
     "all": "All",
-    "note": "Fictional AI photos · Editable in the editor · Demos don't save responses.",
+    "inviteTab": "Wedding invitations",
+    "note": "Previews use sample information. Choose a wedding to edit a website template.",
     "viewTemplateAria": "View template {{name}}",
     "customizable": "Customizable",
-    "viewDemo": "View demo",
+    "viewDemo": "Preview",
     "useTemplate": "Use template",
-    "count": "{{count}} templates you can edit in the editor. Saving designs to your account isn't connected yet."
+    "count": "{{count}} templates you can edit in the editor. Saving designs to your account isn't connected yet.",
+    "websiteTab": "Wedding website templates",
+    "loadError": "Could not load invitation templates. Please reload the page.",
+    "websiteLoadError": "Could not load website templates.",
+    "retry": "Try again",
+    "loadingWebsites": "Loading website templates…",
+    "loadingInvitations": "Loading invitation templates…",
+    "totalTemplates": "{{count}} templates",
+    "chooseWedding": "Choose a wedding",
+    "websitePreviewNote": "This preview uses sample details. Choose a wedding, then select the template in Website Builder.",
+    "previewError": "Unable to display this template preview.",
+    "noWebsites": "No published website templates yet.",
+    "previewSample": "This preview uses sample information.",
+    "previewViewport": "Preview viewport",
+    "desktop": "Desktop",
+    "mobile": "Mobile"
   },
   "storyTemplates": {
     "actionFailed": "Action failed.",
@@ -125,9 +141,15 @@
     "libraryArea": "Active library",
     "archiveArea": "Archive",
     "archiveCategoriesLabel": "Archive categories",
-    "archiveCategories": { "archived": "Archived templates", "draft": "Drafts" },
+    "archiveCategories": {
+      "archived": "Archived templates",
+      "draft": "Drafts"
+    },
     "emptyLibrary": "There are no published templates in the library yet.",
-    "emptyArchive": { "archived": "No archived templates.", "draft": "No drafts." },
+    "emptyArchive": {
+      "archived": "No archived templates.",
+      "draft": "No drafts."
+    },
     "exportSelected": "Export templates ({{count}})",
     "import": "Import templates",
     "importFile": "Choose a website template JSON file",
@@ -149,7 +171,11 @@
     "categoryLabel": "Style",
     "categoryPlaceholder": "For example: Garden, Minimal",
     "accessLabel": "Plan access",
-    "access": { "unclassified": "Unclassified", "free": "Free", "premium": "Premium" },
+    "access": {
+      "unclassified": "Unclassified",
+      "free": "Free",
+      "premium": "Premium"
+    },
     "newTemplate": "New template",
     "untitled": "Untitled template",
     "draft": "Draft",
@@ -159,19 +185,49 @@
     "guestExperienceTitle": "Guest experience defaults",
     "guestExperienceHelp": "These settings are prefilled for new websites using this template. Couples can change them for each wedding.",
     "guestToolsLabel": "Utility buttons (up to 4)",
-    "guestTools": { "rsvp": "RSVP", "calendar": "Add to calendar", "gift": "Gift", "wishes": "Send a wish", "share": "Share website" },
+    "guestTools": {
+      "rsvp": "RSVP",
+      "calendar": "Add to calendar",
+      "gift": "Gift",
+      "wishes": "Send a wish",
+      "share": "Share website"
+    },
     "guestDecorationLabel": "Default decoration effect",
-    "guestDecorations": { "none": "No effect", "petals": "Falling petals", "sparkles": "Soft sparkles", "hearts": "Floating hearts", "fireflies": "Soft fireflies" },
+    "guestDecorations": {
+      "none": "No effect",
+      "petals": "Falling petals",
+      "sparkles": "Soft sparkles",
+      "hearts": "Floating hearts",
+      "fireflies": "Soft fireflies"
+    },
     "guestIntensityLabel": "Effect intensity",
-    "guestIntensities": { "light": "Light", "medium": "Medium", "vivid": "Vivid" },
+    "guestIntensities": {
+      "light": "Light",
+      "medium": "Medium",
+      "vivid": "Vivid"
+    },
     "sectionStyleTitle": "Section presentation",
     "sectionStyleHelp": "Adjust the background, spacing and motion of this section to give each template its own character.",
     "sectionBackground": "Section background",
-    "sectionBackgrounds": { "default": "Use site background", "soft": "Soft pink", "accent": "Subtle accent" },
+    "sectionBackgrounds": {
+      "default": "Use site background",
+      "soft": "Soft pink",
+      "accent": "Subtle accent"
+    },
     "sectionSpacing": "Spacing",
-    "sectionSpacings": { "compact": "Compact", "normal": "Standard", "spacious": "Spacious" },
+    "sectionSpacings": {
+      "compact": "Compact",
+      "normal": "Standard",
+      "spacious": "Spacious"
+    },
     "sectionAnimation": "Entrance effect",
-    "sectionAnimations": { "none": "None", "fade": "Gentle fade", "rise": "Reveal on scroll", "stagger": "Staggered reveal", "zoom": "Soft zoom" },
+    "sectionAnimations": {
+      "none": "None",
+      "fade": "Gentle fade",
+      "rise": "Reveal on scroll",
+      "stagger": "Staggered reveal",
+      "zoom": "Soft zoom"
+    },
     "defaultsTitle": "Default content",
     "defaultContentHelp": "Templates store shared copy and presentation defaults. Couple names, dates, venues, photos and gift details are provided by each couple.",
     "defaultTitleLabel": "Default title",
@@ -181,7 +237,12 @@
     "defaultSubmitLabel": "RSVP button label",
     "heroCtaLabel": "Primary button label",
     "heroOverlayLabel": "Cover image overlay",
-    "heroOverlayOptions": { "template": "Use template layout", "none": "None", "soft": "Soft", "strong": "Strong" },
+    "heroOverlayOptions": {
+      "template": "Use template layout",
+      "none": "None",
+      "soft": "Soft",
+      "strong": "Strong"
+    },
     "countdownOptionsTitle": "Countdown options",
     "countdownOptionsHelp": "Defaults for new websites; the target date still comes from the wedding event.",
     "countdownShowSeconds": "Show seconds",
@@ -204,7 +265,10 @@
       "accent": "Accent",
       "text": "Text"
     },
-    "fonts": { "fontHeading": "Heading font", "fontBody": "Body font" },
+    "fonts": {
+      "fontHeading": "Heading font",
+      "fontBody": "Body font"
+    },
     "paletteName": "Palette name",
     "removePalette": "Remove palette",
     "newPalette": "New palette",
@@ -214,7 +278,11 @@
     "previewImage": "Template cover image",
     "previewImageHelp": "Image path from the website image library; leave empty if unused.",
     "previewFor": "Previewing {{version}}",
-    "viewports": { "desktop": "Desktop", "tablet": "Tablet", "mobile": "Mobile" },
+    "viewports": {
+      "desktop": "Desktop",
+      "tablet": "Tablet",
+      "mobile": "Mobile"
+    },
     "previewSize": "Preview size",
     "previewExpand": "Expand preview",
     "previewModalDescription": "Scroll through the full page and switch device sizes here.",

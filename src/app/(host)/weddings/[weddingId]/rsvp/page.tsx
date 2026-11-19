@@ -1,17 +1,11 @@
 import { PermissionGuard } from "@/shared/components/permission-guard";
-import { EmptyState } from "@/shared/feedback/empty-state";
-import { HostRsvpDashboard } from "@/features/rsvp";
+import { HostRsvpDashboard, RsvpPermissionFallback } from "@/features/rsvp";
 export default async function Page({ params }: { params: Promise<{ weddingId: string }> }) {
   const { weddingId } = await params;
   return (
     <PermissionGuard
       permission="RSVP_VIEW"
-      fallback={
-        <EmptyState
-          title="Access restricted"
-          description="You do not have permission to view this section."
-        />
-      }
+      fallback={<RsvpPermissionFallback section="responses" />}
     >
       <HostRsvpDashboard weddingId={weddingId} />
     </PermissionGuard>

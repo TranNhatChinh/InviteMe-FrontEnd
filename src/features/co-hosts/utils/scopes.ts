@@ -97,11 +97,11 @@ export function grantsFromScopeDraft(draft: ScopeDraft): PermissionScope[] {
 
 const fallbackValidation = {
   "validation.checkInWeddingWide":
-    "Quyền check-in chỉ được cấp cho toàn bộ wedding. Hãy xác nhận phạm vi này.",
+    "Quyền check-in chỉ được cấp trong toàn bộ đám cưới. Hãy xác nhận phạm vi này.",
   "validation.giftRecordWeddingWide":
-    "Quyền ghi nhận quà chỉ được cấp cho toàn bộ wedding. Hãy xác nhận phạm vi này.",
+    "Quyền ghi nhận quà chỉ được cấp trong toàn bộ đám cưới. Hãy xác nhận phạm vi này.",
   "validation.selectGroupOrWedding":
-    "Chọn ít nhất một nhóm khách hoặc cấp quyền trên toàn bộ wedding.",
+    "Chọn ít nhất một nhóm khách hoặc cấp quyền trong toàn bộ đám cưới.",
   "validation.seatingViewScope":
     "Quyền chỉnh sửa chỗ ngồi cần quyền xem sơ đồ với phạm vi bao gồm các nhóm được sửa.",
 };

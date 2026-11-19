@@ -274,12 +274,12 @@
   "picker": {
     "back": "Về Thiệp mời",
     "backToTemplates": "Về danh sách mẫu",
-    "description": "Xem demo để khám phá mẫu thiệp, hoặc chỉnh sửa và áp dụng cho đám cưới của bạn.",
+    "description": "Xem thử mẫu thiệp, hoặc chỉnh sửa và áp dụng cho đám cưới của bạn.",
     "filters": "Lọc phong cách",
     "all": "Tất cả",
     "minimalism": "Minimalism",
     "song-hy": "Song hỷ",
-    "demo": "Xem demo",
+    "demo": "Xem thử",
     "editApply": "Chỉnh sửa & áp dụng",
     "changeTemplate": "Đổi mẫu"
   },

@@ -15,6 +15,7 @@ const titleKeys: Record<string, string> = {
   "Xác nhận tham dự": "rsvpTitle",
   "Co-hosts & access": "coHostsTitle",
   "Co-host và quyền truy cập": "coHostsTitle",
+  "Người đồng quản lý và quyền truy cập": "coHostsTitle",
   "Activity history": "activityTitle",
   "Lịch sử hoạt động": "activityTitle",
   "Platform overview": "adminOverviewTitle",
@@ -37,6 +38,8 @@ const descriptionKeys: Record<string, string> = {
   "Duyệt yêu cầu đổi câu trả lời và người đi thêm.": "rsvpQueueDescription",
   "Theo dõi câu trả lời và số chỗ của từng thiệp.": "rsvpDescription",
   "Mời người đáng tin cậy và giới hạn quyền của họ theo toàn bộ đám cưới hoặc từng nhóm khách.":
+    "coHostsDescription",
+  "Mời người bạn tin cậy cùng quản lý đám cưới và giới hạn quyền truy cập theo toàn bộ đám cưới hoặc từng nhóm khách.":
     "coHostsDescription",
   "Theo dõi ai đã thực hiện hành động nào trong đám cưới này.": "activityDescription",
   "InviteMe system activity and administration.": "adminOverviewDescription",

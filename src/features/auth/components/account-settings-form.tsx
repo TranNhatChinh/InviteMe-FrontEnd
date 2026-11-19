@@ -35,6 +35,7 @@ function validationMessage(error: unknown, fallback: string, t: (key: string) =>
 export function AccountSettingsForm() {
   const { t } = useTranslation("settings");
   const { language } = useLocale();
+  const deleteConfirmationPhrase = t("deleteConfirmationPhrase");
   const { api, session, queryClient } = useRuntime();
   const router = useRouter();
   const { user, isLoading } = useCurrentUser();
@@ -147,9 +148,8 @@ export function AccountSettingsForm() {
 
   async function deleteAccount() {
     setDeleteError("");
-    const confirmationPhrase = "XOA TAI KHOAN";
-    if (deleteConfirmation !== confirmationPhrase) {
-      setDeleteError(t("deleteConfirmMismatch", { phrase: confirmationPhrase }));
+    if (deleteConfirmation !== deleteConfirmationPhrase) {
+      setDeleteError(t("deleteConfirmMismatch", { phrase: deleteConfirmationPhrase }));
       return;
     }
     if (!deletePassword && !deleteGoogleToken) {
@@ -247,7 +247,7 @@ export function AccountSettingsForm() {
           </FormField>
           <div className="space-y-2">
             <label htmlFor="account-email" className="text-sm font-medium">
-              Email
+              {t("emailLabel")}
             </label>
             <Input
               id="account-email"
@@ -440,7 +440,7 @@ export function AccountSettingsForm() {
             )}
             <div className="space-y-2">
               <label htmlFor="delete-confirmation" className="text-sm font-medium">
-                {t("deleteConfirmationLabel", { phrase: "XOA TAI KHOAN" })}
+                {t("deleteConfirmationLabel", { phrase: deleteConfirmationPhrase })}
               </label>
               <Input
                 id="delete-confirmation"
