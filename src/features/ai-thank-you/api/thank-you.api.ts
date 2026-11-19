@@ -122,6 +122,15 @@ export function generateThankYouTemplateOptions(
     includeGiftAmount: boolean;
   },
 ) {
+  if (!input.guestIds.length) {
+    return api
+      .request(`${templateBase(weddingId)}/generate`, {
+        method: "POST",
+        body: { includeGiftAmount: input.includeGiftAmount },
+        schema: thankYouTemplateSchema,
+      })
+      .then((template) => [template]);
+  }
   return api.request(`${templateBase(weddingId)}/generate-options`, {
     method: "POST",
     body: { ...input, variantCount: 1 },
@@ -180,12 +189,26 @@ export function queueThankYouTemplateMessages(
   guestIds: string[],
   channels: string[],
   key: string,
+  smsContent?: string,
 ) {
   return api.request(`${messageBase(weddingId)}/send`, {
     method: "POST",
     headers: { "Idempotency-Key": key },
-    body: { templateId, guestIds, channels },
+    body: { templateId, guestIds, channels, smsContent },
     schema: z.object({ id: z.string(), replayed: z.boolean() }),
+  });
+}
+
+export function generateThankYouSms(api: ApiClient, weddingId: string, guestIds: string[]) {
+  return api.request(`${messageBase(weddingId)}/sms/generate`, {
+    method: "POST", body: { guestIds }, schema: z.object({ content: z.string() }),
+  });
+}
+
+export function previewThankYouSms(api: ApiClient, weddingId: string, guestIds: string[], smsContent: string, signal?: AbortSignal) {
+  return api.request(`${messageBase(weddingId)}/sms/preview`, {
+    method: "POST", signal, body: { guestIds, smsContent },
+    schema: z.array(z.object({ guestId: z.string(), guestName: z.string(), content: z.string(), encoding: z.string(), units: z.number(), segments: z.number(), hasPhone: z.boolean() })),
   });
 }
 
