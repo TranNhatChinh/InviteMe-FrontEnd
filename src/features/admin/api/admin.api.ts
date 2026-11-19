@@ -162,6 +162,28 @@ export const adminDashboardSchema = z.object({
 });
 export type AdminDashboard = z.infer<typeof adminDashboardSchema>;
 
+export const adminDashboardAnalyticsSchema = z.object({
+  from: z.iso.date(),
+  to: z.iso.date(),
+  bucket: z.enum(["day", "week"]),
+  accountGrowth: z.array(z.object({ bucket: z.iso.date(), count: z.number() })),
+  weddingGrowth: z.array(z.object({ bucket: z.iso.date(), count: z.number() })),
+  invitationDelivery: z.array(
+    z.object({
+      bucket: z.iso.date(),
+      channel: z.string(),
+      status: z.string(),
+      count: z.number(),
+    }),
+  ),
+  rsvpStatus: z.array(z.object({ status: z.string(), count: z.number() })),
+  nonArchivedWeddings: z.number(),
+  publishedWebsites: z.number(),
+  failedInvitations: z.number(),
+  delayedInvitations: z.number(),
+});
+export type AdminDashboardAnalytics = z.infer<typeof adminDashboardAnalyticsSchema>;
+
 export const adminUserSchema = z.object({
   id: z.string(),
   email: z.string(),
@@ -376,6 +398,15 @@ export const adminApi = {
     api.request("/admin/me/permissions", { signal, schema: z.array(z.string()) }),
   dashboard: (api: ApiClient, signal?: AbortSignal) =>
     api.request("/admin/dashboard", { signal, schema: adminDashboardSchema }),
+  dashboardAnalytics: (
+    api: ApiClient,
+    input: { from: string; to: string; bucket: "day" | "week" },
+    signal?: AbortSignal,
+  ) =>
+    api.request(`/admin/dashboard/analytics?${queryString(input)}`, {
+      signal,
+      schema: adminDashboardAnalyticsSchema,
+    }),
   users: (
     api: ApiClient,
     input: { page: number; pageSize?: number; search?: string; status?: string; role?: string },
