@@ -1,19 +1,6 @@
-import { CheckInOverview } from "@/features/guests";
-import { PermissionGuard } from "@/shared/components/permission-guard";
-import { EmptyState } from "@/shared/feedback/empty-state";
+import { redirect } from "next/navigation";
+
 export default async function Page({ params }: { params: Promise<{ weddingId: string }> }) {
   const { weddingId } = await params;
-  return (
-    <PermissionGuard
-      permission="RSVP_VIEW"
-      fallback={
-        <EmptyState
-          title="Access restricted"
-          description="You do not have permission to view this section."
-        />
-      }
-    >
-      <CheckInOverview weddingId={weddingId} />
-    </PermissionGuard>
-  );
+  redirect(`/weddings/${encodeURIComponent(weddingId)}/check-in?view=overview`);
 }

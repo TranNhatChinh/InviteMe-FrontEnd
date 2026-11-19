@@ -28,6 +28,7 @@ type WeddingSection = {
   permission: WeddingPermission;
   group: string;
   icon: WorkspaceNavigationIcon;
+  anyPermissions?: WeddingPermission[];
   ownerOnly?: boolean;
   wideOnly?: boolean;
   planEntitlement?: PlanEntitlement;
@@ -104,9 +105,9 @@ const sections: WeddingSection[] = [
     slug: "check-in",
     label: "Check-in",
     permission: "CHECKIN_MANAGE",
+    anyPermissions: ["CHECKIN_MANAGE", "RSVP_VIEW"],
     group: "Tiệc cưới",
     icon: "checkin",
-    planEntitlement: "checkin",
   },
   {
     slug: "gifts",
@@ -131,13 +132,6 @@ const sections: WeddingSection[] = [
     icon: "thank-you",
     ownerOnly: true,
     planEntitlement: "aiThankYouRuns",
-  },
-  {
-    slug: "analytics",
-    label: "Tổng quan check-in",
-    permission: "RSVP_VIEW",
-    group: "Tiệc cưới",
-    icon: "analytics",
   },
   {
     slug: "audit-logs",
@@ -243,7 +237,7 @@ export function WeddingNavigation({ weddingId }: { weddingId: string }) {
     () =>
       sections.filter(
         (section) =>
-          can(section.permission) &&
+          (section.anyPermissions?.some(can) ?? can(section.permission)) &&
           (!section.ownerOnly || isOwner) &&
           (!section.wideOnly || isWeddingWide(section.permission)),
       ),
