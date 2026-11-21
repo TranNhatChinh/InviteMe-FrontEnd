@@ -11,6 +11,8 @@ import {
   importActions,
   importSummary,
   importRowStatus,
+  importDuplicateContext,
+  separateContactErrors,
 } from "../src/features/guests/utils/planning-import-review";
 import {
   checkImportGuests,
@@ -224,4 +226,108 @@ test("check is read-only API and commit carries token, decisions and the exact r
   assert.deepEqual(calls[1]?.options, calls[2]?.options);
   assert.deepEqual(calls[1]?.options.headers, { "Idempotency-Key": "same-key" });
   assert.equal((calls[1]?.options.body as PlanningImportCommit).decisions[0]?.action, "SKIP");
+});
+
+test("database duplicates need a decision, not a validation error; 5 new + 5 existing", () => {
+  const rows = validateCoupleRows(
+    Array.from({ length: 10 }, (_, i) => {
+      const item = row(i + 2, "1");
+      item.values[0] = `Khách ${i}`;
+      item.values[5] = `09170000${String(i).padStart(2, "0")}`;
+      return item;
+    }),
+  );
+  const value: PlanningImportPreview = {
+    ...preview,
+    errors: [],
+    quotaRemaining: 30,
+    rows: rows.map((item, i) => ({
+      rowNumber: item.line,
+      status: i < 5 ? "NEED_DECISION" : "NEW",
+      reasons: i < 5 ? ["EXACT_DUPLICATE_IN_WEDDING", "SHARED_PHONE", "SHARED_EMAIL"] : [],
+      matches: [],
+      matchCount: i < 5 ? 1 : 0,
+    })),
+  };
+  const actions = importActions(value);
+  assert.deepEqual(
+    rows.map((item) => importRowStatus(item, value, actions, new Set())),
+    [...Array(5).fill("DECISION"), ...Array(5).fill("VALID")],
+  );
+  assert.equal(importSummary(rows, value, actions).created, 5);
+  assert.equal(importSummary(rows, value, actions).unresolved, 5);
+  const skipped = {
+    ...actions,
+    ...Object.fromEntries(rows.slice(0, 5).map((item) => [item.line, "SKIP" as const])),
+  };
+  assert.equal(importSummary(rows, value, skipped).skipped, 5);
+  assert.equal(importSummary(rows, value, skipped).created, 5);
+  assert.equal(importSummary(rows, value, skipped).unresolved, 0);
+  assert.equal(
+    importRowStatus({ ...rows[0]!, errors: ["Sai email"] }, value, actions, new Set()),
+    "ERROR",
+  );
+});
+
+test("duplicate context distinguishes DB, Excel and conflicting contacts without inventing snapshots", () => {
+  const item = validateCoupleRows([row()])[0]!;
+  const phone = {
+    guestId: "a",
+    sourceRowNumber: null,
+    recipientName: "Khách A",
+    differences: [{ field: "email", existing: "a@example.com", incoming: "an@example.com" }],
+  };
+  const email = {
+    guestId: "b",
+    sourceRowNumber: null,
+    recipientName: "Khách B",
+    differences: [{ field: "phone", existing: "0900000000", incoming: "0912345678" }],
+  };
+  const check = {
+    rowNumber: 2,
+    status: "NEED_DECISION" as const,
+    reasons: ["SHARED_PHONE", "SHARED_EMAIL"],
+    matches: [phone, email],
+    matchCount: 2,
+  };
+  const context = importDuplicateContext(check, item);
+  assert.equal(context.label, "Cần xác minh");
+  assert.equal(context.canUpdate, false);
+  assert.equal(context.target, undefined);
+  assert.match(context.candidates[0]!.message, /SĐT trùng với Khách A trong hệ thống/);
+  assert.match(context.candidates[1]!.message, /Email trùng với Khách B trong hệ thống/);
+  const file = importDuplicateContext(
+    { ...check, matches: [{ ...phone, guestId: null, sourceRowNumber: 7 }], matchCount: 1 },
+    item,
+  );
+  assert.equal(file.label, "Trùng trong Excel");
+  assert.match(file.candidates[0]!.message, /dòng 7: Khách A trong file Excel/);
+  assert.equal(file.target, undefined);
+  const missingSnapshot = importDuplicateContext(
+    { ...check, matches: [phone], matchCount: 1 },
+    item,
+  );
+  assert.equal(missingSnapshot.target, undefined);
+  assert.equal(missingSnapshot.canUpdate, false);
+  const empty = importDuplicateContext({ ...check, matches: [], matchCount: 1 }, item);
+  assert.equal(empty.label, "Cần xác minh");
+});
+
+test("creating a separate invitation must change all shared contacts including normalized variants", () => {
+  const item = validateCoupleRows([row()])[0]!;
+  const check = {
+    rowNumber: 2,
+    status: "NEED_DECISION" as const,
+    reasons: ["SHARED_PHONE", "SHARED_EMAIL"],
+    matches: [{ guestId: "a", sourceRowNumber: null, recipientName: "An", differences: [] }],
+    matchCount: 1,
+  };
+  const values = [...item.values];
+  values[5] = "+84 912 345 678";
+  values[7] = "AN@EXAMPLE.COM";
+  assert.equal(separateContactErrors(check, item, values).length, 2);
+  values[5] = "0900000000";
+  assert.equal(separateContactErrors(check, item, values).length, 1);
+  values[7] = "";
+  assert.deepEqual(separateContactErrors(check, item, values), []);
 });

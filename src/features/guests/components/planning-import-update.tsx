@@ -11,7 +11,7 @@ import {
   type PlanningImportPreview,
 } from "../api/planning.api";
 import { validateCoupleRows, type CoupleRow } from "../utils/couple-import";
-import { importReasonLabels } from "../utils/planning-import-review";
+import { importDuplicateContext } from "../utils/planning-import-review";
 
 export const updateFields = [
   ["recipientName", "Tên người nhận", 0],
@@ -45,7 +45,9 @@ export function PlanningImportUpdateEditor({
   onClose: () => void;
 }) {
   const candidates = check.matches.filter((x) => x.guestId && x.guest);
-  const [target, setTarget] = useState(current?.targetGuestId ?? "");
+  const [target, setTarget] = useState(
+    current?.targetGuestId ?? (candidates.length === 1 ? (candidates[0]?.guestId ?? "") : ""),
+  );
   const [fields, setFields] = useState<string[]>(current?.selectedFields ?? []);
   const [values, setValues] = useState(() => {
     const draft = [...row.values];
@@ -74,6 +76,9 @@ export function PlanningImportUpdateEditor({
         <p className="text-sm">
           Chọn khách hiện có, đánh dấu thông tin cần sửa và nhập giá trị mới.
         </p>
+        <p className="text-sm text-stone-600">
+          Chỉ lưu lựa chọn cho lần import này. Khách chỉ được cập nhật sau khi xác nhận import.
+        </p>
         <label className="block text-sm font-medium">
           Khách cần cập nhật
           <select
@@ -97,8 +102,8 @@ export function PlanningImportUpdateEditor({
           </select>
         </label>
         <ul className="text-sm text-indigo-800">
-          {check.reasons.map((reason) => (
-            <li key={reason}>{importReasonLabels[reason] ?? reason}</li>
+          {importDuplicateContext(check, row).candidates.map(({ match, message }) => (
+            <li key={match.guestId ?? match.sourceRowNumber}>{message}</li>
           ))}
         </ul>
         {guest && (
@@ -210,8 +215,8 @@ export function PlanningImportUpdateEditor({
                 )}
               {fields.includes("expectedPeople") && (
                 <p>
-                  Máy chủ sẽ kiểm tra lại số người RSVP, suất đã gắn người/chỗ và quota trước khi
-                  lưu.
+                  Tổng số suất mới thay thế số suất cũ, không cộng thêm. Hệ thống kiểm tra lại RSVP,
+                  chỗ đã xếp và quota trước khi lưu.
                 </p>
               )}
             </div>
@@ -273,7 +278,7 @@ export function PlanningImportUpdateEditor({
               }
             }}
           >
-            {applying ? "Đang kiểm tra…" : "Áp dụng"}
+            {applying ? "Đang kiểm tra…" : "Lưu lựa chọn cập nhật"}
           </Button>
         </div>
       </fieldset>
