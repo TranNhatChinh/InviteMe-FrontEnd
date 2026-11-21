@@ -1,193 +1,191 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { CoupleImport } from "@/features/guests";
-import { validateCoupleRows } from "@/features/guests";
-import type {
-  PlanningImportCommit,
-  PlanningImportPreview,
-  PlanningImportResult,
+import { CoupleImport, validateCoupleRows } from "@/features/guests";
+import {
+  importBody,
+  type PlanningImportCommit,
+  type PlanningImportDecision,
+  type PlanningImportPreview,
+  type PlanningImportResult,
 } from "@/features/guests";
+import type { CoupleRow } from "@/features/guests";
 
-const mockInitialRaw = [
-  {
-    line: 2,
-    values: ["Nguyễn Văn An", "Bác", "5", "Nhà gái", "Họ hàng", "0901111111", "Có trẻ nhỏ", ""],
-  },
-  {
-    line: 3,
-    values: ["Trần Thị Hoa", "Cô", "2", "Nhà gái", "Họ hàng", "", "Muốn ngồi gần lối ra", ""],
-  },
-  {
-    line: 4,
-    values: ["Lê Minh Anh", "Bạn", "2", "Nhà gái", "Bạn bè", "", "Đại diện nhóm hai người", ""],
-  },
-  { line: 5, values: ["Phạm Thu Hà", "Bạn", "1", "Nhà gái", "Bạn bè", "", "", ""] },
-  {
-    line: 6,
-    values: ["Hoàng Quốc Nam", "Anh", "1", "Nhà trai", "Đồng nghiệp", "", "", ""],
-  },
-  {
-    line: 7,
-    values: ["Nguyễn Văn An", "Bác", "4", "Nhà gái", "Họ hàng", "0901111111", "Khách của bố", ""],
-  },
-  {
-    line: 8,
-    values: ["Hoàng Văn Đức", "Anh", "0", "Nhà trai", "Đồng nghiệp", "", "", ""],
-  },
-  {
-    line: 9,
-    values: ["Trần Thị Lan", "Chị", "1", "Nhà gái", "Bạn bè", "0903333333", "", ""],
-  },
-  {
-    line: 10,
-    values: ["Đặng Quốc Huy", "Ông", "3", "Nhà trai", "Họ hàng", "0987 654 321", "", ""],
-  },
-  { line: 11, values: ["Ngô Thị Thu", "Cô", "2", "Nhà gái", "Họ ngoại", "", "", ""] },
+type Candidate = PlanningImportPreview["rows"][number]["matches"][number];
+const names = [
+  "Nguyễn Văn An",
+  "Trần Thị Bình",
+  "Lê Minh Châu",
+  "Phạm Quốc Dũng",
+  "Hoàng Thu Hà",
+  "Đỗ Anh Khoa",
+  "Vũ Ngọc Lan",
+  "Bùi Đức Minh",
+  "Đặng Thanh Nga",
+  "Hồ Bảo Phúc",
 ];
+const mockRows = validateCoupleRows(
+  names.map((name, i) => ({
+    line: i + 2,
+    values: [
+      name,
+      i === 0 ? "Bác" : "Anh/Chị",
+      i === 0 ? "4" : "2",
+      i % 2 ? "Nhà trai" : "Nhà gái",
+      i % 2 ? "Bạn bè" : "Họ hàng",
+      `09170000${String(i + 1).padStart(2, "0")}`,
+      i === 0 ? "Có trẻ nhỏ" : "",
+      `khach${i + 1}@example.com`,
+    ],
+  })),
+);
+const existing = importBody(mockRows.slice(0, 5)).rows.map((row, i) => ({
+  ...row,
+  id: `demo-guest-${i + 1}`,
+  version: 1,
+  recipientName: row.recipientName ?? "",
+  honorific: row.honorific ?? null,
+  expectedPeople: i === 0 ? 2 : (row.expectedPeople ?? 1),
+  side: row.side ?? "UNSPECIFIED",
+  group: row.group ?? "OTHER",
+  seated: false,
+  invitationSent: false,
+  hasRsvp: false,
+  confirmedPeople: 0,
+  protectedPlaces: 0,
+}));
 
-const mockRows = validateCoupleRows(mockInitialRaw);
-
-const mockPreview: PlanningImportPreview = {
-  previewToken: "mock-preview-token",
-  expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-  quotaRemaining: 30,
-  proposedPlaces: 11,
-  errors: [],
-  rows: [
-    {
-      rowNumber: 2,
-      status: "NEED_DECISION",
-      reasons: ["SAME_NAME_AND_CONTACT_CHANGED"],
-      matchCount: 1,
-      matches: [
-        {
-          guestId: "G01",
-          sourceRowNumber: null,
-          recipientName: "G01 Nguyễn Văn An",
-          differences: [
-            { field: "expectedPeople", existing: "4", incoming: "5" },
-            { field: "note", existing: "Khách của bố", incoming: "Có trẻ nhỏ" },
-          ],
-        },
-      ],
-    },
-    {
-      rowNumber: 3,
-      status: "NEW",
-      reasons: [],
-      matchCount: 0,
-      matches: [],
-    },
-    {
-      rowNumber: 4,
-      status: "NEW",
-      reasons: [],
-      matchCount: 0,
-      matches: [],
-    },
-    {
-      rowNumber: 5,
-      status: "NEW",
-      reasons: [],
-      matchCount: 0,
-      matches: [],
-    },
-    {
-      rowNumber: 6,
-      status: "WARNING",
-      reasons: ["SAME_NAME_OTHER_SIDE_GROUP"],
-      matchCount: 1,
-      matches: [
-        {
-          guestId: "G05",
-          sourceRowNumber: null,
-          recipientName: "G05 Hoàng Quốc Nam",
-          differences: [],
-        },
-      ],
-    },
-    {
-      rowNumber: 7,
-      status: "NEED_DECISION",
-      reasons: ["EXACT_DUPLICATE_IN_WEDDING"],
-      matchCount: 1,
-      matches: [
-        {
-          guestId: "G01",
-          sourceRowNumber: null,
-          recipientName: "G01 Nguyễn Văn An",
-          differences: [],
-        },
-      ],
-    },
-    {
-      rowNumber: 9,
-      status: "WARNING",
-      reasons: ["SHARED_PHONE"],
-      matchCount: 1,
-      matches: [
-        {
-          guestId: "G03",
-          sourceRowNumber: null,
-          recipientName: "G03 Lê Văn Cường",
-          differences: [],
-        },
-      ],
-    },
-    {
-      rowNumber: 10,
-      status: "NEW",
-      reasons: [],
-      matchCount: 0,
-      matches: [],
-    },
-  ],
-};
-
+// Development-only fixture. No API writes: all decisions are previewed in memory.
+async function handleCheck(
+  rows: CoupleRow[],
+  decisions: PlanningImportDecision[] = [],
+): Promise<PlanningImportPreview> {
+  const checks = importBody(rows).rows.map((row) => {
+    const matches: Candidate[] = existing
+      .filter(
+        (guest) =>
+          guest.recipientName === row.recipientName ||
+          (!!row.phone && guest.phone === row.phone) ||
+          (!!row.email && guest.email === row.email),
+      )
+      .map((guest) => ({
+        guestId: guest.id,
+        sourceRowNumber: null,
+        recipientName: guest.recipientName,
+        guest,
+        differences: (
+          [
+            "recipientName",
+            "honorific",
+            "expectedPeople",
+            "side",
+            "group",
+            "phone",
+            "email",
+            "note",
+          ] as const
+        )
+          .filter((field) => (guest[field] ?? "") !== (row[field] ?? ""))
+          .map((field) => ({
+            field,
+            existing: guest[field] == null ? null : String(guest[field]),
+            incoming: row[field] == null ? null : String(row[field]),
+          })),
+      }));
+    const reasons: string[] = [];
+    if (matches.length) {
+      reasons.push(
+        matches.some((match) => !match.differences.length)
+          ? "EXACT_DUPLICATE_IN_WEDDING"
+          : "SAME_NAME_AND_CONTACT_CHANGED",
+      );
+      if (matches.some((match) => row.phone && match.guest?.phone === row.phone))
+        reasons.push("SHARED_PHONE");
+      if (matches.some((match) => row.email && match.guest?.email === row.email))
+        reasons.push("SHARED_EMAIL");
+    }
+    return {
+      rowNumber: row.rowNumber,
+      status: matches.length ? ("NEED_DECISION" as const) : ("NEW" as const),
+      reasons,
+      matches,
+      matchCount: matches.length,
+    };
+  });
+  return {
+    previewToken: "development-only",
+    expiresAt: "2099-01-01T00:00:00Z",
+    quotaRemaining: 30,
+    proposedPlaces: 10,
+    errors: [],
+    rows: checks,
+    updates: decisions
+      .filter((decision) => decision.action === "UPDATE")
+      .map((decision) => {
+        const guest = existing.find((item) => item.id === decision.targetGuestId);
+        const count = decision.selectedFields?.includes("expectedPeople")
+          ? decision.updateValues?.expectedPeople
+          : guest?.expectedPeople;
+        return {
+          rowNumber: decision.rowNumber,
+          guestId: decision.targetGuestId ?? "",
+          fields: decision.selectedFields ?? [],
+          noChange: false,
+          placeDelta: (count ?? 0) - (guest?.expectedPeople ?? 0),
+          errors: [],
+          warnings: [],
+        };
+      }),
+  };
+}
+async function handleImport(input: PlanningImportCommit): Promise<PlanningImportResult> {
+  const created = input.decisions.filter((decision) => decision.action === "CREATE_SEPARATE");
+  const updated = input.decisions.filter((decision) => decision.action === "UPDATE");
+  return {
+    importId: "mock-import-id",
+    createdGuestCount: created.length,
+    createdPlaceCount: input.rows
+      .filter((row) => created.some((decision) => decision.rowNumber === row.rowNumber))
+      .reduce((sum, row) => sum + (row.expectedPeople ?? 1), 0),
+    items: created.map((decision) => ({
+      rowNumber: decision.rowNumber,
+      guestId: `new-${decision.rowNumber}`,
+      expectedPeople:
+        input.rows.find((row) => row.rowNumber === decision.rowNumber)?.expectedPeople ?? 1,
+      action: "CREATE_SEPARATE",
+    })),
+    updatedGuestCount: updated.length,
+    updated: updated.map((decision) => ({
+      rowNumber: decision.rowNumber,
+      guestId: decision.targetGuestId ?? "",
+      expectedPeople:
+        decision.updateValues?.expectedPeople ??
+        existing.find((guest) => guest.id === decision.targetGuestId)?.expectedPeople ??
+        1,
+      action: "UPDATE",
+    })),
+    noChangeCount: 0,
+    noChange: [],
+    tasks: [],
+    warnings: [],
+    skippedCount: input.decisions.filter((decision) => decision.action === "SKIP").length,
+    skipped: input.decisions
+      .filter((decision) => decision.action === "SKIP")
+      .map((decision) => ({ rowNumber: decision.rowNumber, action: "SKIP" })),
+  };
+}
 export function ImportPreview() {
   const router = useRouter();
-
-  async function handleCheck(): Promise<PlanningImportPreview> {
-    return mockPreview;
-  }
-
-  async function handleImport(input: PlanningImportCommit): Promise<PlanningImportResult> {
-    return {
-      updatedGuestCount: 0,
-      noChangeCount: 0,
-      updated: [],
-      noChange: [],
-      tasks: [],
-      importId: "mock-import-id",
-      createdGuestCount: input.decisions.filter((d) => d.action === "CREATE_SEPARATE").length,
-      createdPlaceCount: 11,
-      items: input.decisions
-        .filter((d) => d.action === "CREATE_SEPARATE")
-        .map((d) => ({
-          rowNumber: d.rowNumber,
-          guestId: `new-guest-${d.rowNumber}`,
-          expectedPeople: 1,
-          action: "CREATE_SEPARATE",
-        })),
-      warnings: [],
-      skippedCount: input.decisions.filter((d) => d.action === "SKIP").length,
-      skipped: input.decisions
-        .filter((d) => d.action === "SKIP")
-        .map((d) => ({ rowNumber: d.rowNumber, action: "SKIP" })),
-    };
-  }
-
   return (
     <main id="main-content" className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
       <CoupleImport
         onClose={() => router.push("/")}
         onCheck={handleCheck}
         onImport={handleImport}
-        weddingTitle="Đám cưới Minh & Lan"
-        initialFilename="khach-moi.xlsx"
+        weddingTitle="Đám cưới mẫu · Preview import"
+        initialFilename="demo-10-khach-5-trung.xlsx"
         initialRows={mockRows}
-        isMock={true}
+        isMock
       />
     </main>
   );
