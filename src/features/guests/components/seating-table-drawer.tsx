@@ -6,13 +6,12 @@ import { Plus, Trash2, X } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { Chip } from "@/shared/ui/chip";
 import { ActionMenu } from "@/shared/ui/action-menu";
-import { NumberStepper } from "@/shared/ui/number-stepper";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { cn } from "@/shared/lib/utils";
 import { trapDialogFocus } from "@/shared/lib/dialog-focus";
-import type { SeatingPlan } from "../api/planning-seating.api";
+import { seatingCapacities, type SeatingPlan } from "../api/planning-seating.api";
 import { queuePlaceName } from "./seating-queue";
 
 const attendanceLabels: Record<string, string> = {
@@ -85,8 +84,8 @@ export function SeatingTableDrawer({
   const capacityError =
     capacity && number < minimum
       ? `Đang có ${occupied} khách, bỏ xếp trước khi giảm${minimum > occupied ? ` (ghế cao nhất đang dùng: ${minimum})` : ""}.`
-      : !capacity || !Number.isInteger(number) || number < 1 || number > 20
-        ? "Số ghế phải từ 1 đến 20."
+      : !seatingCapacities.some((value) => value === number)
+        ? "Chọn số ghế được hỗ trợ: 8, 10 hoặc 12."
         : "";
   const dirty = name.trim() !== table.name || number !== table.capacity;
   const valid = !!name.trim() && !capacityError;
@@ -281,17 +280,28 @@ export function SeatingTableDrawer({
               <Label htmlFor={`${id}-capacity`} className="text-[11px] text-muted-foreground">
                 Số ghế
               </Label>
-              <NumberStepper
+              <select
                 id={`${id}-capacity`}
-                label="Số ghế"
+                aria-label="Số ghế"
                 value={capacity}
-                onChange={setCapacity}
-                min={minimum}
-                max={20}
+                onChange={(event) => setCapacity(event.target.value)}
                 disabled={saving}
-                invalid={!!capacityError}
-                describedBy={capacityError ? `${id}-error` : undefined}
-              />
+                aria-invalid={!!capacityError}
+                aria-describedby={capacityError ? `${id}-error` : undefined}
+                className="h-[46px] w-full rounded-lg border border-foreground/15 bg-white px-3 text-sm shadow-none focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                {!seatingCapacities.some((value) => value === number) && (
+                  <option value={capacity} disabled>
+                    {capacity} ghế — chọn lại số ghế hỗ trợ
+                  </option>
+                )}
+                {seatingCapacities.map((value) => (
+                  <option key={value} value={value} disabled={value < minimum}>
+                    {t("seatOption", { count: value })}
+                    {value < minimum ? " — đang có ghế đã xếp" : ""}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           {capacityError && (
