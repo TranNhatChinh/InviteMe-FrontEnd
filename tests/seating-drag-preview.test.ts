@@ -109,3 +109,20 @@ test("preview stays inside viewport edges and keyboard position is unchanged", (
   args.activatorEvent = { code: "Space" } as unknown as Event;
   assert.equal(offsetDragPreview(args), args.transform);
 });
+
+test("hovering a two-person party changes both preview seats instead of pinning seat one", () => {
+  const empty = { ...plan, tables: [{ id: "b", name: "Bàn", capacity: 10 }], assignments: [] };
+  assert.deepEqual(
+    seatingDropFeedback(empty, ["p1", "p2"], { tableId: "b", seatNumber: 4 })?.seats,
+    [4, 5],
+  );
+  assert.deepEqual(
+    seatingDropFeedback(empty, ["p1", "p2"], { tableId: "b", seatNumber: 7 })?.seats,
+    [7, 8],
+  );
+  assert.deepEqual(
+    seatingDropFeedback(empty, ["p1", "p2"], { tableId: "b", seatNumber: 10 })?.seats,
+    [10, 1],
+  );
+  assert.deepEqual(empty.assignments, []);
+});
