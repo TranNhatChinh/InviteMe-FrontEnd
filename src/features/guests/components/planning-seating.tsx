@@ -38,6 +38,7 @@ import { trapDialogFocus } from "@/shared/lib/dialog-focus";
 import {
   applySeatingGeneration,
   type CanvasLayout,
+  type TableShape,
   applySeatingArrangement,
   type ArrangeSeatingInput,
   type SeatingGenerationApply,
@@ -55,7 +56,12 @@ import { previewSeatMove } from "../utils/planning-seat-move";
 import { moveSeatingWithRetry } from "../utils/seating-conflict-retry";
 import { ArrangeSeatingDialog } from "./arrange-seating-dialog";
 import { GenerateSeatingDialog } from "./generate-seating-dialog";
-import { SeatingObjectPalette, type SeatingCanvasObject } from "./seating-object-palette";
+import {
+  SeatingObjectPalette,
+  type SeatingCanvasObject,
+  type SeatingTableItem,
+} from "./seating-object-palette";
+import { tableSeatPoint } from "../utils/seating-table-shape";
 import { SeatingSeatBadge } from "./seating-seat-badge";
 import { SeatingCanvas } from "./seating-canvas";
 import { sideSlots } from "../utils/seating-layout";
@@ -261,6 +267,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     seatNumber?: number;
   } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [tableShape, setTableShape] = useState<TableShape>("round");
+  const [tableShapes, setTableShapes] = useState<Record<string, TableShape>>({});
   const [tableDrop, setTableDrop] = useState<{ x: number; y: number } | undefined>();
   const [tablePositions, setTablePositions] = useState<Record<string, { x: number; y: number }>>(
     {},
@@ -370,12 +378,12 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   ];
 
   function addCanvasItem(
-    kind: SeatingCanvasObject["kind"] | "table",
+    kind: SeatingCanvasObject["kind"] | SeatingTableItem,
     point?: { x: number; y: number },
     side?: TableSlot["side"],
   ) {
     if (!plan || !editable || saving) return;
-    if (kind !== "table") {
+    if (kind !== "table" && kind !== "tableTwoSided" && kind !== "tableFourSided") {
       if (
         (kind === "brideArea" || kind === "groomArea") &&
         roomObjects.some((object) => object.kind === kind)
@@ -384,6 +392,9 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       setObjects([...roomObjects, { id: "object:" + crypto.randomUUID(), kind, point }]);
       return;
     }
+    setTableShape(
+      kind === "tableTwoSided" ? "twoSided" : kind === "tableFourSided" ? "fourSided" : "round",
+    );
     if (plan.tables.length >= 100) return;
     const slot = [
       ...sideSlots(plan.tables, "BRIDE", plan.brideTablesPerRow ?? 2),
@@ -985,7 +996,15 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     tableDisabled={saving || plan.tables.length >= 100}
                     onClose={() => setPaletteOpen(false)}
                     onObject={(kind) => addCanvasItem(kind)}
-                    onTable={() => addCanvasItem("table")}
+                    onTable={(shape) =>
+                      addCanvasItem(
+                        shape === "twoSided"
+                          ? "tableTwoSided"
+                          : shape === "fourSided"
+                            ? "tableFourSided"
+                            : "table",
+                      )
+                    }
                   />
                 ) : (
                   <DropTarget
@@ -1125,6 +1144,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       plan={plan}
                       disabled={saving}
                       slot={tableSlot}
+                      shape={tableShape}
                       onCloseSlot={() => setTableSlot(null)}
                       onChange={(input) =>
                         change(input, undefined, undefined, (next) => {
@@ -1135,6 +1155,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                               table.row === tableSlot.row &&
                               table.column === tableSlot.column,
                           );
+                          if (created)
+                            setTableShapes((current) => ({ ...current, [created.id]: tableShape }));
                           if (created && tableDrop)
                             setTablePositions((current) => ({
                               ...current,
@@ -1155,6 +1177,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 plan={plan}
                 objects={roomObjects}
                 tablePositions={tablePositions}
+                tableShapes={tableShapes}
                 onPaletteDrop={editable && !saving ? addCanvasItem : undefined}
                 onCaptureLayout={
                   generationDraft
@@ -1181,6 +1204,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 }
                 saving={saving}
                 renderTable={(table) => {
+                  const shape =
+                    tableShapes[table.id] ?? plan.canvasLayout?.tables[table.id]?.shape ?? "round";
                   const members = plan.assignments.filter((a) => a.tableId === table.id);
                   const remote = collaboration.leases.filter(
                     (lease) =>
@@ -1249,7 +1274,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                         className="relative aspect-square scroll-mt-6"
                       >
                         <button
-                          className={`absolute left-[21%] top-[21%] flex size-[58%] flex-col items-center justify-center rounded-full text-center text-sm bg-[#ffa895] text-stone-950 ${tableId === table.id ? "ring-2 ring-primary" : ""}`}
+                          className={`absolute flex flex-col items-center justify-center text-center text-sm bg-[#ffa895] text-stone-950 ${shape === "round" ? "left-[21%] top-[21%] size-[58%] rounded-full" : "left-[14%] top-[25%] h-[50%] w-[72%] rounded-xl"} ${tableId === table.id ? "ring-2 ring-primary" : ""}`}
                           aria-pressed={tableId === table.id && seat === null}
                           aria-label={t("seating.viewTableGuests", { table: table.name })}
                           aria-haspopup="dialog"
@@ -1291,8 +1316,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                           </span>
                         </button>
                         {Array.from({ length: table.capacity }, (_, i) => {
-                          const n = i + 1,
-                            angle = (i / table.capacity) * Math.PI * 2 - Math.PI / 2;
+                          const n = i + 1;
+                          const seatPoint = tableSeatPoint(shape, i, table.capacity);
                           const a = members.find((x) => x.seatNumber === n),
                             p = plan.places.find((x) => x.id === a?.placeId);
                           return (
@@ -1314,8 +1339,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                                   : undefined
                               }
                               style={{
-                                left: `calc(${50 + 43 * Math.cos(angle)}% - 18px)`,
-                                top: `calc(${50 + 43 * Math.sin(angle)}% - 20px)`,
+                                left: `calc(${seatPoint.x}% - 18px)`,
+                                top: `calc(${seatPoint.y}% - 20px)`,
                               }}
                             >
                               <DragSource

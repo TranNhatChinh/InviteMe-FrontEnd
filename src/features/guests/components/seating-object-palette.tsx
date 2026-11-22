@@ -1,17 +1,10 @@
 "use client";
 
-import {
-  DoorOpen,
-  Gift,
-  Layers,
-  Music2,
-  PanelTop,
-  MoveVertical,
-  X,
-} from "lucide-react";
+import { DoorOpen, Gift, Layers, Music2, PanelTop, MoveVertical, X } from "lucide-react";
 import Image from "next/image";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
+import type { TableShape } from "../api/planning-seating.api";
 
 export const seatingObjectIcons = {
   danceFloor: Music2,
@@ -22,6 +15,7 @@ export const seatingObjectIcons = {
 };
 export type SeatingObjectKind = keyof typeof seatingObjectIcons;
 export const seatingPaletteMime = "application/x-inviteme-seating-item";
+export type SeatingTableItem = "table" | "tableTwoSided" | "tableFourSided";
 export type SeatingCanvasObject = {
   id: string;
   point?: { x: number; y: number };
@@ -30,10 +24,12 @@ export type SeatingCanvasObject = {
 
 const paletteImages = {
   table: "round-table",
+  tableTwoSided: "table-2-sided",
+  tableFourSided: "table-4-sided",
   brideArea: "bride-area",
   groomArea: "groom-area",
   aisle: "aisle",
-  stage: "stage",
+  stage: "stage-floral",
   danceFloor: "dance-floor",
   giftTable: "gift-table",
   entrance: "entrance",
@@ -42,12 +38,12 @@ const paletteImages = {
 function PaletteIllustration({ kind }: { kind: keyof typeof paletteImages }) {
   return (
     <Image
-      src={`/images/seating/palette/${paletteImages[kind]}.webp`}
+      src={`/images/seating/palette/${paletteImages[kind]}.${["stage", "tableTwoSided", "tableFourSided"].includes(kind) ? "png" : "webp"}`}
       alt=""
       width={64}
       height={64}
       draggable={false}
-      className="size-14 shrink-0 object-contain"
+      className={`size-14 shrink-0 object-contain ${kind === "tableTwoSided" || kind === "tableFourSided" ? "scale-[1.35]" : ""}`}
     />
   );
 }
@@ -58,13 +54,13 @@ export function SeatingObjectPalette({
   onClose,
   tableDisabled,
 }: {
-  onTable: () => void;
+  onTable: (shape: TableShape) => void;
   onObject: (kind: SeatingCanvasObject["kind"]) => void;
   onClose: () => void;
   tableDisabled?: boolean;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "studio" });
-  const dragItem = (kind: SeatingCanvasObject["kind"] | "table") => ({
+  const dragItem = (kind: SeatingCanvasObject["kind"] | SeatingTableItem) => ({
     draggable: true,
     onDragStart: (event: React.DragEvent<HTMLButtonElement>) => {
       event.dataTransfer.setData(seatingPaletteMime, kind);
@@ -90,16 +86,25 @@ export function SeatingObjectPalette({
       <div className="space-y-2">
         <h3 className="text-sm font-medium">{t("guestTables")}</h3>
         <div className="grid grid-cols-4">
-          <button
-            type="button"
-            className={tile}
-            {...(!tableDisabled && dragItem("table"))}
-            disabled={tableDisabled}
-            onClick={onTable}
-          >
-            <PaletteIllustration kind="table" />
-            {t("roundTable")}
-          </button>
+          {(
+            [
+              { kind: "table", shape: "round", label: "roundTable" },
+              { kind: "tableTwoSided", shape: "twoSided", label: "twoSidedTable" },
+              { kind: "tableFourSided", shape: "fourSided", label: "fourSidedTable" },
+            ] as const
+          ).map(({ kind, shape, label }) => (
+            <button
+              key={kind}
+              type="button"
+              className={tile}
+              {...(!tableDisabled && dragItem(kind))}
+              disabled={tableDisabled}
+              onClick={() => onTable(shape)}
+            >
+              <PaletteIllustration kind={kind} />
+              {t(label)}
+            </button>
+          ))}
         </div>
       </div>
       <div className="space-y-2">

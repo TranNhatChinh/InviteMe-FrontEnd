@@ -8,10 +8,11 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
+import Image from "next/image";
 import { Minus, Mouse, Plus, Scan, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
-import type { CanvasLayout, SeatingPlan } from "../api/planning-seating.api";
+import type { CanvasLayout, SeatingPlan, TableShape } from "../api/planning-seating.api";
 import type { SeatingTable } from "../utils/seating-layout";
 
 import {
@@ -19,6 +20,7 @@ import {
   seatingPaletteMime,
   type SeatingCanvasObject,
   type SeatingObjectKind,
+  type SeatingTableItem,
 } from "./seating-object-palette";
 
 const sides = ["BRIDE", "GROOM"] as const;
@@ -50,6 +52,7 @@ export function SeatingCanvas({
   onRemoveObject,
   onPaletteDrop,
   tablePositions,
+  tableShapes = {},
   onSaveLayout,
   onCaptureLayout,
   saving,
@@ -61,11 +64,12 @@ export function SeatingCanvas({
   saving?: boolean;
   objects?: SeatingCanvasObject[];
   onPaletteDrop?: (
-    kind: SeatingCanvasObject["kind"] | "table",
+    kind: SeatingCanvasObject["kind"] | SeatingTableItem,
     point: Point,
     side?: ZoneSide,
   ) => void;
   tablePositions?: Record<string, Point>;
+  tableShapes?: Record<string, TableShape>;
   onRemoveObject?: (id: string) => void;
   renderTable: (table: SeatingTable) => ReactNode;
 }) {
@@ -258,6 +262,9 @@ export function SeatingCanvas({
           table.id,
           {
             ...point,
+            ...((tableShapes[table.id] ?? plan.canvasLayout?.tables[table.id]?.shape)
+              ? { shape: tableShapes[table.id] ?? plan.canvasLayout?.tables[table.id]?.shape }
+              : {}),
             ...(side === null
               ? { outsideZone: true }
               : side && side !== table.side
@@ -305,7 +312,7 @@ export function SeatingCanvas({
   const height =
     Math.max(
       480,
-      stage.y + 64 + padding,
+      stage.y + 160 + padding,
       ...points.map((point) => point.y + spacing),
       ...zones.map((zone) => zone.point.y + zone.size.y + padding),
     ) - upper;
@@ -562,18 +569,30 @@ export function SeatingCanvas({
           event.preventDefault();
           const kind = event.dataTransfer.getData(seatingPaletteMime);
           const isObject = Object.keys(seatingObjectIcons).some((key) => key === kind);
-          if (!isObject && kind !== "table" && kind !== "brideArea" && kind !== "groomArea") return;
+          if (
+            !isObject &&
+            kind !== "table" &&
+            kind !== "tableTwoSided" &&
+            kind !== "tableFourSided" &&
+            kind !== "brideArea" &&
+            kind !== "groomArea"
+          )
+            return;
           const rect = surface.current?.getBoundingClientRect();
           if (!rect) return;
           const point = {
             x: Math.round((event.clientX - rect.left) / zoom + left),
             y: Math.round((event.clientY - rect.top) / zoom + upper),
           };
-          if (kind === "table") {
+          if (kind === "table" || kind === "tableTwoSided" || kind === "tableFourSided") {
             point.x -= tableWidth / 2;
             point.y -= tableWidth / 2;
           }
-          onPaletteDrop(kind as SeatingCanvasObject["kind"] | "table", point, zoneAt(point)?.side);
+          onPaletteDrop(
+            kind as SeatingCanvasObject["kind"] | SeatingTableItem,
+            point,
+            zoneAt(point)?.side,
+          );
         }}
         onContextMenu={(event) => event.preventDefault()}
         onPointerDownCapture={(event) => {
@@ -731,10 +750,20 @@ export function SeatingCanvas({
                 onPointerCancel={finish}
                 onLostPointerCapture={finish}
                 onKeyDown={(event) => moveWithKey(event, "stage", stage)}
-                className={`absolute grid h-16 w-[250px] place-items-center rounded-xl border border-rose-200 bg-rose-50 text-sm font-semibold text-rose-900 ${frameClass("stage")}`}
+                className={`absolute grid h-40 w-[250px] place-items-center text-sm font-semibold text-rose-900 ${frameClass("stage")}`}
                 style={{ left: stage.x - left, top: stage.y - upper }}
               >
-                {t("stage")}
+                <Image
+                  src="/images/seating/palette/stage-floral.png"
+                  alt=""
+                  fill
+                  sizes="250px"
+                  draggable={false}
+                  className="pointer-events-none select-none object-contain"
+                />
+                <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                  {t("stage")}
+                </span>
                 {selectionDots("stage")}
               </div>
             )}
@@ -754,11 +783,29 @@ export function SeatingCanvas({
                   onPointerCancel={finish}
                   onLostPointerCapture={finish}
                   onKeyDown={(event) => moveWithKey(event, id, point)}
-                  className={`absolute flex items-center justify-center gap-2 rounded-xl border border-stone-300 bg-stone-100 text-sm font-medium text-stone-800 ${kind === "aisle" ? "h-72 w-32 border-dashed" : "h-20 w-[190px]"} ${frameClass(id)}`}
+                  className={`absolute flex items-center justify-center gap-2 rounded-xl text-sm font-medium text-stone-800 ${kind === "stage" ? "h-40 w-[250px]" : "border border-stone-300 bg-stone-100"} ${kind === "aisle" ? "h-72 w-32 border-dashed" : kind === "stage" ? "" : "h-20 w-[190px]"} ${frameClass(id)}`}
                   style={{ left: point.x - left, top: point.y - upper }}
                 >
-                  <Icon className="size-5" />
-                  {t(kind)}
+                  {kind === "stage" ? (
+                    <>
+                      <Image
+                        src="/images/seating/palette/stage-floral.png"
+                        alt=""
+                        fill
+                        sizes="250px"
+                        draggable={false}
+                        className="pointer-events-none select-none object-contain"
+                      />
+                      <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                        {t(kind)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon className="size-5" />
+                      {t(kind)}
+                    </>
+                  )}
                   {selectionDots(id)}
                   {editable && selectedId === id && onRemoveObject && (
                     <button
@@ -834,7 +881,7 @@ export function SeatingCanvas({
                 tables: Object.fromEntries(
                   Object.entries(snapshot.tables).map(([id, table]) => [
                     id,
-                    { x: table.x, y: table.y, outsideZone: table.outsideZone ?? false, side: null },
+                    { ...table, outsideZone: table.outsideZone ?? false, side: null },
                   ]),
                 ),
               });

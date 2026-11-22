@@ -10,6 +10,7 @@ import {
   type SeatingChange,
   type SeatingPlan,
   type SeatingSide,
+  type TableShape,
 } from "../api/planning-seating.api";
 import { nextSeatingTableNumber } from "../utils/seating-layout";
 
@@ -21,6 +22,7 @@ export function AddSeatingTableDialog({
   onCloseSlot,
   onChange,
   error,
+  shape = "round",
 }: {
   plan: SeatingPlan;
   disabled: boolean;
@@ -28,8 +30,10 @@ export function AddSeatingTableDialog({
   onCloseSlot: () => void;
   onChange: (change: SeatingChange) => Promise<boolean>;
   error?: string;
+  shape?: TableShape;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "layout" });
+  const { t: studioText } = useTranslation("guestPlanning", { keyPrefix: "studio" });
   const { scope, isWeddingWide } = usePermission();
   const group = isWeddingWide("SEATING_EDIT") ? "OTHER" : scope("SEATING_EDIT")?.groups[0]?.id;
   const [nameOverride, setName] = useState<string | null>(null);
@@ -49,7 +53,7 @@ export function AddSeatingTableDialog({
         if (!disabled) onCloseSlot();
       }}
       title={t("addTable")}
-      description={`${t(slot.side)} · ${t("position", slot)}`}
+      description={`${studioText(shape === "twoSided" ? "twoSidedTable" : shape === "fourSided" ? "fourSidedTable" : "roundTable")} · ${t(slot.side)} · ${t("position", slot)}`}
     >
       <form
         className="space-y-4"
