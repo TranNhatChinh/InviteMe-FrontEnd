@@ -28,7 +28,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
-import { PanelLeft, Plus, Trash2, X } from "lucide-react";
+import { PanelLeft, Plus, X } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
 import { REALTIME_EVENTS } from "@/core/realtime/realtime-events";
@@ -64,7 +64,7 @@ import {
 import { tableSeatPoint } from "../utils/seating-table-shape";
 import { SeatingSeatBadge } from "./seating-seat-badge";
 import { SeatingCanvas } from "./seating-canvas";
-import { sideSlots } from "../utils/seating-layout";
+import { sideSlots, nextSeatingTableNumber } from "../utils/seating-layout";
 import { wouldSplitParty } from "../utils/seating-layout";
 import {
   changeGenerationDraft,
@@ -1179,13 +1179,57 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 tablePositions={tablePositions}
                 tableShapes={tableShapes}
                 onPaletteDrop={editable && !saving ? addCanvasItem : undefined}
-                onCaptureLayout={
-                  generationDraft
-                    ? (layout: CanvasLayout) => {
-                        canvasDraft.current = layout;
-                      }
-                    : undefined
-                }
+                onCaptureLayout={(layout: CanvasLayout) => {
+                  canvasDraft.current = layout;
+                }}
+                onEditTable={(table) => {
+                  setTableId(table.id);
+                  setPlaceId(null);
+                  setSeat(null);
+                }}
+                onDeleteTable={(table) => {
+                  setFailure(false);
+                  setPendingDelete({ id: table.id, name: table.name });
+                }}
+                onDuplicateTable={(table, point) => {
+                  const preferred = table.side ?? "BRIDE";
+                  const slot = sideSlots(
+                    plan.tables,
+                    preferred,
+                    preferred === "BRIDE"
+                      ? (plan.brideTablesPerRow ?? 2)
+                      : (plan.groomTablesPerRow ?? 2),
+                  ).find((slot) => !slot.table);
+                  if (!slot) return;
+                  const shape =
+                    tableShapes[table.id] ?? plan.canvasLayout?.tables[table.id]?.shape ?? "round";
+                  void change(
+                    {
+                      action: "CREATE_TABLE",
+                      name: t("layout.defaultTableName", {
+                        number: nextSeatingTableNumber(plan.tables),
+                      }),
+                      capacity: table.capacity,
+                      groupId: table.groupId ?? "OTHER",
+                      side: slot.side,
+                      row: slot.row,
+                      column: slot.column,
+                    },
+                    undefined,
+                    undefined,
+                    (next) => {
+                      const created = next.tables.find(
+                        (item) => !plan.tables.some((existing) => existing.id === item.id),
+                      );
+                      if (!created) return;
+                      setTableShapes((current) => ({ ...current, [created.id]: shape }));
+                      setTablePositions((current) => ({
+                        ...current,
+                        [created.id]: { x: point.x + 32, y: point.y + 32 },
+                      }));
+                    },
+                  );
+                }}
                 onSaveLayout={
                   generationDraft
                     ? undefined
@@ -1253,21 +1297,6 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                             names: remote.map((lease) => lease.displayName).join(", "),
                           })}
                         </p>
-                      )}
-                      {editable && (
-                        <button
-                          type="button"
-                          data-seating-canvas-interactive
-                          className="absolute right-1 top-1 z-10 rounded-md border bg-card p-1.5 text-destructive hover:bg-muted"
-                          aria-label={t("layout.deleteTable", { name: table.name })}
-                          disabled={saving}
-                          onClick={() => {
-                            setFailure(false);
-                            setPendingDelete({ id: table.id, name: table.name });
-                          }}
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
                       )}
                       <div
                         id={`seating-table-${table.id}`}

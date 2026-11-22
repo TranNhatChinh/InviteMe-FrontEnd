@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import Image from "next/image";
-import { Minus, Mouse, Plus, Scan, X } from "lucide-react";
+import { Copy, Minus, Mouse, Pencil, Plus, Scan, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
 import type { CanvasLayout, SeatingPlan, TableShape } from "../api/planning-seating.api";
@@ -53,6 +53,9 @@ export function SeatingCanvas({
   onPaletteDrop,
   tablePositions,
   tableShapes = {},
+  onEditTable,
+  onDuplicateTable,
+  onDeleteTable,
   onSaveLayout,
   onCaptureLayout,
   saving,
@@ -70,6 +73,9 @@ export function SeatingCanvas({
   ) => void;
   tablePositions?: Record<string, Point>;
   tableShapes?: Record<string, TableShape>;
+  onEditTable?: (table: SeatingTable) => void;
+  onDuplicateTable?: (table: SeatingTable, point: Point) => void;
+  onDeleteTable?: (table: SeatingTable) => void;
   onRemoveObject?: (id: string) => void;
   renderTable: (table: SeatingTable) => ReactNode;
 }) {
@@ -539,6 +545,9 @@ export function SeatingCanvas({
   return (
     <div
       className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#faf9f7]"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setSelectedId(null);
+      }}
       onClickCapture={(event) => {
         if (!suppressClick.current || event.detail === 0) return;
         suppressClick.current = false;
@@ -828,6 +837,9 @@ export function SeatingCanvas({
                 tabIndex={editable ? 0 : undefined}
                 aria-label={editable ? t("move", { name: table.name }) : undefined}
                 role={editable ? "group" : undefined}
+                onFocus={(event) => {
+                  if (editable && event.target === event.currentTarget) setSelectedId(table.id);
+                }}
                 onPointerDown={(event) => start(event, table.id, point)}
                 onPointerMove={move}
                 onPointerLeave={() => leave(table.id)}
@@ -839,7 +851,40 @@ export function SeatingCanvas({
                 style={{ left: point.x - left, top: point.y - upper }}
               >
                 {renderTable(table)}
-                {selectionDots(table.id)}
+                {editable && selectedId === table.id && !movingId && (
+                  <div
+                    role="group"
+                    aria-label={t("tableActions", { name: table.name })}
+                    data-seating-canvas-interactive
+                    className="absolute -top-14 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-stone-200 bg-white p-1.5 text-stone-800 shadow-md"
+                  >
+                    {(
+                      [
+                        { Icon: Pencil, label: "editTable", action: onEditTable },
+                        { Icon: Copy, label: "duplicateTable", action: onDuplicateTable },
+                        { Icon: Trash2, label: "deleteTable", action: onDeleteTable },
+                      ] as const
+                    ).map(
+                      ({ Icon, label, action }) =>
+                        action && (
+                          <button
+                            key={label}
+                            type="button"
+                            data-seating-canvas-interactive
+                            title={t(label, { name: table.name })}
+                            aria-label={t(label, { name: table.name })}
+                            disabled={
+                              saving || (label === "duplicateTable" && plan.tables.length >= 100)
+                            }
+                            className="grid size-8 place-items-center rounded-full hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-sky-500 disabled:opacity-40"
+                            onClick={() => action(table, point)}
+                          >
+                            <Icon aria-hidden="true" className="size-4" />
+                          </button>
+                        ),
+                    )}
+                  </div>
+                )}
                 {split && membership[table.id] === null && (
                   <span className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-amber-100 px-2 py-1 text-xs text-amber-900">
                     {t("outsideZones")}
