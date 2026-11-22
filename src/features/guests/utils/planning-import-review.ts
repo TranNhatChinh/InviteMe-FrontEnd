@@ -95,7 +95,7 @@ export function importRowStatus(
   excluded: ReadonlySet<number>,
   serverErrors: Record<number, string[]> = {},
 ): ImportRowStatus {
-  if (excluded.has(row.line)) return "SKIPPED";
+  if (excluded.has(row.line) || actions[row.line] === "SKIP") return "SKIPPED";
   const checked = preview?.rows.find((item) => item.rowNumber === row.line);
   if (
     row.errors.length ||
@@ -103,13 +103,47 @@ export function importRowStatus(
     preview?.errors.some((issue) => issue.rowNumber === row.line)
   )
     return "ERROR";
-  if (actions[row.line] === "SKIP") return "SKIPPED";
-  if (actions[row.line] === "UPDATE") return "UPDATE";
   if (!checked) return "PENDING";
+  if (actions[row.line] === "UPDATE") return "UPDATE";
   if (checked.status === "NEED_DECISION" && actions[row.line] !== "CREATE_SEPARATE")
     return "DECISION";
   if (checked.status !== "NEW" || row.warnings.length) return "WARNING";
   return "VALID";
+}
+
+export const importRowChip: Record<ImportRowStatus, string> = {
+  VALID: "Sẽ tạo mới",
+  WARNING: "Sẽ tạo mới",
+  UPDATE: "Sẽ cập nhật khách cũ",
+  SKIPPED: "Đã bỏ qua",
+  DECISION: "Cần quyết định",
+  ERROR: "Lỗi cần sửa",
+  PENDING: "Đang kiểm tra…",
+};
+export type ImportReviewFilter =
+  "ALL" | "READY" | "DECISION" | "WARNING" | "ERROR" | "SKIPPED" | "UPDATE" | "PENDING";
+export function matchesImportFilter(
+  filter: ImportReviewFilter,
+  status: ImportRowStatus,
+  action: ImportActions[number] | undefined,
+  hasWarnings: boolean,
+) {
+  if (filter === "ALL") return true;
+  if (filter === "READY") return status === "VALID" || status === "WARNING" || status === "UPDATE";
+  if (filter === "UPDATE") return status !== "SKIPPED" && action === "UPDATE";
+  if (filter === "WARNING") return status !== "SKIPPED" && hasWarnings;
+  return status === filter;
+}
+export function importReviewTotals(statuses: ImportRowStatus[]) {
+  return {
+    total: statuses.length,
+    ready: statuses.filter((status) => matchesImportFilter("READY", status, undefined, false))
+      .length,
+    decision: statuses.filter((status) => status === "DECISION").length,
+    error: statuses.filter((status) => status === "ERROR").length,
+    skipped: statuses.filter((status) => status === "SKIPPED").length,
+    pending: statuses.filter((status) => status === "PENDING").length,
+  };
 }
 export function importActions(preview: PlanningImportPreview): ImportActions {
   return Object.fromEntries(

@@ -12,6 +12,10 @@ import {
   importDuplicateContext,
   separateContactErrors,
   importSummary,
+  importRowChip,
+  importReviewTotals,
+  matchesImportFilter,
+  type ImportReviewFilter,
   type ImportActions,
   type ImportRowStatus,
 } from "../utils/planning-import-review";
@@ -86,7 +90,27 @@ const presentation: Record<
   },
 };
 
-const filters = ["ALL", "VALID", "WARNING", "DECISION", "ERROR", "SKIPPED", "UPDATE"] as const;
+const filterLabels: Record<ImportReviewFilter, string> = {
+  ALL: "Tất cả",
+  READY: "Sẵn sàng nhập",
+  DECISION: "Cần quyết định",
+  WARNING: "Có cảnh báo",
+  ERROR: "Lỗi cần sửa",
+  SKIPPED: "Đã bỏ qua",
+  UPDATE: "Chọn cập nhật",
+  PENDING: "Đang kiểm tra",
+};
+const summaryCards = [
+  { filter: "ALL", label: "Tổng số dòng", total: "total", tile: "border-stone-200 bg-white" },
+  { filter: "READY", label: "Sẵn sàng nhập", total: "ready", tile: presentation.VALID.tile },
+  {
+    filter: "DECISION",
+    label: "Cần quyết định",
+    total: "decision",
+    tile: "border-amber-200 bg-amber-50 text-amber-800",
+  },
+  { filter: "ERROR", label: "Lỗi cần sửa", total: "error", tile: presentation.ERROR.tile },
+] as const;
 
 const reasonTitles: Record<string, string> = {
   EXACT_DUPLICATE_IN_FILE: "Trùng hệt với một dòng trong file",
@@ -260,7 +284,7 @@ export function PlanningImportReview({
   onSubmit: () => void;
   onRetry: () => void;
 }) {
-  const [filter, setFilter] = useState<(typeof filters)[number]>("ALL");
+  const [filter, setFilter] = useState<ImportReviewFilter>("ALL");
   const [updating, setUpdating] = useState<CoupleRow | null>(null);
   const [resolving, setResolving] = useState<number | null>(null);
   const [creating, setCreating] = useState<CoupleRow | null>(null);
@@ -278,7 +302,8 @@ export function PlanningImportReview({
   const count = (status: ImportRowStatus) =>
     [...states.values()].filter((value) => value === status).length;
 
-  const pending = count("PENDING");
+  const totals = importReviewTotals([...states.values()]);
+  const pending = totals.pending;
   const problems = count("ERROR") + count("DECISION");
   const places = summary?.places ?? 0;
   const quota = preview?.quotaRemaining;
@@ -301,7 +326,20 @@ export function PlanningImportReview({
     overQuota ||
     !active.length;
 
-  const visible = rows.filter((row) => filter === "ALL" || states.get(row.line) === filter);
+  const hasWarnings = (row: CoupleRow) =>
+    !!row.warnings.length ||
+    states.get(row.line) === "WARNING" ||
+    !!preview?.rows
+      .find((check) => check.rowNumber === row.line)
+      ?.reasons.some((reason) => reason.startsWith("DEFAULTED_"));
+  const matching = (row: CoupleRow, key: ImportReviewFilter) =>
+    matchesImportFilter(
+      key,
+      states.get(row.line) ?? "PENDING",
+      actions[row.line],
+      hasWarnings(row),
+    );
+  const visible = rows.filter((row) => matching(row, filter));
   const checks = new Map(preview?.rows.map((row) => [row.rowNumber, row]));
   const updatingCheck = updating ? checks.get(updating.line) : undefined;
 
@@ -361,42 +399,34 @@ export function PlanningImportReview({
         </ol>
       </header>
 
-      {/* 6 Stat Cards */}
       <div
         role="group"
-        aria-label="Lọc trạng thái dòng"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7"
+        aria-label="Tổng quan import"
+        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
       >
-        {filters.map((key) => {
-          const isSelected = filter === key;
-          const label = key === "ALL" ? "Tất cả" : presentation[key].label;
-          const val = key === "ALL" ? rows.length : count(key);
-
-          return (
-            <button
-              type="button"
-              key={key}
-              aria-pressed={isSelected}
-              onClick={() => setFilter(key)}
-              className={cn(
-                "rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)]",
-                key === "ALL" ? "border-stone-200 bg-white" : presentation[key].tile,
-                isSelected ? "ring-2 ring-stone-900/30" : "hover:opacity-90",
-              )}
-            >
-              <span className="block text-xs font-semibold">{label}</span>
-              <span
-                className={cn(
-                  "mt-2 block text-3xl font-bold leading-none tabular-nums",
-                  key === "ALL" && "text-stone-900",
-                )}
-              >
-                {val}
-              </span>
-            </button>
-          );
-        })}
+        {summaryCards.map((card) => (
+          <button
+            type="button"
+            key={card.filter}
+            aria-pressed={filter === card.filter}
+            onClick={() => setFilter(card.filter)}
+            className={cn(
+              "rounded-2xl border p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400",
+              card.tile,
+              filter === card.filter && "ring-2 ring-stone-900/30",
+            )}
+          >
+            <span className="block text-xs font-semibold">{card.label}</span>
+            <strong className="mt-2 block text-3xl leading-none tabular-nums">
+              {totals[card.total]}
+            </strong>
+          </button>
+        ))}
       </div>
+      <p className="text-xs text-stone-500">
+        Đã bỏ qua: {totals.skipped} dòng{pending > 0 ? ` · Đang kiểm tra: ${pending} dòng` : ""}.
+        Sẵn sàng nhập gồm tạo mới và cập nhật đã qua kiểm tra.
+      </p>
 
       {/* Quota Progress & Skip-All-Exact Button */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -458,6 +488,34 @@ export function PlanningImportReview({
         </Button>
       )}
 
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">Danh sách khách nhập</h2>
+        <div role="group" aria-label="Bộ lọc danh sách khách nhập" className="flex flex-wrap gap-2">
+          {(Object.keys(filterLabels) as ImportReviewFilter[])
+            .filter((key) => key !== "PENDING" || pending > 0 || filter === "PENDING")
+            .map((key) => (
+              <button
+                type="button"
+                key={key}
+                aria-pressed={filter === key}
+                onClick={() => setFilter(key)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a62b4c]",
+                  filter === key
+                    ? "border-[#a62b4c] bg-rose-50 font-semibold text-[#a62b4c]"
+                    : "border-stone-200 bg-white text-stone-600",
+                )}
+              >
+                {filterLabels[key]} ({rows.filter((row) => matching(row, key)).length})
+              </button>
+            ))}
+        </div>
+        <p className="text-xs text-stone-500">
+          Đang lọc: <strong>{filterLabels[filter]}</strong> · {visible.length} dòng. Bộ lọc cảnh báo
+          và cập nhật có thể cùng chứa một dòng.
+        </p>
+      </div>
+
       {/* Row List */}
       <div className="space-y-3.5" aria-live="polite">
         {!visible.length && (
@@ -498,7 +556,7 @@ export function PlanningImportReview({
           return (
             <article
               key={row.line}
-              aria-label={`Dòng ${row.line}: ${style.label}`}
+              aria-label={`Dòng ${row.line}: ${importRowChip[status]}`}
               className={cn(
                 "rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] transition-shadow",
                 style.card,
@@ -533,18 +591,17 @@ export function PlanningImportReview({
                         <span
                           className={cn(
                             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ml-1",
-                            style.badge,
+                            status === "WARNING" ? presentation.VALID.badge : style.badge,
                           )}
                         >
                           <span
-                            className={cn("size-1.5 rounded-full", style.dot)}
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              status === "WARNING" ? presentation.VALID.dot : style.dot,
+                            )}
                             aria-hidden="true"
                           />
-                          {status === "WARNING" && checked?.status === "NEED_DECISION"
-                            ? "Đã chọn tạo riêng"
-                            : status === "DECISION"
-                              ? context?.label
-                              : style.label}
+                          {importRowChip[status]}
                         </span>
                       </div>
 
@@ -628,6 +685,7 @@ export function PlanningImportReview({
                   </div>
 
                   {actions[row.line] === "UPDATE" &&
+                    checked &&
                     (() => {
                       const decision = updates[row.line];
                       const target = checked?.matches.find(
@@ -637,10 +695,13 @@ export function PlanningImportReview({
                       return (
                         <div className="mt-3 space-y-2 rounded-xl bg-sky-50 p-3 text-sm">
                           <p className="font-semibold">
-                            Cập nhật: {target?.recipientName} ·{" "}
+                            Sẽ cập nhật: {target?.recipientName} ·{" "}
                             {updateValue("side", target?.guest?.side)} ·{" "}
                             {updateValue("group", target?.guest?.group)} ·{" "}
                             {target?.guest?.phone || target?.guest?.email || "Không có contact"}
+                          </p>
+                          <p className="text-xs text-sky-800">
+                            Chưa lưu — sẽ áp dụng khi xác nhận import.
                           </p>
                           <p>
                             Thông tin được cập nhật:{" "}
@@ -756,7 +817,9 @@ export function PlanningImportReview({
                 ? "Cần kiểm tra lại danh sách"
                 : pending || checking || (!preview && active.length > 0)
                   ? "Đang kiểm tra danh sách…"
-                  : `Sẵn sàng tạo ${summary?.created ?? 0} lời mời${createdWithWarnings ? `, gồm ${createdWithWarnings} dòng cần lưu ý` : ""} · cập nhật ${summary?.updated ?? 0} khách · thay đổi ${places} suất`}
+                  : totals.ready === 0 && totals.skipped === rows.length
+                    ? "Không có khách nào được tạo hoặc cập nhật"
+                    : `Sẵn sàng tạo ${summary?.created ?? 0} lời mời${createdWithWarnings ? `, gồm ${createdWithWarnings} dòng cần lưu ý` : ""} · cập nhật ${summary?.updated ?? 0} khách · thay đổi ${places} suất`}
           </p>
           <p className={cn("mt-0.5 text-xs", overQuota ? "text-red-700" : "text-stone-500")}>
             {overQuota

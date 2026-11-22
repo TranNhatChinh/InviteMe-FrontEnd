@@ -13,6 +13,9 @@ import {
   importRowStatus,
   importDuplicateContext,
   separateContactErrors,
+  importRowChip,
+  importReviewTotals,
+  matchesImportFilter,
 } from "../src/features/guests/utils/planning-import-review";
 import {
   checkImportGuests,
@@ -330,4 +333,51 @@ test("creating a separate invitation must change all shared contacts including n
   assert.equal(separateContactErrors(check, item, values).length, 1);
   values[7] = "";
   assert.deepEqual(separateContactErrors(check, item, values), []);
+});
+
+test("four summary cards count validated creates and updates while keeping warnings non-blocking", () => {
+  const counts = importReviewTotals([
+    "VALID",
+    "WARNING",
+    "UPDATE",
+    "DECISION",
+    "ERROR",
+    "SKIPPED",
+    "PENDING",
+  ]);
+  assert.deepEqual(counts, { total: 7, ready: 3, decision: 1, error: 1, skipped: 1, pending: 1 });
+  assert.equal(
+    counts.total,
+    counts.ready + counts.decision + counts.error + counts.skipped + counts.pending,
+  );
+  assert.equal(importRowChip.VALID, "Sẽ tạo mới");
+  assert.equal(importRowChip.WARNING, "Sẽ tạo mới");
+  assert.equal(importRowChip.UPDATE, "Sẽ cập nhật khách cũ");
+});
+
+test("skipping a broken row removes it from errors; an update without preview stays pending", () => {
+  const item = validateCoupleRows([row()])[0]!;
+  assert.equal(importRowStatus(item, null, { 2: "UPDATE" }, new Set()), "PENDING");
+  const broken = { ...item, errors: ["Sai dữ liệu"] };
+  assert.equal(importRowStatus(broken, preview, { 2: "SKIP" }, new Set()), "SKIPPED");
+  assert.equal(importRowStatus(broken, preview, { 2: "UPDATE" }, new Set()), "ERROR");
+});
+
+test("detail filters overlap by action and warning without inflating the ready total", () => {
+  assert.equal(matchesImportFilter("READY", "UPDATE", "UPDATE", true), true);
+  assert.equal(matchesImportFilter("WARNING", "UPDATE", "UPDATE", true), true);
+  assert.equal(matchesImportFilter("UPDATE", "UPDATE", "UPDATE", true), true);
+  // A rejected update is still discoverable by the chosen action but never ready.
+  assert.equal(matchesImportFilter("UPDATE", "ERROR", "UPDATE", false), true);
+  assert.equal(matchesImportFilter("READY", "ERROR", "UPDATE", false), false);
+  assert.equal(matchesImportFilter("WARNING", "SKIPPED", "SKIP", true), false);
+  assert.equal(matchesImportFilter("UPDATE", "SKIPPED", "UPDATE", true), false);
+  assert.deepEqual(importReviewTotals(["SKIPPED", "SKIPPED"]), {
+    total: 2,
+    ready: 0,
+    decision: 0,
+    error: 0,
+    skipped: 2,
+    pending: 0,
+  });
 });
