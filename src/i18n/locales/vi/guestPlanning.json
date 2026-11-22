@@ -89,6 +89,7 @@
       "tableUnavailable": "Bàn không còn khả dụng",
       "shortage": "Thiếu {{count}} chỗ",
       "occupied": "Ghế đã có khách",
+      "tableCapacity": "Đủ chỗ cho {{count}} người",
       "capacity": "+{{count}} · còn {{remaining}} chỗ sau khi xếp"
     },
     "legend": {

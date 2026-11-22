@@ -77,6 +77,16 @@ export function seatingDropFeedback(
       messageValues: shortage ? { count: shortage } : {},
       seats: [] as number[],
     };
+  // A table is a valid automatic drop target, but it is not a specific seat anchor.
+  // Only show ghost seats when the pointer is actually over a seat.
+  if (target.seatNumber === undefined)
+    return {
+      valid: true,
+      message: `Đủ chỗ cho ${ids.length} người`,
+      messageKey: "seating.feedback.tableCapacity",
+      messageValues: { count: ids.length },
+      seats: [] as number[],
+    };
   const afterCount = next.assignments.filter((a) => a.tableId === table.id).length;
   return {
     valid: true,

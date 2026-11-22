@@ -104,6 +104,7 @@
       "tableUnavailable": "This table is no longer available",
       "shortage": "{{count}} seats short",
       "occupied": "This seat is occupied",
+      "tableCapacity": "Enough seats for {{count}} people",
       "capacity": "+{{count}} · {{remaining}} seats available after seating"
     },
     "legend": {
