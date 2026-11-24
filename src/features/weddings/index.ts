@@ -7,7 +7,10 @@ export { WeddingOverview } from "./components/wedding-overview";
 export { WeddingNavigation } from "./components/wedding-navigation";
 export { StoryBuilderV4Renderer } from "./components/story-builder-v4-renderer";
 export { StoryTemplateDevicePreview } from "./components/story-template-device-preview";
-export { storyTemplatePreviewContent, storyTemplatePreviewSetup } from "./lib/story-template-preview-data";
+export {
+  storyTemplatePreviewContent,
+  storyTemplatePreviewSetup,
+} from "./lib/story-template-preview-data";
 export {
   createStoryBuilderV4Document,
   isStoryBuilderV4Document,
@@ -41,4 +44,4 @@ export {
   mediaUrl,
   uploadWeddingMedia,
 } from "./api/website.api";
-export { getWeddings } from "./api/wedding.api";
+export { getWeddings, getWeddingAccess } from "./api/wedding.api";

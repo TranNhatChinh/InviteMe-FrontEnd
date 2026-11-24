@@ -4,12 +4,15 @@ import { GiftSettingsPanel, GiftPreviewPanel } from "@/features/gifts";
 import { AuthGuard, useCurrentUser } from "@/features/auth";
 import { WeddingAccessProvider } from "@/features/weddings";
 import { InvitationWording } from "@/features/guests";
+import { listPublicTemplates } from "@/features/public";
 import {
   TemplateStudio,
   ImportedStudio,
   getInvitationDesign,
   saveInvitationDesign,
   publishInvitationDesign,
+  parseStudioDocument,
+  resolveInvitationDocument,
 } from "@/features/template-studio";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -81,10 +84,46 @@ function ConnectedStudio({
     queryKey: key,
     queryFn: ({ signal }) => getInvitationDesign(api, weddingId, signal),
   });
+  const templateRequested = typeof props.initialTemplate === "string";
+  const templates = useQuery({
+    queryKey: ["public-templates"],
+    queryFn: ({ signal }) => listPublicTemplates(api, signal),
+    enabled: templateRequested,
+  });
   if (design.isPending) return <SessionLoading />;
   if (design.isError)
     return <ErrorState error={design.error} retry={() => void design.refetch()} />;
-  return <StudioSession key={weddingId} weddingId={weddingId} snapshot={design.data} {...props} />;
+  if (templateRequested && templates.isPending) return <SessionLoading />;
+  if (templateRequested && templates.isError)
+    return <ErrorState error={templates.error} retry={() => void templates.refetch()} />;
+  const selected = templates.data?.find((template) => template.slug === props.initialTemplate);
+  if (templateRequested && !selected)
+    return (
+      <ErrorState
+        error={new Error("Template is unavailable.")}
+        retry={() => void templates.refetch()}
+      />
+    );
+  let templateDocument: string | undefined;
+  try {
+    if (selected)
+      templateDocument = JSON.stringify({
+        ...resolveInvitationDocument(parseStudioDocument(selected.configurationJson)),
+        templateId: selected.slug,
+      });
+  } catch (error) {
+    return <ErrorState error={error} retry={() => void templates.refetch()} />;
+  }
+  return (
+    <StudioSession
+      key={`${weddingId}:${selected?.id ?? "saved"}`}
+      weddingId={weddingId}
+      snapshot={design.data}
+      {...props}
+      initialDocument={templateDocument}
+      resolvedMusic={selected?.music}
+    />
+  );
 }
 
 function StudioSession({
@@ -102,11 +141,12 @@ function StudioSession({
   const cache = useQueryClient();
   const [version, setVersion] = useState(snapshot.version);
   const [initial, setInitial] = useState(
-    !props.initialTemplate &&
+    props.initialDocument ??
+      (!props.initialTemplate &&
       snapshot.document &&
       (!props.importMode || snapshot.document.kind === "IMPORTED")
-      ? JSON.stringify(snapshot.document)
-      : undefined,
+        ? JSON.stringify(snapshot.document)
+        : undefined),
   );
   const [generation, setGeneration] = useState(0);
   const remoteChanged = version !== snapshot.version;
@@ -187,7 +227,7 @@ function StudioSession({
         )}
         key={generation}
         {...props}
-        resolvedMusic={snapshot.music}
+        resolvedMusic={props.initialTemplate ? props.resolvedMusic : snapshot.music}
         onUploadImage={async (file) => {
           const media = await uploadWeddingMedia(api, weddingId, file);
           return { src: mediaUrl(media.url) ?? media.url, name: file.name };
