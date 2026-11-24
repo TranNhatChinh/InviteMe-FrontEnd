@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
 import type { CanvasLayout, SeatingPlan, TableShape } from "../api/planning-seating.api";
 import type { SeatingTable } from "../utils/seating-layout";
+import { resizeStage } from "../utils/seating-stage-resize";
 
 import {
   seatingObjectIcons,
@@ -164,7 +165,15 @@ export function SeatingCanvas({
     return {
       ...Object.fromEntries(Object.entries(saved.tables).map(([id, { x, y }]) => [id, { x, y }])),
       ...(saved.stage ? { stage: saved.stage } : {}),
+      ...(saved.stage?.width && saved.stage?.height
+        ? { "objectSize:stage": { x: saved.stage.width, y: saved.stage.height } }
+        : {}),
       ...Object.fromEntries(saved.objects.map(({ id, x, y }) => [id, { x, y }])),
+      ...Object.fromEntries(
+        saved.objects
+          .filter((item) => item.width && item.height)
+          .map((item) => [`objectSize:${item.id}`, { x: item.width ?? 250, y: item.height ?? 160 }]),
+      ),
       ...Object.fromEntries(
         sides.flatMap((side) => {
           const zone = saved.zones[side];
@@ -215,6 +224,7 @@ export function SeatingCanvas({
     return { table, point: positions[table.id] ?? tablePositions?.[table.id] ?? initial };
   });
   const stage = positions.stage ?? { x: center - 125, y: 48 };
+  const stageSize = (id: string) => positions[`objectSize:${id}`] ?? { x: 250, y: 160 };
   const objectLayout = objects
     .filter(
       (object): object is SeatingCanvasObject & { kind: SeatingObjectKind } =>
@@ -283,8 +293,15 @@ export function SeatingCanvas({
     zones: Object.fromEntries(
       zones.map(({ side, point, size }) => [side, { ...point, width: size.x, height: size.y }]),
     ),
-    stage: plan.canvasLayout?.stage ? stage : null,
-    objects: objectLayout.map(({ id, kind, point }) => ({ id, type: kind, ...point })),
+    stage: plan.canvasLayout?.stage
+      ? { ...stage, width: stageSize("stage").x, height: stageSize("stage").y }
+      : null,
+    objects: objectLayout.map(({ id, kind, point }) => ({
+      id,
+      type: kind,
+      ...point,
+      ...(kind === "stage" ? { width: stageSize(id).x, height: stageSize(id).y } : {}),
+    })),
   };
   useEffect(() => {
     onCaptureLayout?.(snapshot);
@@ -311,14 +328,20 @@ export function SeatingCanvas({
   const width =
     Math.max(
       hallWidth,
-      stage.x + 250 + padding,
+      stage.x + stageSize("stage").x + padding,
+      ...objectLayout
+        .filter(({ kind }) => kind === "stage")
+        .map(({ id, point }) => point.x + stageSize(id).x + padding),
       ...points.map((point) => point.x + spacing),
       ...zones.map((zone) => zone.point.x + zone.size.x + padding),
     ) - left;
   const height =
     Math.max(
       480,
-      stage.y + 160 + padding,
+      stage.y + stageSize("stage").y + padding,
+      ...objectLayout
+        .filter(({ kind }) => kind === "stage")
+        .map(({ id, point }) => point.y + stageSize(id).y + padding),
       ...points.map((point) => point.y + spacing),
       ...zones.map((zone) => zone.point.y + zone.size.y + padding),
     ) - upper;
@@ -337,6 +360,21 @@ export function SeatingCanvas({
   function place(id: string, point: Point) {
     const rect = surface.current?.getBoundingClientRect();
     if (rect) previousOrigin.current = { x: rect.left - left * zoom, y: rect.top - upper * zoom };
+    if (id.startsWith("resizeStage:")) {
+      const objectId = id.slice("resizeStage:".length, id.lastIndexOf(":"));
+      const corner = resizeCorners.find((item) => id.endsWith(`:${item.key}`));
+      const origin =
+        objectId === "stage" ? stage : objectLayout.find((item) => item.id === objectId)?.point;
+      if (!origin || !corner) return;
+      const size = stageSize(objectId);
+      const next = resizeStage({ ...origin, width: size.x, height: size.y }, point, corner);
+      setPositions((current) => ({
+        ...current,
+        [objectId]: { x: next.x, y: next.y },
+        [`objectSize:${objectId}`]: { x: next.width, y: next.height },
+      }));
+      return;
+    }
     const zone = zones.find((item) => item.id === id);
     if (zone) {
       const dx = point.x - zone.point.x;
@@ -399,7 +437,8 @@ export function SeatingCanvas({
       return;
     const rect = surface.current?.getBoundingClientRect();
     if (!rect) return;
-    if (!id.startsWith("resize:")) setSelectedId(id);
+    if (!id.startsWith("resize:") && !id.startsWith("resizeStage:")) setSelectedId(id);
+    if (id.startsWith("resizeStage:")) event.currentTarget.setPointerCapture(event.pointerId);
     setOutside(null);
     drag.current = {
       id,
@@ -540,6 +579,46 @@ export function SeatingCanvas({
         ))}
       </span>
     );
+  }
+
+  function stageResizeControls(id: string, origin: Point) {
+    if (!editable || selectedId !== id) return null;
+    const size = stageSize(id);
+    return resizeCorners.map((corner) => {
+      const resizeId = `resizeStage:${id}:${corner.key}`;
+      const point = {
+        x: origin.x + (corner.west ? 0 : size.x),
+        y: origin.y + (corner.north ? 0 : size.y),
+      };
+      return (
+        <div
+          key={corner.key}
+          role="group"
+          tabIndex={0}
+          aria-label={t("resizeZone", { name: t("stage") })}
+          className={`absolute z-30 size-4 touch-none rounded-full border-2 border-white bg-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500 ${corner.classes}`}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            start(event, resizeId, point);
+          }}
+          onPointerMove={(event) => {
+            event.stopPropagation();
+            move(event);
+          }}
+          onPointerUp={(event) => {
+            event.stopPropagation();
+            finish(event);
+          }}
+          onPointerCancel={finish}
+          onLostPointerCapture={finish}
+          onPointerLeave={() => leave(resizeId)}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            moveWithKey(event, resizeId, point);
+          }}
+        />
+      );
+    });
   }
 
   return (
@@ -759,8 +838,13 @@ export function SeatingCanvas({
                 onPointerCancel={finish}
                 onLostPointerCapture={finish}
                 onKeyDown={(event) => moveWithKey(event, "stage", stage)}
-                className={`absolute grid h-40 w-[250px] place-items-center text-sm font-semibold text-rose-900 ${frameClass("stage")}`}
-                style={{ left: stage.x - left, top: stage.y - upper }}
+                className={`absolute grid place-items-center text-sm font-semibold text-rose-900 ${frameClass("stage")}`}
+                style={{
+                  left: stage.x - left,
+                  top: stage.y - upper,
+                  width: stageSize("stage").x,
+                  height: stageSize("stage").y,
+                }}
               >
                 <Image
                   src="/images/seating/palette/stage-floral.png"
@@ -773,7 +857,7 @@ export function SeatingCanvas({
                 <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap">
                   {t("stage")}
                 </span>
-                {selectionDots("stage")}
+                {stageResizeControls("stage", stage)}
               </div>
             )}
             {objectLayout.map(({ id, kind, point }) => {
@@ -792,8 +876,14 @@ export function SeatingCanvas({
                   onPointerCancel={finish}
                   onLostPointerCapture={finish}
                   onKeyDown={(event) => moveWithKey(event, id, point)}
-                  className={`absolute flex items-center justify-center gap-2 rounded-xl text-sm font-medium text-stone-800 ${kind === "stage" ? "h-40 w-[250px]" : "border border-stone-300 bg-stone-100"} ${kind === "aisle" ? "h-72 w-32 border-dashed" : kind === "stage" ? "" : "h-20 w-[190px]"} ${frameClass(id)}`}
-                  style={{ left: point.x - left, top: point.y - upper }}
+                  className={`absolute flex items-center justify-center gap-2 rounded-xl text-sm font-medium text-stone-800 ${kind === "stage" ? "" : "border border-stone-300 bg-stone-100"} ${kind === "aisle" ? "h-72 w-32 border-dashed" : kind === "stage" ? "" : "h-20 w-[190px]"} ${frameClass(id)}`}
+                  style={{
+                    left: point.x - left,
+                    top: point.y - upper,
+                    ...(kind === "stage"
+                      ? { width: stageSize(id).x, height: stageSize(id).y }
+                      : {}),
+                  }}
                 >
                   {kind === "stage" ? (
                     <>
@@ -815,7 +905,7 @@ export function SeatingCanvas({
                       {t(kind)}
                     </>
                   )}
-                  {selectionDots(id)}
+                  {kind === "stage" ? stageResizeControls(id, point) : selectionDots(id)}
                   {editable && selectedId === id && onRemoveObject && (
                     <button
                       type="button"

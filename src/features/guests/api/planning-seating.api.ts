@@ -20,6 +20,12 @@ const positionPrioritySchema = z
 export type PositionPriority = z.infer<typeof positionPrioritySchema>;
 
 const canvasPoint = z.object({ x: z.number(), y: z.number() });
+const canvasSizedPoint = canvasPoint
+  .extend({
+    width: z.number().positive().max(1000000).nullish(),
+    height: z.number().positive().max(1000000).nullish(),
+  })
+  .refine((point) => (point.width == null) === (point.height == null));
 export const tableShapeSchema = z.enum(["round", "twoSided", "fourSided"]);
 export type TableShape = z.infer<typeof tableShapeSchema>;
 const canvasZone = canvasPoint.extend({
@@ -37,9 +43,9 @@ const canvasLayoutSchema = z.object({
     }),
   ),
   zones: z.object({ BRIDE: canvasZone.optional(), GROOM: canvasZone.optional() }),
-  stage: canvasPoint.nullable(),
+  stage: canvasSizedPoint.nullable(),
   objects: z.array(
-    canvasPoint.extend({
+    canvasSizedPoint.safeExtend({
       id: z.string(),
       type: z.enum(["danceFloor", "giftTable", "entrance", "aisle", "stage"]),
     }),
