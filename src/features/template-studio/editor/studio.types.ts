@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { templateCatalog } from "../templates/catalog";
 
 export type StudioWordingPanel = (controls: {
-  onPreview: (content: string | null) => void;
+  onPreview: (content: string | null, recipientLabel?: string | null) => void;
 }) => ReactNode;
 
 export type TemplateStudioProps = {

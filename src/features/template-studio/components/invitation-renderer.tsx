@@ -21,11 +21,13 @@ import { ImportedPages } from "../imported/pages";
 export function InvitationRenderer({
   document,
   content,
+  recipientLabel,
   token,
   music,
 }: {
   document: z.infer<typeof studioDocumentSchema>;
   content: string;
+  recipientLabel?: string | null;
   token: string;
   music?: InvitationMusic | null;
 }) {
@@ -91,6 +93,7 @@ export function InvitationRenderer({
             </Editor>
             {showingCover && cover && (
               <InvitationCover
+                recipientLabel={recipientLabel}
                 config={cover}
                 onOpen={() => {
                   setOpened(true);

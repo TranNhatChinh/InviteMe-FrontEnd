@@ -1,12 +1,8 @@
 export const defaultWordingText = "Trân trọng mời Quý khách đến chung vui trong ngày cưới.";
 
-export function resolveCoverGreeting(
-  cover: { greeting?: string; greetingBinding?: "invitationWording" },
-  previewContent: string | null = null,
-) {
-  return cover.greetingBinding === "invitationWording"
-    ? (previewContent ?? defaultWordingText)
-    : (cover.greeting ?? "Thân mời");
+/** Cover greetings use the recipient independently of configurable body wording. */
+export function resolveCoverGreeting(recipientLabel: string | null = null) {
+  return `Trân trọng kính mời ${recipientLabel?.trim() || "Quý khách"}`;
 }
 
 /** Bind the block at render time; the document never stores the selected guest's identity. */

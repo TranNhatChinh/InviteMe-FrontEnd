@@ -101,6 +101,7 @@ export function saveInvitationDesign(
     .then(resolveDesign);
 }
 export const publicInvitationSchema = z.object({
+  recipientLabel: z.string().nullish(),
   music: invitationMusicSchema.nullish(),
   document: studioDocumentSchema,
   content: z.string(),

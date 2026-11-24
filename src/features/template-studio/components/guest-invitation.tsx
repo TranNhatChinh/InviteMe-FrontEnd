@@ -53,6 +53,7 @@ export function GuestInvitation({ token }: { token: string }) {
       key={JSON.stringify(invitation.data.music ?? null)}
       document={resolveInvitationDocument(invitation.data.document)}
       content={invitation.data.content}
+      recipientLabel={invitation.data.recipientLabel}
       token={token}
       music={invitation.data.music}
     />
