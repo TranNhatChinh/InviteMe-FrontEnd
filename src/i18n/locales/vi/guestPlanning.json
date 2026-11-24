@@ -589,6 +589,10 @@
     }
   },
   "studio": {
+    "viewMode": "Chế độ hiển thị chỗ ngồi",
+    "listView": "Danh sách",
+    "noTables": "Chưa có bàn. Thêm bàn hoặc dùng gợi ý sắp xếp để bắt đầu.",
+    "addGuest": "Thêm khách",
     "aisle": "Lối đi",
     "saveLayout": "Lưu bố cục",
     "panHint": "Giữ chuột phải + kéo để di chuyển",

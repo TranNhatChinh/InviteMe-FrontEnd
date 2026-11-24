@@ -589,6 +589,10 @@
     }
   },
   "studio": {
+    "viewMode": "Seating view",
+    "listView": "List view",
+    "noTables": "No tables yet. Add a table or use seating suggestions to get started.",
+    "addGuest": "Add a guest",
     "aisle": "Aisle",
     "saveLayout": "Save layout",
     "panHint": "Hold right mouse button + drag to pan",
