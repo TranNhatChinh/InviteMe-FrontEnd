@@ -1,0 +1,51 @@
+.preview {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid #eee5dd;
+  border-radius: 10px;
+  background: radial-gradient(ellipse at 50% 30%, #f9f6ee, #e9e5de);
+}
+.collage {
+  position: absolute;
+  inset: 6% 7%;
+}
+.paper {
+  position: absolute;
+  width: 36%;
+  border: 5px solid #fffdf8;
+  border-radius: 3px;
+  box-shadow: 0 8px 17px #514a3c24;
+  background: #fffdf8;
+  overflow: hidden;
+}
+.paper0 {
+  left: 0;
+  top: 5%;
+  transform: rotate(-5deg);
+}
+.paper1 {
+  right: 0;
+  top: 10%;
+  transform: rotate(5deg);
+}
+.paper2 {
+  width: 39%;
+  left: 30.5%;
+  top: 22%;
+  transform: rotate(-1deg);
+  z-index: 1;
+}
+.placeholder {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 24px;
+  color: #82776b;
+  text-align: center;
+  font-size: 13px;
+}
+.placeholder button {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}

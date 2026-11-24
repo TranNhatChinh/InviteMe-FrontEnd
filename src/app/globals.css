@@ -3509,3 +3509,55 @@ body:has(.landing-dialog[open]) {
     transform: none !important;
   }
 }
+
+/* Category cards move as a single surface; their preview contents stay fixed. */
+@media (hover: hover) and (pointer: fine) {
+  .landing-template--category {
+    transition: transform 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
+  }
+  .landing-template--category:is(:hover, :focus-within) {
+    transform: translateY(-6px);
+    border-color: color-mix(in srgb, var(--primary), transparent 55%);
+    box-shadow: 0 24px 42px -22px #79565a65;
+  }
+
+  .landing-content :is(.landing-feature, .landing-step) {
+    transition:
+      transform 300ms ease,
+      box-shadow 300ms ease,
+      border-color 300ms ease;
+  }
+
+  .landing-content :is(.landing-feature, .landing-step):is(:hover, :focus-within) {
+    transform: translateY(-6px);
+    border-color: color-mix(in srgb, var(--primary), transparent 55%);
+    box-shadow: 0 24px 42px -22px #79565a65;
+  }
+
+  /* Keep hover separate from the pricing cards' existing GSAP reveal transform. */
+  .landing-content .pricing-card {
+    translate: 0 var(--landing-plan-resting-y, 0px);
+    transition: translate 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
+  }
+
+  .landing-content .pricing-card:is(:hover, :focus-within) {
+    translate: 0 calc(var(--landing-plan-resting-y, 0px) - 6px);
+    border-color: color-mix(in srgb, var(--primary), transparent 55%);
+    box-shadow: 0 24px 42px -22px #79565a65;
+  }
+
+  @media (min-width: 768px) {
+    .landing-content .pricing-card[class~="md:-translate-y-2"] {
+      --landing-plan-resting-y: -8px;
+    }
+  }
+
+  .landing-faq details {
+    transition: box-shadow 250ms ease, border-color 250ms ease;
+  }
+
+  .landing-faq details:is(:hover, :focus-within) {
+    border-color: color-mix(in srgb, var(--primary), transparent 55%);
+    box-shadow: 0 8px 24px -15px #79565a50;
+  }
+}

@@ -16,6 +16,7 @@ import Image from "next/image";
 import type { ReactNode } from "react";
 import { SampleSite } from "./sample-site";
 import { StoryCover } from "./story-cover";
+import { LandingFeatureShowcase } from "./landing-feature-showcase";
 import { useTranslation } from "react-i18next";
 
 const templates = [
@@ -69,10 +70,17 @@ const questions = [
   ["faqLinkQuestion", "faqLinkAnswer"],
 ] as const;
 
-export function LandingContent({ pricingSection }: { pricingSection?: ReactNode }) {
+export function LandingContent({
+  pricingSection,
+  invitationPreview,
+}: {
+  pricingSection?: ReactNode;
+  invitationPreview: ReactNode;
+}) {
   const { t } = useTranslation("landing");
   return (
     <div className="landing-content">
+      <LandingFeatureShowcase />
       <section id="templates" className="landing-section" aria-labelledby="template-title">
         <div className="landing-heading">
           <p className="landing-eyebrow">{t("templateEyebrow")}</p>
@@ -81,27 +89,9 @@ export function LandingContent({ pricingSection }: { pricingSection?: ReactNode 
         </div>
         <div className="landing-template-grid">
           {templates.map((template) => (
-            <article className="landing-template" key={template.id}>
+            <article className="landing-template landing-template--category" key={template.id}>
               <div className="landing-template__preview">
-                {template.id === "story" ? (
-                  <StoryCover />
-                ) : (
-                  <div className="landing-category-image">
-                    <Image
-                      src={
-                        template.id === "invite"
-                          ? "/images/template-studio/collection/photo-garden.webp"
-                          : "/images/templates/story-meadow.png"
-                      }
-                      alt={template.id === "invite" ? t("weddingInviteAlt") : t("weddingStoryAlt")}
-                      fill
-                      sizes="(max-width: 640px) 90vw, 550px"
-                    />
-                    <span className="landing-category-image__label">
-                      {template.id === "invite" ? t("invitationCategory") : t("storyCategory")}
-                    </span>
-                  </div>
-                )}
+                {template.id === "story" ? <StoryCover /> : invitationPreview}
               </div>
               <div className="landing-template__body">
                 <h3>{t(template.titleKey)}</h3>

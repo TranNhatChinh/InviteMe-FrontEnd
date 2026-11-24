@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import Image from "next/image";
 import Link from "next/link";
@@ -193,7 +193,7 @@ export function PricingTable({
           gsap.fromTo(
             el.querySelectorAll(".pricing-card"),
             { opacity: 0, y: 32 },
-            { opacity: 1, y: 0, duration: 0.7, stagger: 0.15, ease: "power3.out" }
+            { opacity: 1, y: 0, duration: 0.7, stagger: 0.15, ease: "power3.out", clearProps: "transform,translate,rotate,scale,opacity" }
           );
           observer.disconnect();
         }
@@ -468,11 +468,13 @@ export function PricingTable({
                 </tr>
               </thead>
               <tbody>
-                {COMPARISON_ROWS.map((section, idx) => (
-                  <tr key={idx} className="contents">
-                    <td colSpan={4} className="bg-muted/40 font-semibold px-4 py-2.5 text-xs uppercase tracking-wider text-muted-foreground">
-                      {t(`pricing.comparison.categories.${section.category}`)}
-                    </td>
+                {COMPARISON_ROWS.map((section) => (
+                  <Fragment key={section.category}>
+                    <tr>
+                      <td colSpan={4} className="bg-muted/40 font-semibold px-4 py-2.5 text-xs uppercase tracking-wider text-muted-foreground">
+                        {t(`pricing.comparison.categories.${section.category}`)}
+                      </td>
+                    </tr>
                     {section.items.map((row, rowIdx) => (
                       <tr key={rowIdx} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                         <td className="py-3 px-4 text-foreground font-medium">{t(`pricing.comparison.rows.${row.name}`)}</td>
@@ -487,7 +489,7 @@ export function PricingTable({
                         </td>
                       </tr>
                     ))}
-                  </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

@@ -5,18 +5,21 @@ import { imageShapeStyle, itemStyle, studioTextStyle } from "./items";
 import { resolveStudioText } from "./wording-text";
 import { WordingPreviewContext } from "./wording-preview";
 import { ImportedPages } from "../imported/pages";
+import { InvitationCover } from "./invitation-cover";
 export function TemplateThumbnail({
   document,
   scale = 0.43,
   height = 230,
   fluid = false,
   full = false,
+  showCover = false,
 }: {
   document: ReturnType<typeof parseStudioDocument>;
   scale?: number;
   height?: number;
   fluid?: boolean;
   full?: boolean;
+  showCover?: boolean;
 }) {
   const wording = useContext(WordingPreviewContext);
   const host = useRef<HTMLDivElement>(null);
@@ -31,7 +34,40 @@ export function TemplateThumbnail({
     return () => observer.disconnect();
   }, [fluid]);
   const root = document.nodes.ROOT;
-  if (document.kind === "IMPORTED") return <div style={{height,overflow:"hidden"}}><ImportedPages pages={document.pages ?? []} widgets={document.widgets}/></div>;
+  if (showCover && root?.props.cover?.enabled) {
+    const coverScale = fluid ? width / 480 : scale;
+    return (
+      <div
+        ref={host}
+        aria-hidden="true"
+        style={{
+          position: "relative",
+          width: fluid ? "100%" : 480 * scale,
+          aspectRatio: "9 / 16",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: 480,
+            height: (480 * 16) / 9,
+            transform: `scale(${coverScale})`,
+            transformOrigin: "top left",
+            pointerEvents: "none",
+          }}
+        >
+          <InvitationCover config={root.props.cover} editing onOpen={() => {}} />
+        </div>
+      </div>
+    );
+  }
+  if (document.kind === "IMPORTED")
+    return (
+      <div style={{ height, overflow: "hidden" }}>
+        <ImportedPages pages={document.pages ?? []} widgets={document.widgets} />
+      </div>
+    );
   if (!root) return null;
   const frameWidth = full ? (root.props.width ?? 480) : 480;
   const frameHeight = full ? (root.props.height ?? 760) : fluid ? 1400 : 700;
