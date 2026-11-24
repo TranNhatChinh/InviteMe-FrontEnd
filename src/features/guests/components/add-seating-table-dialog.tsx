@@ -23,6 +23,7 @@ export function AddSeatingTableDialog({
   onChange,
   error,
   shape = "round",
+  draft = false,
 }: {
   plan: SeatingPlan;
   disabled: boolean;
@@ -31,6 +32,7 @@ export function AddSeatingTableDialog({
   onChange: (change: SeatingChange) => Promise<boolean>;
   error?: string;
   shape?: TableShape;
+  draft?: boolean;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "layout" });
   const { t: studioText } = useTranslation("guestPlanning", { keyPrefix: "studio" });
@@ -39,6 +41,7 @@ export function AddSeatingTableDialog({
   const [nameOverride, setName] = useState<string | null>(null);
   const name =
     nameOverride ?? t("defaultTableName", { number: nextSeatingTableNumber(plan.tables) });
+  const [side, setSide] = useState<SeatingSide | "">(draft ? slot.side : "");
   const [capacity, setCapacity] = useState<SeatingCapacity>(10);
   const valid =
     !!name.trim() &&
@@ -53,7 +56,13 @@ export function AddSeatingTableDialog({
         if (!disabled) onCloseSlot();
       }}
       title={t("addTable")}
-      description={`${studioText(shape === "twoSided" ? "twoSidedTable" : shape === "fourSided" ? "fourSidedTable" : "roundTable")} · ${t(slot.side)} · ${t("position", slot)}`}
+      description={studioText(
+        shape === "twoSided"
+          ? "twoSidedTable"
+          : shape === "fourSided"
+            ? "fourSidedTable"
+            : "roundTable",
+      )}
     >
       <form
         className="space-y-4"
@@ -66,7 +75,7 @@ export function AddSeatingTableDialog({
               name: name.trim(),
               capacity,
               groupId: group,
-              ...slot,
+              ...(side ? { side } : {}),
             })
           )
             onCloseSlot();
@@ -78,6 +87,21 @@ export function AddSeatingTableDialog({
           </p>
         )}
         <fieldset disabled={disabled} className="space-y-4">
+          <label className="block text-sm">
+            {t("side")}
+            <select
+              aria-label={t("side")}
+              value={side}
+              onChange={(event) => setSide(event.target.value as SeatingSide | "")}
+              className="mt-1 block w-full rounded-lg border bg-background p-2"
+            >
+              <option value="" disabled={draft}>
+                {t("neutralSide")}
+              </option>
+              <option value="GROOM">{t("GROOM")}</option>
+              <option value="BRIDE">{t("BRIDE")}</option>
+            </select>
+          </label>
           <label className="block text-sm">
             {t("tableName")}
             <input

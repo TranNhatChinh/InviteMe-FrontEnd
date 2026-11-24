@@ -62,6 +62,7 @@ import {
   type SeatingTableItem,
 } from "./seating-object-palette";
 import { tableSeatPoint } from "../utils/seating-table-shape";
+import { tableSideColors } from "../utils/seating-table-side";
 import { SeatingSeatBadge } from "./seating-seat-badge";
 import { SeatingCanvas } from "./seating-canvas";
 import { sideSlots, nextSeatingTableNumber } from "../utils/seating-layout";
@@ -374,22 +375,14 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   const plan = generationDraft?.plan ?? preview ?? planQuery.data;
   const roomObjects: SeatingCanvasObject[] = objects ?? [
     ...(plan?.canvasLayout?.objects.map(({ id, type }) => ({ id, kind: type })) ?? []),
-    ...(plan?.canvasLayout?.zones.BRIDE ? [{ id: "zone:BRIDE", kind: "brideArea" as const }] : []),
-    ...(plan?.canvasLayout?.zones.GROOM ? [{ id: "zone:GROOM", kind: "groomArea" as const }] : []),
   ];
 
   function addCanvasItem(
     kind: SeatingCanvasObject["kind"] | SeatingTableItem,
     point?: { x: number; y: number },
-    side?: TableSlot["side"],
   ) {
     if (!plan || !editable || saving) return;
     if (kind !== "table" && kind !== "tableTwoSided" && kind !== "tableFourSided") {
-      if (
-        (kind === "brideArea" || kind === "groomArea") &&
-        roomObjects.some((object) => object.kind === kind)
-      )
-        return;
       setObjects([...roomObjects, { id: "object:" + crypto.randomUUID(), kind, point }]);
       return;
     }
@@ -401,7 +394,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
       ...sideSlots(plan.tables, "BRIDE", plan.brideTablesPerRow ?? 2),
       ...sideSlots(plan.tables, "GROOM", plan.groomTablesPerRow ?? 2),
     ]
-      .filter((slot) => !slot.table && (!side || slot.side === side))
+      .filter((slot) => !slot.table)
       .sort((a, b) => a.row - b.row)[0];
     if (slot) {
       setTableDrop(point);
@@ -1155,6 +1148,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     )}
                   {editable && tableSlot && (
                     <AddSeatingTableDialog
+                      draft={!!generationDraft}
                       key={
                         tableSlot
                           ? `${tableSlot.side}:${tableSlot.row}:${tableSlot.column}`
@@ -1168,11 +1162,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       onChange={(input) =>
                         change(input, undefined, undefined, (next) => {
                           const created = next.tables.find(
-                            (table) =>
-                              !plan.tables.some((existing) => existing.id === table.id) &&
-                              table.side === tableSlot.side &&
-                              table.row === tableSlot.row &&
-                              table.column === tableSlot.column,
+                            (table) => !plan.tables.some((existing) => existing.id === table.id),
                           );
                           if (created)
                             setTableShapes((current) => ({ ...current, [created.id]: tableShape }));
@@ -1189,7 +1179,23 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 </div>
               </div>
               <div className="border-b bg-card px-3 py-2">
-                <SeatingLegend canvas />
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <SeatingLegend canvas />
+                  <ul
+                    aria-label={t("layout.side")}
+                    className="flex flex-wrap gap-3 text-xs text-stone-600"
+                  >
+                    {(["GROOM", "BRIDE", null] as const).map((side) => (
+                      <li key={side ?? "none"} className="flex items-center gap-1.5">
+                        <span
+                          aria-hidden="true"
+                          className={`size-3 rounded-full ${tableSideColors(side).surface}`}
+                        />
+                        {t(`layout.${tableSideColors(side).label}`)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
               {view === "list" && (
                 <div
@@ -1216,7 +1222,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                             dragTarget?.tableId === table.id && dragFeedback?.valid === false
                           }
                           label={t("seating.dropZone", { table: table.name })}
-                          className={`rounded-2xl border border-[#ffa895] bg-white/60 p-5 ${members.length ? "" : "border-dashed"}`}
+                          className={`rounded-2xl border p-5 ${tableSideColors(table.side).card} ${members.length ? "" : "border-dashed"}`}
                         >
                           <div
                             id={`seating-table-${table.id}`}
@@ -1225,6 +1231,9 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                             <h3 className="min-w-0 flex-1 truncate text-lg font-semibold">
                               {table.name}
                             </h3>
+                            <span className="text-xs text-stone-600">
+                              {t(`layout.${tableSideColors(table.side).label}`)}
+                            </span>
                             <span className="text-xs text-muted-foreground">
                               {members.length}/{table.capacity}
                             </span>
@@ -1328,15 +1337,6 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     setPendingDelete({ id: table.id, name: table.name });
                   }}
                   onDuplicateTable={(table, point) => {
-                    const preferred = table.side ?? "BRIDE";
-                    const slot = sideSlots(
-                      plan.tables,
-                      preferred,
-                      preferred === "BRIDE"
-                        ? (plan.brideTablesPerRow ?? 2)
-                        : (plan.groomTablesPerRow ?? 2),
-                    ).find((slot) => !slot.table);
-                    if (!slot) return;
                     const shape =
                       tableShapes[table.id] ??
                       plan.canvasLayout?.tables[table.id]?.shape ??
@@ -1349,9 +1349,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                         }),
                         capacity: table.capacity,
                         groupId: table.groupId ?? "OTHER",
-                        side: slot.side,
-                        row: slot.row,
-                        column: slot.column,
+                        ...(table.side ? { side: table.side } : {}),
                       },
                       undefined,
                       undefined,
@@ -1444,7 +1442,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                           className="relative aspect-square scroll-mt-6"
                         >
                           <button
-                            className={`absolute flex flex-col items-center justify-center text-center text-sm bg-[#ffa895] text-stone-950 ${shape === "round" ? "left-[21%] top-[21%] size-[58%] rounded-full" : "left-[14%] top-[25%] h-[50%] w-[72%] rounded-xl"} ${tableId === table.id ? "ring-2 ring-primary" : ""}`}
+                            className={`absolute flex flex-col items-center justify-center text-center text-sm ${tableSideColors(table.side).surface} text-stone-950 ${shape === "round" ? "left-[21%] top-[21%] size-[58%] rounded-full" : "left-[14%] top-[25%] h-[50%] w-[72%] rounded-xl"} ${tableId === table.id ? "ring-2 ring-primary" : ""}`}
                             aria-pressed={tableId === table.id && seat === null}
                             aria-label={t("seating.viewTableGuests", { table: table.name })}
                             aria-haspopup="dialog"
@@ -1473,6 +1471,9 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                             }}
                           >
                             <strong>{table.name}</strong>
+                            <span className="text-[10px] text-stone-700">
+                              {t(`layout.${tableSideColors(table.side).label}`)}
+                            </span>
                             {table.groupId && (
                               <span className="block max-w-24 truncate text-[10px] text-muted-foreground">
                                 {groupNames.get(table.groupId) ?? t("seating.groupScope")}
@@ -1580,17 +1581,6 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   table={inspectedTable}
                   canLayout={isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")}
                   saveError={failure ? message : undefined}
-                  onLayoutSave={(side, row, column) =>
-                    void change({
-                      action: "UPDATE_TABLE",
-                      tableId: inspectedTable.id,
-                      name: inspectedTable.name,
-                      capacity: inspectedTable.capacity,
-                      side,
-                      row,
-                      column,
-                    })
-                  }
                   plan={plan}
                   editable={editable}
                   saving={saving}
@@ -1614,14 +1604,22 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       );
                     }
                   }}
-                  onSave={(name, capacity) =>
+                  onSave={(name, capacity, side) => {
+                    const positions = canvasDraft.current?.tables;
+                    if (positions)
+                      setTablePositions(
+                        Object.fromEntries(
+                          Object.entries(positions).map(([id, { x, y }]) => [id, { x, y }]),
+                        ),
+                      );
                     void change({
                       action: "UPDATE_TABLE",
                       tableId: inspectedTable.id,
                       name,
                       capacity,
-                    })
-                  }
+                      ...(side !== undefined ? { side } : {}),
+                    });
+                  }}
                   onDelete={() =>
                     void change({ action: "DELETE_TABLE", tableId: inspectedTable.id })
                   }

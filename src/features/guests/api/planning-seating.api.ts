@@ -33,6 +33,7 @@ const canvasZone = canvasPoint.extend({
   height: z.number().positive(),
 });
 const canvasLayoutSchema = z.object({
+  receptionMode: z.enum(["JOINT", "GROOM", "BRIDE"]).nullish(),
   splitZones: z.boolean(),
   tables: z.record(
     z.string(),
@@ -119,7 +120,7 @@ export type SeatingChange =
       tableId: string;
       name: string;
       capacity: number;
-      side?: SeatingSide;
+      side?: SeatingSide | "UNSPECIFIED";
       row?: number;
       column?: number;
     }
@@ -171,13 +172,16 @@ export function changeSeatingPlan(
 export const seatingCapacities = [8, 10, 12] as const;
 export type SeatingCapacity = (typeof seatingCapacities)[number];
 export type SeatingSide = "BRIDE" | "GROOM";
+export type ReceptionMode = "JOINT" | "GROOM" | "BRIDE";
 export type SeatingGenerationConfig = {
+  receptionMode?: ReceptionMode;
   expectedVersion: number;
   tableCapacity: SeatingCapacity;
   positionPriority?: PositionPriority;
   tablesPerRow: { bride: number; groom: number };
 };
 export const seatingGenerationSchema = z.object({
+  receptionMode: z.enum(["JOINT", "GROOM", "BRIDE"]).optional(),
   sourceVersion: z.number().int(),
   sourceFingerprint: z.string(),
   algorithmVersion: z.string(),

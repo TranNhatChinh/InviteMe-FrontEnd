@@ -52,6 +52,69 @@ function plan(): SeatingPlan {
     assignments: [],
   };
 }
+test("single reception stays in the draft and apply contract and shares slots across sides", () => {
+  const source = plan();
+  for (const mode of ["GROOM", "BRIDE"] as const) {
+    const config = {
+      expectedVersion: 0,
+      tableCapacity: 10 as const,
+      receptionMode: mode,
+      tablesPerRow: { bride: 2, groom: 2 },
+    };
+    const proposal = seatingGenerationSchema.parse({
+      sourceVersion: 0,
+      sourceFingerprint: "fp",
+      algorithmVersion: "v2",
+      receptionMode: mode,
+      optimizationStatus: "FEASIBLE_NOT_PROVEN",
+      summary: { guests: 0, places: 0, tables: 2, emptySeats: 20 },
+      warnings: [],
+      assignments: [],
+      tables: [
+        { code: "G01", side: "BRIDE", row: 1, column: 1, capacity: 10, group: null, guestIds: [] },
+        { code: "T01", side: "GROOM", row: 1, column: 2, capacity: 10, group: null, guestIds: [] },
+      ],
+    });
+    const draft = generationDraftPlan(source, proposal, config);
+    assert.equal(draft.canvasLayout?.receptionMode, mode);
+    const edited = changeGenerationDraft(draft, {
+      action: "CREATE_TABLE",
+      name: "Third",
+      capacity: 10,
+      side: "BRIDE",
+    });
+    assert.equal(edited.tables[2]?.row, 2);
+    assert.equal(edited.tables[2]?.column, 1);
+    const changedSide = changeGenerationDraft(edited, {
+      action: "UPDATE_TABLE",
+      tableId: "draft:G01",
+      name: "G01",
+      capacity: 10,
+      side: "GROOM",
+    });
+    assert.equal(changedSide.tables[0]?.row, 1);
+    assert.equal(changedSide.tables[0]?.column, 1);
+    const moved = changeGenerationDraft(changedSide, {
+      action: "MOVE_TABLE_SLOT",
+      tableId: "draft:G01",
+      targetRow: 2,
+      targetColumn: 1,
+    });
+    assert.equal(moved.tables[2]?.row, 1);
+    const input = generationDraftInput(moved, {
+      ...config,
+      sourceFingerprint: "fp",
+      algorithmVersion: "v2",
+    });
+    assert.equal(input.receptionMode, mode);
+    assert.equal(input.draft?.tables.length, 3);
+    const parsed = seatingPlanSchema.parse({
+      ...moved,
+      canvasLayout: { ...moved.canvasLayout, receptionMode: mode },
+    });
+    assert.equal(parsed.canvasLayout?.receptionMode, mode);
+  }
+});
 test("generated draft edits remain local and serialize the edited tables and seats for one save", () => {
   const source = plan();
   const config = {

@@ -19,15 +19,13 @@ export type SeatingTableItem = "table" | "tableTwoSided" | "tableFourSided";
 export type SeatingCanvasObject = {
   id: string;
   point?: { x: number; y: number };
-  kind: SeatingObjectKind | "brideArea" | "groomArea";
+  kind: SeatingObjectKind;
 };
 
 const paletteImages = {
   table: "round-table",
   tableTwoSided: "table-2-sided",
   tableFourSided: "table-4-sided",
-  brideArea: "bride-area",
-  groomArea: "groom-area",
   aisle: "aisle",
   stage: "stage-floral",
   danceFloor: "dance-floor",
@@ -110,7 +108,7 @@ export function SeatingObjectPalette({
       <div className="space-y-2">
         <h3 className="text-sm font-medium">{t("roomObjects")}</h3>
         <div className="grid grid-cols-4">
-          {(["brideArea", "groomArea", "aisle", "stage"] as const).map((kind) => (
+          {(["aisle", "stage"] as const).map((kind) => (
             <button
               type="button"
               key={kind}

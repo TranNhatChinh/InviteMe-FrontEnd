@@ -20,6 +20,16 @@ export function generationDraftPlan(
       proposal.positionPriority ?? config.positionPriority ?? source.positionPriority,
     brideTablesPerRow: config.tablesPerRow.bride,
     groomTablesPerRow: config.tablesPerRow.groom,
+    canvasLayout: {
+      ...(source.canvasLayout ?? {
+        splitZones: false,
+        tables: {},
+        zones: {},
+        stage: null,
+        objects: [],
+      }),
+      receptionMode: proposal.receptionMode ?? config.receptionMode ?? "JOINT",
+    },
     tables: proposal.tables.map((t) => ({
       id: "draft:" + t.code,
       name: t.code,
@@ -43,6 +53,7 @@ export function generationDraftInput(
 ): SeatingGenerationApply {
   return {
     ...input,
+    receptionMode: plan.canvasLayout?.receptionMode ?? input.receptionMode ?? "JOINT",
     tablesPerRow: { bride: plan.brideTablesPerRow ?? 2, groom: plan.groomTablesPerRow ?? 2 },
     draft: {
       tables: plan.tables.map((t) => {
@@ -74,8 +85,12 @@ export function changeGenerationDraft(source: SeatingPlan, change: SeatingChange
     return next;
   }
   const next = structuredClone(source);
+  const mode = next.canvasLayout?.receptionMode ?? "JOINT";
+  const single = mode !== "JOINT";
   const width = (side: string | null | undefined) =>
-    side === "BRIDE" ? (next.brideTablesPerRow ?? 2) : (next.groomTablesPerRow ?? 2);
+    (single ? mode === "BRIDE" : side === "BRIDE")
+      ? (next.brideTablesPerRow ?? 2)
+      : (next.groomTablesPerRow ?? 2);
   if (change.action === "CREATE_TABLE" || change.action === "CREATE_TABLES") {
     const count = change.action === "CREATE_TABLE" ? 1 : change.tableCount;
     if (!change.side || count < 1 || next.tables.length + count > 100)
@@ -85,7 +100,7 @@ export function changeGenerationDraft(source: SeatingPlan, change: SeatingChange
         (n) =>
           !next.tables.some(
             (t) =>
-              t.side === change.side &&
+              (single || t.side === change.side) &&
               t.row === Math.floor(n / width(change.side)) + 1 &&
               t.column === (n % width(change.side)) + 1,
           ),
@@ -107,9 +122,9 @@ export function changeGenerationDraft(source: SeatingPlan, change: SeatingChange
   } else if (change.action === "UPDATE_LAYOUT") {
     next.brideTablesPerRow = change.brideTablesPerRow;
     next.groomTablesPerRow = change.groomTablesPerRow;
-    for (const side of ["BRIDE", "GROOM"] as const)
+    for (const side of single ? [mode] : ["BRIDE", "GROOM"])
       next.tables
-        .filter((t) => t.side === side)
+        .filter((t) => single || t.side === side)
         .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
         .forEach((t, i) => {
           t.row = Math.floor(i / width(side)) + 1;
@@ -124,7 +139,9 @@ export function changeGenerationDraft(source: SeatingPlan, change: SeatingChange
     } else if (change.action === "MOVE_TABLE_SLOT") {
       const other = next.tables.find(
         (t) =>
-          t.side === table.side && t.row === change.targetRow && t.column === change.targetColumn,
+          (single || t.side === table.side) &&
+          t.row === change.targetRow &&
+          t.column === change.targetColumn,
       );
       if (other) {
         other.row = table.row;
@@ -135,16 +152,35 @@ export function changeGenerationDraft(source: SeatingPlan, change: SeatingChange
     } else if (change.action === "UPDATE_TABLE") {
       table.name = change.name.trim();
       table.capacity = change.capacity;
+      if (change.side === "UNSPECIFIED")
+        throw new Error("Bàn trong phương án gợi ý cần chọn Nhà trai hoặc Nhà gái.");
       if (change.side) {
+        const previousSide = table.side;
         table.side = change.side;
-        table.row = change.row;
-        table.column = change.column;
+        if (change.row && change.column) {
+          table.row = change.row;
+          table.column = change.column;
+        } else if (!single && previousSide !== change.side) {
+          const index = Array.from({ length: 100 * width(change.side) }, (_, n) => n).find(
+            (n) =>
+              !next.tables.some(
+                (t) =>
+                  t.id !== table.id &&
+                  t.side === change.side &&
+                  t.row === Math.floor(n / width(change.side)) + 1 &&
+                  t.column === (n % width(change.side)) + 1,
+              ),
+          );
+          if (index === undefined) throw new Error("Không còn vị trí trống.");
+          table.row = Math.floor(index / width(change.side)) + 1;
+          table.column = (index % width(change.side)) + 1;
+        }
       }
     }
   }
   const slots = new Set<string>();
   for (const t of next.tables) {
-    const slot = [t.side, t.row, t.column].join(":");
+    const slot = [single ? "SINGLE" : t.side, t.row, t.column].join(":");
     if (
       !t.name.trim() ||
       !t.side ||
