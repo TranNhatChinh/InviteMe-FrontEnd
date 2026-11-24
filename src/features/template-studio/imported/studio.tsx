@@ -21,6 +21,7 @@ import { useRuntime } from "@/core/config/runtime";
 import { BrandLogo } from "@/shared/components/brand-logo";
 import { Button } from "@/shared/ui/button";
 import { ActionMenu } from "@/shared/ui/action-menu";
+import { PreviewMusicPlayer } from "../components/preview-music-player";
 import { MusicPanel } from "../editor/music-panel";
 import { FallingParticles } from "../components/falling-particles";
 import { particleEffects } from "../components/particle-settings";
@@ -343,6 +344,13 @@ export function ImportedStudio({
           style={{ fontFamily: "Arial, sans-serif" }}
         >
           <FallingParticles effect={settings.particles ?? "none"} />
+          {preview && (
+            <PreviewMusicPlayer
+              value={settings.music}
+              resolved={props.resolvedMusic}
+              allowLibraryLookup={props.musicLibraryLookup}
+            />
+          )}
           {!preview && toolbar}
           {busy && !editing && (
             <p role="status" className="bg-white px-5 py-2 text-sm">

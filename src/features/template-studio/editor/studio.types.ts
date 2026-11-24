@@ -14,6 +14,7 @@ export type TemplateStudioProps = {
   giftPreview?: (gift?: import("@/shared/api/invitation-gift-settings").GiftSettings) => ReactNode;
   importMode?: boolean;
   resolvedMusic?: import("@/shared/api/music.api").InvitationMusic | null;
+  musicLibraryLookup?: boolean;
   initialTemplate?: boolean | string;
   initialPreview?: boolean;
   initialWording?: boolean;

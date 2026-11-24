@@ -68,6 +68,7 @@ import styles from "./studio.module.css";
 import { StudioBackups } from "./studio-backups";
 import { BackgroundPanel } from "./background-panel";
 import { EffectsPanel } from "./effects-panel";
+import { PreviewMusicPlayer } from "../components/preview-music-player";
 import { MusicPanel } from "./music-panel";
 import { BrandLogo } from "@/shared/components/brand-logo";
 import { ActionMenu } from "@/shared/ui/action-menu";
@@ -98,6 +99,7 @@ function Workspace({
   onUploadImage,
   loadImages,
   resolvedMusic,
+  musicLibraryLookup = true,
 }: TemplateStudioProps) {
   const { api } = useRuntime();
   const router = useRouter();
@@ -754,6 +756,13 @@ function Workspace({
         }
       >
         <FallingParticles effect={particles} />
+        {preview && (
+          <PreviewMusicPlayer
+            value={query.getNodes().ROOT?.data.props.music}
+            resolved={resolvedMusic}
+            allowLibraryLookup={musicLibraryLookup}
+          />
+        )}
         {!preview && toolbar}
         <div className={styles.layout}>
           <aside className={styles.library} aria-label={t("categories.libraryAria")}>
@@ -2328,6 +2337,7 @@ export function TemplateStudio({
   onUploadImage,
   loadImages,
   resolvedMusic,
+  musicLibraryLookup = true,
 }: TemplateStudioProps) {
   const [focus, setFocus] = useState<PhotoFocus>(null);
   const [revision, setRevision] = useState(initialPreview ? 1 : 0);
@@ -2373,6 +2383,7 @@ export function TemplateStudio({
             onUploadImage={onUploadImage}
             loadImages={loadImages}
             resolvedMusic={resolvedMusic}
+            musicLibraryLookup={musicLibraryLookup}
           />
         </Editor>
       </RevealReplayContext.Provider>

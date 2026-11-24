@@ -59,7 +59,14 @@ export function InvitationTemplatePicker({ weddingId }: { weddingId: string }) {
                   </Link>
                 </Button>
               </header>
-              <TemplateStudio key={selected.slug} initialTemplate={selected.slug} initialPreview />
+              <TemplateStudio
+                key={selected.slug}
+                initialTemplate={selected.slug}
+                initialDocument={JSON.stringify(selected.document)}
+                initialPreview
+                resolvedMusic={selected.music ?? null}
+                musicLibraryLookup={false}
+              />
             </div>
           ) : (
             <main id="main-content" className="min-h-screen bg-background px-4 py-8 sm:px-8">

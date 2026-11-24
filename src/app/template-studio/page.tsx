@@ -1,4 +1,4 @@
-import { TemplateStudio } from "@/features/template-studio";
+import { PublicInvitationStudio } from "@/app/_components/public-invitation-studio";
 import { WeddingTemplateStudio } from "@/app/_components/wedding-template-studio";
 import { z } from "zod";
 import { cookies } from "next/headers";
@@ -34,10 +34,10 @@ export default async function Page({
     );
   }
   return (
-    <TemplateStudio
+    <PublicInvitationStudio
       key={`${params.template ?? "blank"}:${params.preview === "1" ? "preview" : "edit"}`}
-      initialTemplate={params.template ?? false}
-      initialPreview={params.preview === "1"}
+      template={params.template}
+      preview={params.preview === "1"}
     />
   );
 }
