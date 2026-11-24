@@ -1,7 +1,6 @@
 "use client";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./invitation-cover.module.css";
-import { WordingPreviewContext } from "./wording-preview";
 import { resolveCoverGreeting } from "./wording-text";
 export type CoverConfig = {
   enabled: boolean;
@@ -17,17 +16,18 @@ export type CoverConfig = {
 };
 export function InvitationCover({
   config,
+  recipientLabel,
   onOpen,
   editing = false,
   onStart,
 }: {
   config: CoverConfig;
+  recipientLabel?: string | null;
   onOpen: () => void;
   editing?: boolean;
   onStart?: () => void;
 }) {
   const [opening, setOpening] = useState(false);
-  const wordingPreview = useContext(WordingPreviewContext);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const completed = useRef(false);
   useEffect(
@@ -152,7 +152,6 @@ export function InvitationCover({
           >
             {config.names}
           </h2>
-          <p style={{ fontSize: 18 }}>{config.date}</p>
           <p
             style={{
               fontSize: 20,
@@ -161,7 +160,7 @@ export function InvitationCover({
               overflowWrap: "anywhere",
             }}
           >
-            {resolveCoverGreeting(config, wordingPreview)}
+            {resolveCoverGreeting(recipientLabel)}
           </p>
           <button
             onClick={start}

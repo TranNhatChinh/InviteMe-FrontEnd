@@ -4,10 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import burgundyTemplate from "../src/features/template-studio/templates/minimalism-burgundy.json";
 import brownTemplate from "../src/features/template-studio/templates/minimalism-brown.json";
-import {
-  templateCatalog,
-  findTemplate,
-} from "../src/features/template-studio/templates/catalog";
+import { templateCatalog, findTemplate } from "../src/features/template-studio/templates/catalog";
 import { parseStudioDocument } from "../src/features/template-studio/schemas/document";
 import {
   resolveStudioText,
@@ -99,13 +96,10 @@ test("cover wording binding survives export without copying guest identity", () 
   );
   const restored = parseStudioDocument(saved).nodes.ROOT!.props.cover!;
   assert.equal(restored.greetingBinding, "invitationWording");
-  assert.equal(resolveCoverGreeting(restored, "Kính mời Bác An"), "Kính mời Bác An");
-  assert.equal(resolveCoverGreeting(restored, "Thân gửi Chị Hoa"), "Thân gửi Chị Hoa");
-  assert.equal(resolveCoverGreeting(restored), defaultWordingText);
-  assert.equal(
-    resolveCoverGreeting({ ...restored, greetingBinding: undefined }, "Bác An"),
-    "Thân mời",
-  );
+  assert.equal(resolveCoverGreeting("Bác An"), "Trân trọng kính mời Bác An");
+  assert.equal(resolveCoverGreeting("Chị Hoa"), "Trân trọng kính mời Chị Hoa");
+  assert.equal(resolveCoverGreeting(), "Trân trọng kính mời Quý khách");
+  assert.equal(resolveCoverGreeting("  "), "Trân trọng kính mời Quý khách");
   assert.doesNotMatch(saved, /Bác An|Chị Hoa/);
 });
 

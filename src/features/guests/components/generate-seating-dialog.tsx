@@ -18,6 +18,7 @@ import {
   type SeatingGenerationConfig,
   type SeatingGenerationPreview,
   type SeatingPlan,
+  type ReceptionMode,
 } from "../api/planning-seating.api";
 import { generationIssues } from "../utils/seating-layout";
 
@@ -37,6 +38,9 @@ export function GenerateSeatingDialog({
   const [open, setOpen] = useState(false);
   const [capacity, setCapacity] = useState<SeatingCapacity>(10);
   const [columns, setColumns] = useState(plan.brideTablesPerRow ?? 2);
+  const [receptionMode, setReceptionMode] = useState<ReceptionMode>(
+    plan.canvasLayout?.receptionMode ?? "JOINT",
+  );
   const [priority, setPriority] = useState<PositionPriority>([
     ...(plan.positionPriority ?? defaultPositionPriority),
   ]);
@@ -48,6 +52,7 @@ export function GenerateSeatingDialog({
   const issues = generationIssues(plan, capacity);
   const invalid = !plan.places.length || plan.tables.length > 0 || issues.oversized.length > 0;
   const config: SeatingGenerationConfig = {
+    receptionMode,
     expectedVersion: plan.version,
     tableCapacity: capacity,
     positionPriority: priority,
@@ -97,6 +102,7 @@ export function GenerateSeatingDialog({
         onClick={() => {
           reset();
           setPriority([...(plan.positionPriority ?? defaultPositionPriority)]);
+          setReceptionMode(plan.canvasLayout?.receptionMode ?? "JOINT");
           setOpen(true);
         }}
       >
@@ -105,17 +111,33 @@ export function GenerateSeatingDialog({
       </Button>
       <Modal open={open} onClose={close} title={t("title")} description={t("description")}>
         <div className="space-y-5" aria-busy={busy}>
-          <fieldset className="space-y-2 rounded-xl border p-3">
+          <fieldset disabled={busy || disabled} className="space-y-2 rounded-xl border p-3">
             <legend className="text-sm font-medium">{t("groupingMode")}</legend>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="radio" name="seating-grouping" checked readOnly />
-              {t("strictGrouping")}
-            </label>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input type="radio" name="seating-grouping" disabled />
-              {t("sharedGroupingComingSoon")}
-            </label>
+            {(["JOINT", "GROOM", "BRIDE"] as const).map((mode) => (
+              <label key={mode} className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="seating-grouping"
+                  value={mode}
+                  checked={receptionMode === mode}
+                  onChange={() => {
+                    reset();
+                    setReceptionMode(mode);
+                  }}
+                />
+                {t(
+                  mode === "JOINT"
+                    ? "jointReception"
+                    : mode === "GROOM"
+                      ? "groomReception"
+                      : "brideReception",
+                )}
+              </label>
+            ))}
           </fieldset>
+          {receptionMode !== "JOINT" && (
+            <p className="text-xs text-muted-foreground">{t("singleReceptionPolicy")}</p>
+          )}
           {!plan.places.length && (
             <p role="status">
               {t("noPlaces")}{" "}
@@ -144,9 +166,9 @@ export function GenerateSeatingDialog({
               ))}
             </div>
             <label className="block text-sm">
-              {t("sharedColumns")}
+              {t(receptionMode === "JOINT" ? "sharedColumns" : "singleColumns")}
               <select
-                aria-label={t("sharedColumns")}
+                aria-label={t(receptionMode === "JOINT" ? "sharedColumns" : "singleColumns")}
                 className="mt-1 block w-full rounded-lg border bg-background p-2"
                 value={columns}
                 onChange={(e) => {
@@ -161,7 +183,7 @@ export function GenerateSeatingDialog({
                 ))}
               </select>
               <span className="mt-1 block text-xs text-muted-foreground">
-                {t("sharedColumnsHint")}
+                {t(receptionMode === "JOINT" ? "sharedColumnsHint" : "singleColumnsHint")}
               </span>
             </label>
           </fieldset>

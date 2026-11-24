@@ -105,7 +105,12 @@ export function PreviewViewport({
                     <BatteryFull />
                   </span>
                 </div>
-                <iframe ref={frame} title="Xem trước thiệp" className={styles.frame} />
+                <iframe
+                  ref={frame}
+                  allow="autoplay"
+                  title="Xem trước thiệp"
+                  className={styles.frame}
+                />
                 {target && createPortal(children, target)}
               </div>
             </div>

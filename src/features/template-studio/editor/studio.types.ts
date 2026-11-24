@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { templateCatalog } from "../templates/catalog";
 
 export type StudioWordingPanel = (controls: {
-  onPreview: (content: string | null) => void;
+  onPreview: (content: string | null, recipientLabel?: string | null) => void;
 }) => ReactNode;
 
 export type TemplateStudioProps = {
@@ -14,6 +14,7 @@ export type TemplateStudioProps = {
   giftPreview?: (gift?: import("@/shared/api/invitation-gift-settings").GiftSettings) => ReactNode;
   importMode?: boolean;
   resolvedMusic?: import("@/shared/api/music.api").InvitationMusic | null;
+  musicLibraryLookup?: boolean;
   initialTemplate?: boolean | string;
   initialPreview?: boolean;
   initialWording?: boolean;

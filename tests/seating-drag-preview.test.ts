@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { previewSeatMove } from "../src/features/guests/utils/planning-seat-move";
 import type { SeatingPlan } from "../src/features/guests/api/planning-seating.api";
 import {
   offsetDragPreview,
@@ -108,4 +109,58 @@ test("preview stays inside viewport edges and keyboard position is unchanged", (
   assert.equal(100 + result.x + 240, 382);
   args.activatorEvent = { code: "Space" } as unknown as Event;
   assert.equal(offsetDragPreview(args), args.transform);
+});
+
+test("hovering a two-person party changes both preview seats instead of pinning seat one", () => {
+  const empty = { ...plan, tables: [{ id: "b", name: "Bàn", capacity: 10 }], assignments: [] };
+  assert.deepEqual(
+    seatingDropFeedback(empty, ["p1", "p2"], { tableId: "b", seatNumber: 4 })?.seats,
+    [4, 5],
+  );
+  assert.deepEqual(
+    seatingDropFeedback(empty, ["p1", "p2"], { tableId: "b", seatNumber: 7 })?.seats,
+    [7, 8],
+  );
+  assert.deepEqual(
+    seatingDropFeedback(empty, ["p1", "p2"], { tableId: "b", seatNumber: 10 })?.seats,
+    [10, 1],
+  );
+  assert.deepEqual(empty.assignments, []);
+});
+
+test("table hover reports capacity without default seats; only seat hover anchors the party", () => {
+  const empty = { ...plan, tables: [{ id: "b", name: "Bàn", capacity: 10 }], assignments: [] };
+  const group = ["p1", "p2"];
+  const table = () => seatingDropFeedback(empty, group, { tableId: "b" });
+  assert.deepEqual(table(), {
+    valid: true,
+    message: "Đủ chỗ cho 2 người",
+    messageKey: "seating.feedback.tableCapacity",
+    messageValues: { count: 2 },
+    seats: [],
+  });
+  assert.deepEqual(
+    seatingDropFeedback(empty, group, { tableId: "b", seatNumber: 4 })?.seats,
+    [4, 5],
+  );
+  assert.deepEqual(table()?.seats, []); // Moving through a gap must clear seat highlights, not jump to [1, 2].
+  assert.deepEqual(
+    seatingDropFeedback(empty, group, { tableId: "b", seatNumber: 7 })?.seats,
+    [7, 8],
+  );
+  assert.deepEqual(table()?.seats, []);
+  // Releasing over the table still uses automatic allocation, with no preview writes.
+  assert.deepEqual(
+    previewSeatMove(empty, group, "b")?.assignments.map((a) => a.seatNumber),
+    [1, 2],
+  );
+  assert.deepEqual(empty.assignments, []);
+});
+
+test("hovering a full source table counts the dragged party's own seats as available", () => {
+  const feedback = seatingDropFeedback(plan, ["p2", "p3"], { tableId: "a" });
+  assert.equal(feedback?.valid, true);
+  assert.equal(feedback?.messageKey, "seating.feedback.tableCapacity");
+  assert.deepEqual(feedback?.seats, []);
+  assert.equal(plan.assignments.length, 4);
 });

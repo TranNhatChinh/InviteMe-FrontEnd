@@ -6,13 +6,12 @@ import { Plus, Trash2, X } from "lucide-react";
 import { Avatar } from "@/shared/ui/avatar";
 import { Chip } from "@/shared/ui/chip";
 import { ActionMenu } from "@/shared/ui/action-menu";
-import { NumberStepper } from "@/shared/ui/number-stepper";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { cn } from "@/shared/lib/utils";
 import { trapDialogFocus } from "@/shared/lib/dialog-focus";
-import type { SeatingPlan } from "../api/planning-seating.api";
+import { seatingCapacities, type SeatingPlan } from "../api/planning-seating.api";
 import { queuePlaceName } from "./seating-queue";
 
 const attendanceLabels: Record<string, string> = {
@@ -43,7 +42,6 @@ export function SeatingTableDrawer({
   onSave,
   onDelete,
   canLayout = false,
-  onLayoutSave,
   saveError,
   draft = false,
 }: {
@@ -56,23 +54,15 @@ export function SeatingTableDrawer({
   onMove: (placeId: string) => void;
   onUnassign: (placeId: string) => void;
   onAssign: (seatNumber: number) => void;
-  onSave: (name: string, capacity: number) => void;
+  onSave: (name: string, capacity: number, side?: "BRIDE" | "GROOM" | "UNSPECIFIED") => void;
   onDelete: () => void;
   canLayout?: boolean;
   saveError?: string;
   draft?: boolean;
-  onLayoutSave?: (side: "BRIDE" | "GROOM", row: number, column: number) => void;
 }) {
   const { t } = useTranslation("guestPlanning", { keyPrefix: "layout" });
   const { t: draftText } = useTranslation("guestPlanning", { keyPrefix: "generation" });
   const [side, setSide] = useState(table.side ?? "");
-  const [row, setRow] = useState(table.row ?? 1),
-    [column, setColumn] = useState(table.column ?? 1);
-  const columns = side === "BRIDE" ? (plan.brideTablesPerRow ?? 2) : (plan.groomTablesPerRow ?? 2);
-  const slotOccupied = plan.tables.some(
-    (other) =>
-      other.id !== table.id && other.side === side && other.row === row && other.column === column,
-  );
   const [name, setName] = useState(table.name);
   const [capacity, setCapacity] = useState(String(table.capacity));
   const confirmationRef = useRef<HTMLDialogElement>(null);
@@ -85,10 +75,13 @@ export function SeatingTableDrawer({
   const capacityError =
     capacity && number < minimum
       ? `Đang có ${occupied} khách, bỏ xếp trước khi giảm${minimum > occupied ? ` (ghế cao nhất đang dùng: ${minimum})` : ""}.`
-      : !capacity || !Number.isInteger(number) || number < 1 || number > 20
-        ? "Số ghế phải từ 1 đến 20."
+      : !seatingCapacities.some((value) => value === number)
+        ? "Chọn số ghế được hỗ trợ: 8, 10 hoặc 12."
         : "";
-  const dirty = name.trim() !== table.name || number !== table.capacity;
+  const dirty =
+    name.trim() !== table.name ||
+    number !== table.capacity ||
+    (canLayout && side !== (table.side ?? ""));
   const valid = !!name.trim() && !capacityError;
   const rows = Array.from({ length: table.capacity }, (_, index) => {
     const seatNumber = index + 1;
@@ -102,7 +95,12 @@ export function SeatingTableDrawer({
       className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         event.preventDefault();
-        if (editable && !saving && dirty && valid) onSave(name.trim(), number);
+        if (editable && !saving && dirty && valid)
+          onSave(
+            name.trim(),
+            number,
+            canLayout ? (side === "BRIDE" || side === "GROOM" ? side : "UNSPECIFIED") : undefined,
+          );
       }}
     >
       <header className="shrink-0 border-b border-foreground/10 px-5 pb-4 pt-5">
@@ -168,89 +166,8 @@ export function SeatingTableDrawer({
           {saveError}
         </p>
       )}
-      <div className="shrink-0 space-y-2 border-b px-5 py-3 text-sm">
-        <p>
-          {table.side ? t(table.side) : t("unpositioned")}{" "}
-          {table.row && table.column
-            ? ` · ${t("position", { row: table.row, column: table.column })}`
-            : ""}
-        </p>
-        {canLayout && editable && onLayoutSave && (
-          <details>
-            <summary className="cursor-pointer text-xs underline">{t("assignLayout")}</summary>
-            <fieldset disabled={saving} className="mt-3 space-y-3">
-              <label className="block text-xs">
-                {t("side")}
-                <select
-                  aria-label={t("side")}
-                  className="mt-1 block w-full rounded border bg-background p-2"
-                  value={side}
-                  onChange={(e) => {
-                    setSide(e.target.value);
-                    setColumn(1);
-                  }}
-                >
-                  <option value="">{t("chooseSide")}</option>
-                  <option value="BRIDE">{t("BRIDE")}</option>
-                  <option value="GROOM">{t("GROOM")}</option>
-                </select>
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-xs">
-                  {t("row")}
-                  <input
-                    className="mt-1 block w-full rounded border bg-background p-2"
-                    type="number"
-                    aria-label={t("row")}
-                    min={1}
-                    max={100}
-                    value={row || ""}
-                    onChange={(e) => setRow(Number(e.target.value))}
-                  />
-                </label>
-                <label className="text-xs">
-                  {t("column")}
-                  <select
-                    aria-label={t("column")}
-                    className="mt-1 block w-full rounded border bg-background p-2"
-                    value={column}
-                    onChange={(e) => setColumn(Number(e.target.value))}
-                  >
-                    {Array.from({ length: columns }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {slotOccupied && (
-                <p role="alert" className="text-xs text-amber-800">
-                  {t("occupiedSlot")}
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground">{t("sideRule")}</p>
-              <Button
-                type="button"
-                size="sm"
-                disabled={
-                  !side ||
-                  !Number.isInteger(row) ||
-                  row < 1 ||
-                  row > 100 ||
-                  column > columns ||
-                  slotOccupied ||
-                  saving
-                }
-                onClick={() => {
-                  if (side === "BRIDE" || side === "GROOM") onLayoutSave(side, row, column);
-                }}
-              >
-                {t("save")}
-              </Button>
-            </fieldset>
-          </details>
-        )}
+      <div className="shrink-0 border-b px-5 py-3 text-sm">
+        {table.side ? t(table.side) : t("neutralSide")}
       </div>
       {editable && (
         <section
@@ -261,6 +178,25 @@ export function SeatingTableDrawer({
             Chỉnh sửa bàn
           </h3>
           <div className="space-y-4">
+            {canLayout && (
+              <label className="block text-sm">
+                {t("side")}
+                <select
+                  aria-label={t("side")}
+                  className="mt-1 block w-full rounded-lg border bg-background p-2"
+                  disabled={saving}
+                  value={side}
+                  onChange={(event) => setSide(event.target.value)}
+                >
+                  <option value="" disabled={draft}>
+                    {t("neutralSide")}
+                  </option>
+                  <option value="GROOM">{t("GROOM")}</option>
+                  <option value="BRIDE">{t("BRIDE")}</option>
+                </select>
+              </label>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor={`${id}-name`} className="text-[11px] text-muted-foreground">
                 Tên bàn
@@ -281,17 +217,28 @@ export function SeatingTableDrawer({
               <Label htmlFor={`${id}-capacity`} className="text-[11px] text-muted-foreground">
                 Số ghế
               </Label>
-              <NumberStepper
+              <select
                 id={`${id}-capacity`}
-                label="Số ghế"
+                aria-label="Số ghế"
                 value={capacity}
-                onChange={setCapacity}
-                min={minimum}
-                max={20}
+                onChange={(event) => setCapacity(event.target.value)}
                 disabled={saving}
-                invalid={!!capacityError}
-                describedBy={capacityError ? `${id}-error` : undefined}
-              />
+                aria-invalid={!!capacityError}
+                aria-describedby={capacityError ? `${id}-error` : undefined}
+                className="h-[46px] w-full rounded-lg border border-foreground/15 bg-white px-3 text-sm shadow-none focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                {!seatingCapacities.some((value) => value === number) && (
+                  <option value={capacity} disabled>
+                    {capacity} ghế — chọn lại số ghế hỗ trợ
+                  </option>
+                )}
+                {seatingCapacities.map((value) => (
+                  <option key={value} value={value} disabled={value < minimum}>
+                    {t("seatOption", { count: value })}
+                    {value < minimum ? " — đang có ghế đã xếp" : ""}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           {capacityError && (

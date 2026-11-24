@@ -9,12 +9,17 @@ import { defaultGroups, findGroup } from "../utils/group-catalog";
 import {
   importReasonLabels,
   importRowStatus,
-  unresolvedContactErrors,
+  importDuplicateContext,
+  separateContactErrors,
   importSummary,
+  importRowChip,
+  importReviewTotals,
+  matchesImportFilter,
+  type ImportReviewFilter,
   type ImportActions,
   type ImportRowStatus,
 } from "../utils/planning-import-review";
-import { groupLabels } from "@/shared/lib/planning-groups";
+import { PlanningImportDuplicate } from "./planning-import-duplicate";
 import { Button } from "@/shared/ui/button";
 import { Modal } from "@/shared/ui/modal";
 import { cn } from "@/shared/lib/utils";
@@ -29,19 +34,6 @@ const fields: Record<string, string> = {
   email: "Email",
   note: "Ghi chú",
 };
-
-const labels: Record<string, string> = {
-  ...groupLabels,
-  BRIDE: "Nhà gái",
-  GROOM: "Nhà trai",
-  MUTUAL: "Chung",
-  UNSPECIFIED: "Chưa xác định",
-  INDIVIDUAL: "Cá nhân",
-  FAMILY: "Gia đình",
-  GROUP: "Nhóm",
-};
-
-const display = (value: string | null) => (value ? (labels[value] ?? value) : "Trống");
 
 const presentation: Record<
   ImportRowStatus,
@@ -64,9 +56,9 @@ const presentation: Record<
   DECISION: {
     label: "Cần quyết định",
     tile: "border-[#dbe4fd] bg-[#eef2fe] text-[#3f51b5]",
-    card: "border-[#c7d5f8]",
-    badge: "bg-[#eef2fe] text-[#3f51b5]",
-    dot: "bg-[#3f51b5]",
+    card: "border-amber-300",
+    badge: "bg-amber-50 text-amber-800",
+    dot: "bg-amber-600",
   },
   ERROR: {
     label: "Lỗi",
@@ -98,12 +90,32 @@ const presentation: Record<
   },
 };
 
-const filters = ["ALL", "VALID", "WARNING", "DECISION", "ERROR", "SKIPPED", "UPDATE"] as const;
+const filterLabels: Record<ImportReviewFilter, string> = {
+  ALL: "Tất cả",
+  READY: "Sẵn sàng nhập",
+  DECISION: "Cần quyết định",
+  WARNING: "Có cảnh báo",
+  ERROR: "Lỗi cần sửa",
+  SKIPPED: "Đã bỏ qua",
+  UPDATE: "Chọn cập nhật",
+  PENDING: "Đang kiểm tra",
+};
+const summaryCards = [
+  { filter: "ALL", label: "Tổng số dòng", total: "total", tile: "border-stone-200 bg-white" },
+  { filter: "READY", label: "Sẵn sàng nhập", total: "ready", tile: presentation.VALID.tile },
+  {
+    filter: "DECISION",
+    label: "Cần quyết định",
+    total: "decision",
+    tile: "border-amber-200 bg-amber-50 text-amber-800",
+  },
+  { filter: "ERROR", label: "Lỗi cần sửa", total: "error", tile: presentation.ERROR.tile },
+] as const;
 
 const reasonTitles: Record<string, string> = {
   EXACT_DUPLICATE_IN_FILE: "Trùng hệt với một dòng trong file",
   EXACT_DUPLICATE_IN_WEDDING: "Trùng hệt khách đã có trong đám cưới",
-  SAME_NAME_AND_CONTACT_CHANGED: "Cùng tên và SĐT với khách đã có, nhưng dữ liệu khác",
+  SAME_NAME_AND_CONTACT_CHANGED: "Cùng tên và thông tin liên hệ, nhưng dữ liệu khác",
   SHARED_PHONE: "Dùng chung SĐT với một khách khác",
   SHARED_EMAIL: "Dùng chung email với một khách khác",
   SAME_NAME_DIFFERENT_CONTACT: "Cùng tên nhưng contact khác",
@@ -111,40 +123,18 @@ const reasonTitles: Record<string, string> = {
   SAME_NAME_OTHER_SIDE_GROUP: "Cùng tên nhưng khác phía hoặc nhóm khách",
 };
 
-function formatMatchedGuest(
-  match: {
-    guestId: string | null;
-    sourceRowNumber: number | null;
-    recipientName: string;
-    differences: { field: string; existing: string | null; incoming: string | null }[];
-  },
-  row: CoupleRow,
-  reasons: string[],
-) {
-  if (match.sourceRowNumber) {
-    return `Dòng ${match.sourceRowNumber} trong file: ${match.recipientName}`;
-  }
-  const diffPhone = match.differences.find((d) => d.field === "phone");
-  const diffCount = match.differences.find((d) => d.field === "expectedPeople");
-  const phone = diffPhone ? diffPhone.existing : row.values[5];
-  const count = diffCount ? diffCount.existing : row.expected;
-  const isExact = reasons.some((r) => r.startsWith("EXACT_DUPLICATE"));
-
-  const parts: string[] = [match.recipientName];
-  if (phone) parts.push(phone);
-  if (isExact && count) parts.push(`${count} suất`);
-
-  return parts.join(" · ");
-}
-
 function ImportRowEditor({
   row,
   onSave,
   onClose,
+  creating = false,
+  validate = () => [],
 }: {
   row: CoupleRow;
   onSave: (values: string[]) => void;
   onClose: () => void;
+  creating?: boolean;
+  validate?: (values: string[]) => string[];
 }) {
   const [values, setValues] = useState([...row.values]);
   const [errors, setErrors] = useState<string[]>([]);
@@ -160,6 +150,11 @@ function ImportRowEditor({
       setErrors(checked?.errors ?? ["Không đọc được dữ liệu dòng."]);
       return;
     }
+    const issues = validate(checked.values);
+    if (issues.length) {
+      setErrors(issues);
+      return;
+    }
     onSave(checked.values);
     onClose();
   }
@@ -167,8 +162,12 @@ function ImportRowEditor({
   return (
     <Modal
       open
-      title={`Chỉnh sửa dòng ${row.line}`}
-      description="Chỉ sửa dòng trong file đang nhập. Khách đã có không được cập nhật."
+      title={`${creating ? "Sửa để tạo khách riêng" : "Sửa dữ liệu"} — dòng ${row.line}`}
+      description={
+        creating
+          ? "Sửa hoặc bỏ trống liên hệ bị trùng. Dòng sẽ được kiểm tra lại trước khi tạo lời mời riêng; khách đã có được giữ nguyên."
+          : "Chỉ sửa dòng Excel đang nhập. Khách đã có được giữ nguyên."
+      }
       onClose={onClose}
     >
       <div className="space-y-5 font-sans">
@@ -285,8 +284,11 @@ export function PlanningImportReview({
   onSubmit: () => void;
   onRetry: () => void;
 }) {
-  const [filter, setFilter] = useState<(typeof filters)[number]>("ALL");
+  const [filter, setFilter] = useState<ImportReviewFilter>("ALL");
   const [updating, setUpdating] = useState<CoupleRow | null>(null);
+  const [resolving, setResolving] = useState<number | null>(null);
+  const [creating, setCreating] = useState<CoupleRow | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState<CoupleRow | null>(null);
 
   const states = new Map(
@@ -300,7 +302,8 @@ export function PlanningImportReview({
   const count = (status: ImportRowStatus) =>
     [...states.values()].filter((value) => value === status).length;
 
-  const pending = count("PENDING");
+  const totals = importReviewTotals([...states.values()]);
+  const pending = totals.pending;
   const problems = count("ERROR") + count("DECISION");
   const places = summary?.places ?? 0;
   const quota = preview?.quotaRemaining;
@@ -323,7 +326,20 @@ export function PlanningImportReview({
     overQuota ||
     !active.length;
 
-  const visible = rows.filter((row) => filter === "ALL" || states.get(row.line) === filter);
+  const hasWarnings = (row: CoupleRow) =>
+    !!row.warnings.length ||
+    states.get(row.line) === "WARNING" ||
+    !!preview?.rows
+      .find((check) => check.rowNumber === row.line)
+      ?.reasons.some((reason) => reason.startsWith("DEFAULTED_"));
+  const matching = (row: CoupleRow, key: ImportReviewFilter) =>
+    matchesImportFilter(
+      key,
+      states.get(row.line) ?? "PENDING",
+      actions[row.line],
+      hasWarnings(row),
+    );
+  const visible = rows.filter((row) => matching(row, filter));
   const checks = new Map(preview?.rows.map((row) => [row.rowNumber, row]));
   const updatingCheck = updating ? checks.get(updating.line) : undefined;
 
@@ -383,42 +399,34 @@ export function PlanningImportReview({
         </ol>
       </header>
 
-      {/* 6 Stat Cards */}
       <div
         role="group"
-        aria-label="Lọc trạng thái dòng"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7"
+        aria-label="Tổng quan import"
+        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
       >
-        {filters.map((key) => {
-          const isSelected = filter === key;
-          const label = key === "ALL" ? "Tất cả" : presentation[key].label;
-          const val = key === "ALL" ? rows.length : count(key);
-
-          return (
-            <button
-              type="button"
-              key={key}
-              aria-pressed={isSelected}
-              onClick={() => setFilter(key)}
-              className={cn(
-                "rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400 shadow-[0_1px_2px_rgba(0,0,0,0.02)]",
-                key === "ALL" ? "border-stone-200 bg-white" : presentation[key].tile,
-                isSelected ? "ring-2 ring-stone-900/30" : "hover:opacity-90",
-              )}
-            >
-              <span className="block text-xs font-semibold">{label}</span>
-              <span
-                className={cn(
-                  "mt-2 block text-3xl font-bold leading-none tabular-nums",
-                  key === "ALL" && "text-stone-900",
-                )}
-              >
-                {val}
-              </span>
-            </button>
-          );
-        })}
+        {summaryCards.map((card) => (
+          <button
+            type="button"
+            key={card.filter}
+            aria-pressed={filter === card.filter}
+            onClick={() => setFilter(card.filter)}
+            className={cn(
+              "rounded-2xl border p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-400",
+              card.tile,
+              filter === card.filter && "ring-2 ring-stone-900/30",
+            )}
+          >
+            <span className="block text-xs font-semibold">{card.label}</span>
+            <strong className="mt-2 block text-3xl leading-none tabular-nums">
+              {totals[card.total]}
+            </strong>
+          </button>
+        ))}
       </div>
+      <p className="text-xs text-stone-500">
+        Đã bỏ qua: {totals.skipped} dòng{pending > 0 ? ` · Đang kiểm tra: ${pending} dòng` : ""}.
+        Sẵn sàng nhập gồm tạo mới và cập nhật đã qua kiểm tra.
+      </p>
 
       {/* Quota Progress & Skip-All-Exact Button */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -480,6 +488,34 @@ export function PlanningImportReview({
         </Button>
       )}
 
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">Danh sách khách nhập</h2>
+        <div role="group" aria-label="Bộ lọc danh sách khách nhập" className="flex flex-wrap gap-2">
+          {(Object.keys(filterLabels) as ImportReviewFilter[])
+            .filter((key) => key !== "PENDING" || pending > 0 || filter === "PENDING")
+            .map((key) => (
+              <button
+                type="button"
+                key={key}
+                aria-pressed={filter === key}
+                onClick={() => setFilter(key)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a62b4c]",
+                  filter === key
+                    ? "border-[#a62b4c] bg-rose-50 font-semibold text-[#a62b4c]"
+                    : "border-stone-200 bg-white text-stone-600",
+                )}
+              >
+                {filterLabels[key]} ({rows.filter((row) => matching(row, key)).length})
+              </button>
+            ))}
+        </div>
+        <p className="text-xs text-stone-500">
+          Đang lọc: <strong>{filterLabels[filter]}</strong> · {visible.length} dòng. Bộ lọc cảnh báo
+          và cập nhật có thể cùng chứa một dòng.
+        </p>
+      </div>
+
       {/* Row List */}
       <div className="space-y-3.5" aria-live="polite">
         {!visible.length && (
@@ -493,11 +529,11 @@ export function PlanningImportReview({
           const style = presentation[status];
           const checked = checks.get(row.line);
           const skipped = status === "SKIPPED";
-          const canUpdate = checked?.matches.some((match) => match.guestId && match.guest);
+          const duplicate = checked?.status === "NEED_DECISION";
+          const context = checked ? importDuplicateContext(checked, row) : null;
 
           const errors = [
             ...row.errors,
-            ...unresolvedContactErrors(checked, actions[row.line]),
             ...(serverErrors[row.line] ?? []),
             ...(preview?.errors
               .filter((issue) => issue.rowNumber === row.line)
@@ -508,33 +544,19 @@ export function PlanningImportReview({
               ) ?? []),
           ];
 
-          const reasons =
-            checked?.reasons.filter((reason) => !reason.startsWith("DEFAULTED_")) ?? [];
-          const isExact = reasons.some((r) => r.startsWith("EXACT_DUPLICATE"));
-          const isSameNameChanged = reasons.includes("SAME_NAME_AND_CONTACT_CHANGED");
           const warningMessages = checked?.reasons.length
             ? checked.reasons.map(
                 (reason) => reasonTitles[reason] ?? importReasonLabels[reason] ?? "Cần lưu ý",
               )
             : row.warnings;
 
-          const matchedCandidate = checked?.matches[0];
-          const matchedSummary = matchedCandidate
-            ? formatMatchedGuest(matchedCandidate, row, reasons)
-            : null;
-
           const isGroupInvalid = row.values[4] && !findGroup(row.values[4], defaultGroups);
-          const hasCountIssue =
-            row.expected === null ||
-            row.expected < 1 ||
-            row.expected > 10 ||
-            status === "ERROR" ||
-            status === "DECISION";
+          const hasCountIssue = row.expected === null || row.expected < 1 || row.expected > 10;
 
           return (
             <article
               key={row.line}
-              aria-label={`Dòng ${row.line}: ${style.label}`}
+              aria-label={`Dòng ${row.line}: ${importRowChip[status]}`}
               className={cn(
                 "rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] transition-shadow",
                 style.card,
@@ -569,16 +591,17 @@ export function PlanningImportReview({
                         <span
                           className={cn(
                             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ml-1",
-                            style.badge,
+                            status === "WARNING" ? presentation.VALID.badge : style.badge,
                           )}
                         >
                           <span
-                            className={cn("size-1.5 rounded-full", style.dot)}
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              status === "WARNING" ? presentation.VALID.dot : style.dot,
+                            )}
                             aria-hidden="true"
                           />
-                          {status === "WARNING" && checked?.status === "NEED_DECISION"
-                            ? "Đã chọn tạo riêng"
-                            : style.label}
+                          {importRowChip[status]}
                         </span>
                       </div>
 
@@ -612,28 +635,21 @@ export function PlanningImportReview({
 
                     {/* Action buttons */}
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      {!skipped && canUpdate && (
-                        <Button size="sm" variant="outline" onClick={() => setUpdating(row)}>
-                          Cập nhật<span className="sr-only"> dòng {row.line}</span>
-                        </Button>
-                      )}
-                      {status === "DECISION" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onCreateSeparate(row.line)}
-                        >
-                          Tạo riêng<span className="sr-only"> dòng {row.line}</span>
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditing(row)}
-                        className="rounded-xl border-stone-200 bg-white hover:bg-stone-50 text-stone-700 px-4 py-1.5 text-xs font-medium shadow-none"
-                      >
-                        Chỉnh sửa<span className="sr-only"> dòng {row.line}</span>
-                      </Button>
+                      {!skipped &&
+                        (duplicate && status !== "ERROR" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            aria-expanded={resolving === row.line}
+                            onClick={() => setResolving(resolving === row.line ? null : row.line)}
+                          >
+                            Xử lý trùng<span className="sr-only"> dòng {row.line}</span>
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => setEditing(row)}>
+                            Sửa dữ liệu<span className="sr-only"> dòng {row.line}</span>
+                          </Button>
+                        ))}
                       <Button
                         size="sm"
                         variant="outline"
@@ -669,6 +685,7 @@ export function PlanningImportReview({
                   </div>
 
                   {actions[row.line] === "UPDATE" &&
+                    checked &&
                     (() => {
                       const decision = updates[row.line];
                       const target = checked?.matches.find(
@@ -678,16 +695,14 @@ export function PlanningImportReview({
                       return (
                         <div className="mt-3 space-y-2 rounded-xl bg-sky-50 p-3 text-sm">
                           <p className="font-semibold">
-                            Cập nhật: {target?.recipientName} ·{" "}
+                            Sẽ cập nhật: {target?.recipientName} ·{" "}
                             {updateValue("side", target?.guest?.side)} ·{" "}
                             {updateValue("group", target?.guest?.group)} ·{" "}
                             {target?.guest?.phone || target?.guest?.email || "Không có contact"}
                           </p>
-                          <ul>
-                            {reasons.map((reason) => (
-                              <li key={reason}>{importReasonLabels[reason] ?? reason}</li>
-                            ))}
-                          </ul>
+                          <p className="text-xs text-sky-800">
+                            Chưa lưu — sẽ áp dụng khi xác nhận import.
+                          </p>
                           <p>
                             Thông tin được cập nhật:{" "}
                             {decision?.selectedFields
@@ -711,9 +726,7 @@ export function PlanningImportReview({
                                 </strong>
                               </p>
                             ))}
-                          {plan?.noChange && (
-                            <p>NO_CHANGE: không có thay đổi thực tế, không tăng version.</p>
-                          )}
+                          {plan?.noChange && <p>Không có thay đổi thông tin khách.</p>}
                           {plan?.warnings.map((warning) => (
                             <p className="text-amber-900" key={warning.code}>
                               {warning.message} Việc cần xử lý sẽ được lưu sau import.
@@ -722,11 +735,9 @@ export function PlanningImportReview({
                         </div>
                       );
                     })()}
-                  {canUpdate && (status === "ERROR" || status === "DECISION") && (
-                    <p className="mt-3 text-xs text-stone-600">
-                      Khách mới: chọn <strong>Chỉnh sửa</strong> để sửa dòng Excel trước khi tạo lời
-                      mời riêng. Khách đã có: chọn <strong>Cập nhật</strong> để sửa thông tin của
-                      khách đó.
+                  {!skipped && status === "VALID" && (
+                    <p className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-xs text-green-800">
+                      Khách mới · Sẵn sàng tạo lời mời
                     </p>
                   )}
                   {/* Callout Boxes */}
@@ -743,104 +754,52 @@ export function PlanningImportReview({
                     </div>
                   )}
 
-                  {!skipped && status === "DECISION" && (
-                    <div className="mt-3.5 space-y-2.5 rounded-xl bg-[#eef2fe] p-3.5 text-xs text-[#2b3a67]">
-                      {isExact ? (
-                        <>
-                          <div className="rounded-md border border-[#c7d5f8] bg-[#f8faff] px-3 py-1.5 font-semibold text-[#1e293b]">
-                            {reasons.includes("EXACT_DUPLICATE_IN_WEDDING")
-                              ? "Trùng hệt khách đã có trong đám cưới"
-                              : "Trùng hệt với một dòng trong file"}
-                          </div>
-                          {matchedSummary && (
-                            <p className="text-stone-600">Khách đã có: {matchedSummary}</p>
-                          )}
-                          {!canUpdate && (
-                            <p className="text-[11px] text-[#4b5563]">
-                              Cùng một người: bấm Bỏ qua. Người khác: bấm Chỉnh sửa để phân biệt.
-                            </p>
-                          )}
-                        </>
-                      ) : isSameNameChanged ? (
-                        <>
-                          <p className="font-semibold text-xs text-[#1e293b]">
-                            Cùng tên và SĐT với khách đã có, nhưng dữ liệu khác
-                          </p>
-                          {matchedSummary && (
-                            <p className="text-stone-600">Khách đã có: {matchedSummary}</p>
-                          )}
-                          {matchedCandidate && !!matchedCandidate.differences.length && (
-                            <div className="rounded-md border border-[#c7d5f8] divide-y divide-[#c7d5f8] bg-[#f8faff] overflow-hidden">
-                              {matchedCandidate.differences.map((diff) => (
-                                <div
-                                  key={diff.field}
-                                  className="flex items-center gap-6 px-3 py-1.5 text-xs"
-                                >
-                                  <span className="w-16 shrink-0 text-stone-600 font-normal">
-                                    {fields[diff.field] ?? diff.field}
-                                  </span>
-                                  <span className="break-words line-through text-stone-400">
-                                    {display(diff.existing)}
-                                  </span>
-                                  <span aria-hidden="true" className="text-stone-400">
-                                    →
-                                  </span>
-                                  <strong className="break-words font-bold text-stone-900">
-                                    {display(diff.incoming)}
-                                  </strong>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {!canUpdate && (
-                            <p className="text-[11px] text-[#4b5563]">
-                              Cùng một người: giữ một dòng và bỏ qua dòng còn lại.
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {reasons.map((reason) => (
-                            <div
-                              key={reason}
-                              className="rounded-md border border-[#c7d5f8] bg-[#f8faff] px-3 py-1.5 font-semibold text-[#1e293b]"
-                            >
-                              {reasonTitles[reason] ??
-                                importReasonLabels[reason] ??
-                                "Có thông tin cần kiểm tra"}
-                            </div>
+                  {!skipped &&
+                    duplicate &&
+                    status !== "ERROR" &&
+                    checked &&
+                    (resolving === row.line ? (
+                      <PlanningImportDuplicate
+                        key={JSON.stringify(checked)}
+                        row={row}
+                        check={checked}
+                        onUpdate={() => setUpdating(row)}
+                        onCreate={() => setCreating(row)}
+                        onSkip={() => {
+                          onSkip(row);
+                          setResolving(null);
+                        }}
+                      />
+                    ) : (
+                      status === "DECISION" && (
+                        <div className="mt-3.5 space-y-1 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+                          {context?.candidates.map(({ match, message }) => (
+                            <p key={match.guestId ?? match.sourceRowNumber}>{message}</p>
                           ))}
-                          {matchedSummary && (
-                            <p className="text-stone-600">Khách đã có: {matchedSummary}</p>
+                          {!context?.candidates.length && (
+                            <p>Chưa xác định được khách trùng. Cần xác minh dữ liệu.</p>
                           )}
-                          <p className="text-[11px] text-[#4b5563]">
-                            {reasons.includes("SHARED_PHONE") || reasons.includes("SHARED_EMAIL")
-                              ? "Mỗi liên hệ chỉ dùng cho một lời mời. Nếu đây là khách khác, sửa hoặc bỏ trống liên hệ đang trùng trước khi tạo riêng."
-                              : "Nếu là cùng một người, chọn Cập nhật hoặc Bỏ qua. Nếu là lời mời độc lập, xác nhận Tạo riêng."}
-                          </p>
-                        </>
-                      )}
+                          {context?.ambiguous && (
+                            <p className="font-semibold">
+                              Thông tin khớp nhiều khách khác nhau; cần xác minh trước khi cập nhật.
+                            </p>
+                          )}
+                        </div>
+                      )
+                    ))}
+
+                  {!skipped && status === "WARNING" && warningMessages.length > 0 && (
+                    <div className="mt-3.5 space-y-2 rounded-xl bg-[#fef9ec] p-3.5 text-xs text-[#92400e]">
+                      {[...new Set(warningMessages)].map((message) => (
+                        <div
+                          key={message}
+                          className="rounded-md border border-[#fde8bb] bg-[#fffdf5] px-3 py-1.5 font-semibold text-[#92400e]"
+                        >
+                          {message}
+                        </div>
+                      ))}
                     </div>
                   )}
-
-                  {!skipped &&
-                    status === "WARNING" &&
-                    (warningMessages.length > 0 || matchedSummary) && (
-                      <div className="mt-3.5 space-y-2 rounded-xl bg-[#fef9ec] p-3.5 text-xs text-[#92400e]">
-                        {[...new Set(warningMessages)].map((message) => (
-                          <div
-                            key={message}
-                            className="rounded-md border border-[#fde8bb] bg-[#fffdf5] px-3 py-1.5 font-semibold text-[#92400e]"
-                          >
-                            {message}
-                          </div>
-                        ))}
-
-                        {matchedSummary && (
-                          <p className="text-stone-600">Khách đã có: {matchedSummary}</p>
-                        )}
-                      </div>
-                    )}
                 </div>
               </div>
             </article>
@@ -858,12 +817,14 @@ export function PlanningImportReview({
                 ? "Cần kiểm tra lại danh sách"
                 : pending || checking || (!preview && active.length > 0)
                   ? "Đang kiểm tra danh sách…"
-                  : `Sẵn sàng tạo ${summary?.created ?? 0} lời mời${createdWithWarnings ? `, gồm ${createdWithWarnings} dòng cần lưu ý` : ""} · cập nhật ${summary?.updated ?? 0} khách · thay đổi ${places} suất`}
+                  : totals.ready === 0 && totals.skipped === rows.length
+                    ? "Không có khách nào được tạo hoặc cập nhật"
+                    : `Sẵn sàng tạo ${summary?.created ?? 0} lời mời${createdWithWarnings ? `, gồm ${createdWithWarnings} dòng cần lưu ý` : ""} · cập nhật ${summary?.updated ?? 0} khách · thay đổi ${places} suất`}
           </p>
           <p className={cn("mt-0.5 text-xs", overQuota ? "text-red-700" : "text-stone-500")}>
             {overQuota
               ? "Số suất import vượt quota còn lại. Bỏ qua một số dòng trước khi xác nhận."
-              : "Dòng Lỗi và Cần quyết định phải được chỉnh sửa hoặc bỏ qua trước khi xác nhận."}
+              : `Dự kiến tạo mới ${summary?.created ?? 0} · Cập nhật ${summary?.updated ?? 0} · Bỏ qua ${count("SKIPPED")}. Chưa lưu thay đổi.`}
           </p>
         </div>
 
@@ -879,7 +840,7 @@ export function PlanningImportReview({
           <Button
             aria-label="Xác nhận import"
             disabled={disabled}
-            onClick={onSubmit}
+            onClick={() => setConfirming(true)}
             className={cn(
               "rounded-xl px-5 py-2.5 text-xs font-medium transition-colors shadow-none",
               disabled
@@ -892,6 +853,62 @@ export function PlanningImportReview({
         </div>
       </footer>
 
+      {confirming && (
+        <Modal
+          open
+          title="Xác nhận kết quả import"
+          description="Kiểm tra kết quả trước khi lưu thay đổi vào hệ thống."
+          onClose={() => setConfirming(false)}
+        >
+          <div className="space-y-4 text-sm">
+            <p>
+              Tạo mới <strong>{summary?.created ?? 0}</strong> lời mời · Cập nhật{" "}
+              <strong>{summary?.updated ?? 0}</strong> khách · Bỏ qua{" "}
+              <strong>{count("SKIPPED")}</strong> dòng.
+            </p>
+            <p>
+              Chỉ cập nhật các trường đã chọn. Số suất được thay thế bằng tổng mới, không cộng thêm
+              vào lời mời cũ.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirming(false)}>
+                Quay lại kiểm tra
+              </Button>
+              <Button
+                disabled={disabled}
+                onClick={() => {
+                  setConfirming(false);
+                  onSubmit();
+                }}
+              >
+                Xác nhận và import
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {creating && (
+        <ImportRowEditor
+          key={creating.line}
+          row={creating}
+          creating
+          validate={(values) => {
+            const check = checks.get(creating.line);
+            return check
+              ? separateContactErrors(check, creating, values)
+              : ["Đang kiểm tra dữ liệu, vui lòng thử lại."];
+          }}
+          onClose={() => setCreating(null)}
+          onSave={(values) => {
+            if (JSON.stringify(values) === JSON.stringify(creating.values)) {
+              const check = checks.get(creating.line);
+              if (check && !importDuplicateContext(check, creating).contactConflict)
+                onCreateSeparate(creating.line);
+            } else onEdit(creating.line, values);
+            setResolving(null);
+          }}
+        />
+      )}
       {updating && updatingCheck && (
         <PlanningImportUpdateEditor
           key={updating.line}
@@ -899,7 +916,10 @@ export function PlanningImportReview({
           check={updatingCheck}
           current={updates[updating.line]}
           onApply={onUpdate}
-          onClose={() => setUpdating(null)}
+          onClose={() => {
+            setUpdating(null);
+            setResolving(null);
+          }}
         />
       )}
       {editing && (

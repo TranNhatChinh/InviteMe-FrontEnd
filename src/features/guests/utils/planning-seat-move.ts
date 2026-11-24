@@ -18,15 +18,19 @@ export function previewSeatMove(
   const table = plan.tables.find((t) => t.id === tableId);
   if (!table) return null;
   const occupied = new Set(remaining.filter((a) => a.tableId === tableId).map((a) => a.seatNumber));
-  const free = Array.from({ length: table.capacity }, (_, i) => i + 1).filter(
-    (n) => !occupied.has(n),
-  );
-  if (seatNumber !== undefined) {
-    const index = free.indexOf(seatNumber);
-    if (index < 0) return null;
-    free.splice(index, 1);
-    free.unshift(seatNumber);
-  }
+  const start = seatNumber ?? 1;
+  if (
+    !Number.isInteger(start) ||
+    start < 1 ||
+    start > table.capacity ||
+    (occupied.has(start) && seatNumber !== undefined)
+  )
+    return null;
+  // Walk around the table from the hovered seat so the entire party follows the pointer.
+  const free = Array.from(
+    { length: table.capacity },
+    (_, i) => ((start - 1 + i) % table.capacity) + 1,
+  ).filter((n) => !occupied.has(n));
   if (free.length < ids.length) return null;
   const places = plan.places
     .filter((p) => ids.includes(p.id))

@@ -162,10 +162,20 @@ function WeddingSetupSkeleton() {
   );
 }
 
-export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
+export function WeddingSetupForm({
+  weddingId,
+  invitationTemplate,
+}: {
+  weddingId?: string;
+  invitationTemplate?: string;
+}) {
   const { t } = useTranslation("weddings");
   const isEdit = Boolean(weddingId);
   const router = useRouter();
+  const createdDestination = (id: string) =>
+    invitationTemplate
+      ? `/weddings/${encodeURIComponent(id)}/studio?template=${encodeURIComponent(invitationTemplate)}`
+      : `/weddings/${encodeURIComponent(id)}/overview?created=1`;
   const { api } = useRuntime();
   const cache = useQueryClient();
   const { can } = usePermission();
@@ -352,7 +362,7 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
           await uploadCover(newWedding, pendingCover);
           setPendingCover(null);
         }
-        router.push(`/weddings/${encodeURIComponent(newWedding.id)}/overview?created=1`);
+        router.push(createdDestination(newWedding.id));
       }
     } catch (error) {
       if (createdDuringSubmit) {
@@ -386,7 +396,7 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
       setCreated(latest);
       setPendingCover(null);
       void refreshList();
-      router.push(`/weddings/${encodeURIComponent(latest.id)}/overview?created=1`);
+      router.push(createdDestination(latest.id));
     } catch (error) {
       setServerError(
         t("errors.createdButCoverFailed", {
@@ -490,7 +500,7 @@ export function WeddingSetupForm({ weddingId }: { weddingId?: string }) {
             <Button
               type="button"
               className="min-h-11 rounded-xl px-5"
-              onClick={() => router.push(`/weddings/${encodeURIComponent(created.id)}/overview`)}
+              onClick={() => router.push(createdDestination(created.id))}
             >
               {t("openWorkspace")}
             </Button>

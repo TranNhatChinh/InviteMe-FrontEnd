@@ -37,3 +37,42 @@ test("occupied seat rejected; unassigning and reordering a full table supported"
   assert.equal(previewSeatMove(plan(), ["p1", "p2"], null)?.assignments.length, 2);
   assert.equal(previewSeatMove(plan(), ["p1", "p1"], "b"), null);
 });
+
+test("the entire party follows the hovered seat, skipping occupied seats and wrapping once", () => {
+  const source = plan();
+  source.tables[1]!.capacity = 10;
+  const seats = (hover?: number) =>
+    previewSeatMove(source, ["p1", "p2"], "b", hover)
+      ?.assignments.filter((a) => a.tableId === "b" && ["p1", "p2"].includes(a.placeId))
+      .map((a) => a.seatNumber);
+  assert.deepEqual(seats(4), [4, 5]);
+  assert.deepEqual(seats(6), [6, 7]);
+  assert.deepEqual(seats(10), [10, 1]);
+  assert.deepEqual(seats(), [1, 2]);
+  const original = JSON.stringify(source);
+  seats(8);
+  assert.equal(JSON.stringify(source), original);
+  source.assignments.push({ placeId: "p3", tableId: "b", seatNumber: 5 });
+  source.assignments = source.assignments.filter((a) => !(a.placeId === "p3" && a.tableId === "a"));
+  assert.deepEqual(seats(4), [4, 6]);
+  assert.equal(seats(5), undefined); // Explicitly targeting an occupied seat remains invalid.
+  assert.equal(seats(11), undefined);
+});
+
+test("reordering a party releases its own old seats and preserves everyone else", () => {
+  const source = plan();
+  const next = previewSeatMove(source, ["p1", "p2", "p3", "p4"], "a", 3);
+  assert.deepEqual(
+    next?.assignments.map((a) => a.seatNumber),
+    [3, 4, 1, 2],
+  );
+  const partial = previewSeatMove(source, ["p2", "p3"], "a", 3);
+  assert.deepEqual(
+    partial?.assignments.filter((a) => ["p2", "p3"].includes(a.placeId)).map((a) => a.seatNumber),
+    [3, 2],
+  );
+  assert.deepEqual(
+    partial?.assignments.filter((a) => ["p1", "p4"].includes(a.placeId)),
+    source.assignments.filter((a) => ["p1", "p4"].includes(a.placeId)),
+  );
+});

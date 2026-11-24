@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ApiClient } from "@/core/api/api-client";
+import { invitationMusicSchema } from "@/shared/api/music.api";
 
 export const publicTemplateSchema = z.object({
   id: z.string(),
@@ -8,6 +9,7 @@ export const publicTemplateSchema = z.object({
   theme: z.string().nullable(),
   previewUrl: z.string().nullable(),
   configurationJson: z.string(),
+  music: invitationMusicSchema.nullish(),
 });
 export const publicTemplateVisibilitySchema = z.object({ slug: z.string(), visible: z.boolean() });
 export const publicTemplateListSchema = z.array(publicTemplateSchema);

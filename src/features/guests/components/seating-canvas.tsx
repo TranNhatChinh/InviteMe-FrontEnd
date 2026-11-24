@@ -8,33 +8,32 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Minus, Mouse, Plus, Scan, X } from "lucide-react";
+import Image from "next/image";
+import { Copy, Minus, Mouse, Pencil, Plus, Scan, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/button";
-import type { CanvasLayout, SeatingPlan } from "../api/planning-seating.api";
+import type { CanvasLayout, SeatingPlan, TableShape } from "../api/planning-seating.api";
 import type { SeatingTable } from "../utils/seating-layout";
+import { resizeStage } from "../utils/seating-stage-resize";
 
 import {
   seatingObjectIcons,
   seatingPaletteMime,
   type SeatingCanvasObject,
-  type SeatingObjectKind,
+  type SeatingTableItem,
 } from "./seating-object-palette";
 
-const sides = ["BRIDE", "GROOM"] as const;
 function layoutKey(layout: CanvasLayout | null | undefined) {
   return JSON.stringify(layout ?? null, (_key, value: unknown) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return value;
     return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
   });
 }
-type ZoneSide = (typeof sides)[number];
 type Point = { x: number; y: number };
 const spacing = 270;
 const top = 202;
 const aisleWidth = 128;
 const tableWidth = 234;
-const frameOutline = 2;
 const resizeCorners = [
   { key: "nw", west: true, north: true, classes: "-left-2 -top-2 cursor-nwse-resize" },
   { key: "ne", west: false, north: true, classes: "-right-2 -top-2 cursor-nesw-resize" },
@@ -50,6 +49,10 @@ export function SeatingCanvas({
   onRemoveObject,
   onPaletteDrop,
   tablePositions,
+  tableShapes = {},
+  onEditTable,
+  onDuplicateTable,
+  onDeleteTable,
   onSaveLayout,
   onCaptureLayout,
   saving,
@@ -60,12 +63,12 @@ export function SeatingCanvas({
   onCaptureLayout?: (layout: CanvasLayout) => void;
   saving?: boolean;
   objects?: SeatingCanvasObject[];
-  onPaletteDrop?: (
-    kind: SeatingCanvasObject["kind"] | "table",
-    point: Point,
-    side?: ZoneSide,
-  ) => void;
+  onPaletteDrop?: (kind: SeatingCanvasObject["kind"] | SeatingTableItem, point: Point) => void;
   tablePositions?: Record<string, Point>;
+  tableShapes?: Record<string, TableShape>;
+  onEditTable?: (table: SeatingTable) => void;
+  onDuplicateTable?: (table: SeatingTable, point: Point) => void;
+  onDeleteTable?: (table: SeatingTable) => void;
   onRemoveObject?: (id: string) => void;
   renderTable: (table: SeatingTable) => ReactNode;
 }) {
@@ -154,27 +157,20 @@ export function SeatingCanvas({
     return {
       ...Object.fromEntries(Object.entries(saved.tables).map(([id, { x, y }]) => [id, { x, y }])),
       ...(saved.stage ? { stage: saved.stage } : {}),
+      ...(saved.stage?.width && saved.stage?.height
+        ? { "objectSize:stage": { x: saved.stage.width, y: saved.stage.height } }
+        : {}),
       ...Object.fromEntries(saved.objects.map(({ id, x, y }) => [id, { x, y }])),
       ...Object.fromEntries(
-        sides.flatMap((side) => {
-          const zone = saved.zones[side];
-          if (!zone) return [];
-          return [
-            [`zone:${side}`, { x: zone.x, y: zone.y }],
-            [`size:${side}`, { x: zone.width, y: zone.height }],
-          ];
-        }),
+        saved.objects
+          .filter((item) => item.width && item.height)
+          .map((item) => [
+            `objectSize:${item.id}`,
+            { x: item.width ?? 250, y: item.height ?? 160 },
+          ]),
       ),
     };
   });
-  const [membership, setMembership] = useState<Record<string, ZoneSide | null>>(() =>
-    Object.fromEntries(
-      Object.entries(plan.canvasLayout?.tables ?? {})
-        .filter(([, table]) => table.outsideZone)
-        .map(([id]) => [id, null]),
-    ),
-  );
-  const [outside, setOutside] = useState<{ id: string; name: string; point: Point } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
   const drag = useRef<{
@@ -188,90 +184,66 @@ export function SeatingCanvas({
   const suppressClick = useRef(false);
   const brideWidth = plan.brideTablesPerRow ?? 2;
   const groomWidth = plan.groomTablesPerRow ?? 2;
+  const receptionMode = plan.canvasLayout?.receptionMode ?? "JOINT";
+  const single = receptionMode !== "JOINT";
+  const singleWidth = receptionMode === "BRIDE" ? brideWidth : groomWidth;
+  const looseWidth = single ? singleWidth : brideWidth;
   const aisleStart = brideWidth * spacing + 14;
-  const center = aisleStart + aisleWidth / 2;
+  const center = single ? (singleWidth * spacing + 32) / 2 : aisleStart + aisleWidth / 2;
   const groomStart = aisleStart + aisleWidth + 18;
-  const hallWidth = groomStart + (groomWidth - 1) * spacing + tableWidth + 32;
+  const hallWidth = single
+    ? singleWidth * spacing + 32
+    : groomStart + (groomWidth - 1) * spacing + tableWidth + 32;
   const looseTables = plan.tables.filter((table) => !table.side || !table.row || !table.column);
   const lastRow = Math.max(0, ...plan.tables.map((table) => table.row ?? 0));
   const layout = plan.tables.map((table) => {
     const index = looseTables.indexOf(table);
-    const row = index < 0 ? (table.row ?? 1) - 1 : lastRow + Math.floor(index / brideWidth);
-    const column = index < 0 ? (table.column ?? 1) - 1 : index % brideWidth;
+    const row = index < 0 ? (table.row ?? 1) - 1 : lastRow + Math.floor(index / looseWidth);
+    const column = index < 0 ? (table.column ?? 1) - 1 : index % looseWidth;
     const initial = {
-      x: (table.side === "GROOM" ? groomStart : 32) + column * spacing,
+      x: (!single && table.side === "GROOM" ? groomStart : 32) + column * spacing,
       y: top + row * spacing,
     };
     return { table, point: positions[table.id] ?? tablePositions?.[table.id] ?? initial };
   });
   const stage = positions.stage ?? { x: center - 125, y: 48 };
-  const objectLayout = objects
-    .filter(
-      (object): object is SeatingCanvasObject & { kind: SeatingObjectKind } =>
-        object.kind !== "brideArea" && object.kind !== "groomArea",
-    )
-    .map((object, index) => ({
-      ...object,
-      point: positions[object.id] ??
-        object.point ?? {
-          x: center - 95 + (index % 2) * 210,
-          y: top + lastRow * spacing + Math.floor(index / 2) * 112,
-        },
-    }));
-  const makeZone = (side: ZoneSide, x: number, columns: number) => ({
-    id: `zone:${side}`,
-    side,
-    point: positions[`zone:${side}`] ??
-      objects.find(({ kind }) => kind === (side === "BRIDE" ? "brideArea" : "groomArea"))
-        ?.point ?? { x, y: 135 },
-    size: positions[`size:${side}`] ?? {
-      x: columns * spacing,
-      y: Math.max(336, 68 + lastRow * spacing),
-    },
-  });
-  const brideZone = makeZone("BRIDE", 14, brideWidth);
-  const groomZone = makeZone("GROOM", groomStart - 18, groomWidth);
-  const zones = [brideZone, groomZone].filter(({ side }) =>
-    objects.some(({ kind }) => kind === (side === "BRIDE" ? "brideArea" : "groomArea")),
-  );
-  const split = zones.length > 0;
-  const assignedZone = (table: SeatingTable) =>
-    membership[table.id] === undefined ? table.side : membership[table.id];
-  const zoneAt = (point: Point, preferred?: ZoneSide | null) => {
-    const hits = zones.filter(
-      (zone) =>
-        point.x - frameOutline >= zone.point.x &&
-        point.x + tableWidth + frameOutline <= zone.point.x + zone.size.x &&
-        point.y - frameOutline >= zone.point.y &&
-        point.y + tableWidth + frameOutline <= zone.point.y + zone.size.y,
-    );
-    return hits.find((zone) => zone.side === preferred) ?? hits.at(-1);
-  };
+  const stageSize = (id: string) => positions[`objectSize:${id}`] ?? { x: 250, y: 160 };
+  const objectLayout = objects.map((object, index) => ({
+    ...object,
+    point: positions[object.id] ??
+      object.point ?? {
+        x: center - 95 + (index % 2) * 210,
+        y: top + lastRow * spacing + Math.floor(index / 2) * 112,
+      },
+  }));
   const [baseVersion, setBaseVersion] = useState(plan.version);
   const [baseLayout, setBaseLayout] = useState(plan.canvasLayout);
   const snapshot: CanvasLayout = {
-    splitZones: split,
+    receptionMode,
+    splitZones: false,
     tables: Object.fromEntries(
       layout.map(({ table, point }) => {
-        const side = membership[table.id];
         return [
           table.id,
           {
             ...point,
-            ...(side === null
-              ? { outsideZone: true }
-              : side && side !== table.side
-                ? { side }
-                : {}),
+            ...((tableShapes[table.id] ?? plan.canvasLayout?.tables[table.id]?.shape)
+              ? { shape: tableShapes[table.id] ?? plan.canvasLayout?.tables[table.id]?.shape }
+              : {}),
           },
         ];
       }),
     ),
-    zones: Object.fromEntries(
-      zones.map(({ side, point, size }) => [side, { ...point, width: size.x, height: size.y }]),
-    ),
-    stage: plan.canvasLayout?.stage ? stage : null,
-    objects: objectLayout.map(({ id, kind, point }) => ({ id, type: kind, ...point })),
+    zones: {},
+    stage: plan.canvasLayout?.stage
+      ? { ...stage, width: stageSize("stage").x, height: stageSize("stage").y }
+      : null,
+    objects: objectLayout.map(({ id, kind, point }) => ({
+      id,
+      type: kind,
+      ...point,
+      ...(kind === "stage" ? { width: stageSize(id).x, height: stageSize(id).y } : {}),
+    })),
   };
   useEffect(() => {
     onCaptureLayout?.(snapshot);
@@ -279,35 +251,27 @@ export function SeatingCanvas({
 
   const layoutVersion =
     layoutKey(baseLayout) === layoutKey(plan.canvasLayout) ? plan.version : baseVersion;
-  const movingTable = layout.find(({ table }) => table.id === movingId);
-  const destination = movingTable && zoneAt(movingTable.point, assignedZone(movingTable.table));
   const points = [...layout, ...objectLayout].map(({ point }) => point);
   const padding = 32;
-  const left = Math.min(
-    0,
-    stage.x - padding,
-    ...points.map((point) => point.x - padding),
-    ...zones.map((zone) => zone.point.x - padding),
-  );
-  const upper = Math.min(
-    0,
-    stage.y - padding,
-    ...points.map((point) => point.y - padding),
-    ...zones.map((zone) => zone.point.y - padding),
-  );
+  const left = Math.min(0, stage.x - padding, ...points.map((point) => point.x - padding));
+  const upper = Math.min(0, stage.y - padding, ...points.map((point) => point.y - padding));
   const width =
     Math.max(
       hallWidth,
-      stage.x + 250 + padding,
+      stage.x + stageSize("stage").x + padding,
+      ...objectLayout
+        .filter(({ kind }) => kind === "stage")
+        .map(({ id, point }) => point.x + stageSize(id).x + padding),
       ...points.map((point) => point.x + spacing),
-      ...zones.map((zone) => zone.point.x + zone.size.x + padding),
     ) - left;
   const height =
     Math.max(
       480,
-      stage.y + 64 + padding,
+      stage.y + stageSize("stage").y + padding,
+      ...objectLayout
+        .filter(({ kind }) => kind === "stage")
+        .map(({ id, point }) => point.y + stageSize(id).y + padding),
       ...points.map((point) => point.y + spacing),
-      ...zones.map((zone) => zone.point.y + zone.size.y + padding),
     ) - upper;
   const previousOrigin = useRef<Point | null>(null);
 
@@ -324,52 +288,18 @@ export function SeatingCanvas({
   function place(id: string, point: Point) {
     const rect = surface.current?.getBoundingClientRect();
     if (rect) previousOrigin.current = { x: rect.left - left * zoom, y: rect.top - upper * zoom };
-    const zone = zones.find((item) => item.id === id);
-    if (zone) {
-      const dx = point.x - zone.point.x;
-      const dy = point.y - zone.point.y;
-      const tables = layout.filter(({ table }) => assignedZone(table) === zone.side);
+    if (id.startsWith("resizeStage:")) {
+      const objectId = id.slice("resizeStage:".length, id.lastIndexOf(":"));
+      const corner = resizeCorners.find((item) => id.endsWith(`:${item.key}`));
+      const origin =
+        objectId === "stage" ? stage : objectLayout.find((item) => item.id === objectId)?.point;
+      if (!origin || !corner) return;
+      const size = stageSize(objectId);
+      const next = resizeStage({ ...origin, width: size.x, height: size.y }, point, corner);
       setPositions((current) => ({
         ...current,
-        [id]: point,
-        ...Object.fromEntries(
-          tables.map(({ table, point }) => [table.id, { x: point.x + dx, y: point.y + dy }]),
-        ),
-      }));
-      return;
-    }
-    const resized = zones.find((item) => id.startsWith(`resize:${item.side}:`));
-    const corner = resizeCorners.find((item) => id.endsWith(`:${item.key}`));
-    if (resized && corner) {
-      const members = layout.filter(({ table }) => assignedZone(table) === resized.side);
-      const startX = resized.point.x;
-      const startY = resized.point.y;
-      const endX = startX + resized.size.x;
-      const endY = startY + resized.size.y;
-      const leftEdge = corner.west
-        ? Math.min(point.x, endX - 160, ...members.map(({ point }) => point.x - frameOutline))
-        : startX;
-      const topEdge = corner.north
-        ? Math.min(point.y, endY - 160, ...members.map(({ point }) => point.y - frameOutline))
-        : startY;
-      const rightEdge = corner.west
-        ? endX
-        : Math.max(
-            point.x,
-            startX + 160,
-            ...members.map(({ point }) => point.x + tableWidth + frameOutline),
-          );
-      const bottomEdge = corner.north
-        ? endY
-        : Math.max(
-            point.y,
-            startY + 160,
-            ...members.map(({ point }) => point.y + tableWidth + frameOutline),
-          );
-      setPositions((current) => ({
-        ...current,
-        [resized.id]: { x: leftEdge, y: topEdge },
-        [`size:${resized.side}`]: { x: rightEdge - leftEdge, y: bottomEdge - topEdge },
+        [objectId]: { x: next.x, y: next.y },
+        [`objectSize:${objectId}`]: { x: next.width, y: next.height },
       }));
       return;
     }
@@ -386,8 +316,8 @@ export function SeatingCanvas({
       return;
     const rect = surface.current?.getBoundingClientRect();
     if (!rect) return;
-    if (!id.startsWith("resize:")) setSelectedId(id);
-    setOutside(null);
+    if (!id.startsWith("resizeStage:")) setSelectedId(id);
+    if (id.startsWith("resizeStage:")) event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
       id,
       original: origin,
@@ -431,41 +361,7 @@ export function SeatingCanvas({
     event.preventDefault();
     const [dx = 0, dy = 0] = delta;
     const next = { x: point.x + dx, y: point.y + dy };
-    const table = layout.find((item) => item.table.id === id)?.table;
-    if (table && zones.some((zone) => zone.side === assignedZone(table) || zone === zoneAt(next))) {
-      const zone = zoneAt(next, assignedZone(table));
-      if (!zone) {
-        setOutside({ id, name: table.name, point: next });
-        return;
-      }
-      setOutside(null);
-      setMembership((current) => ({ ...current, [id]: zone.side }));
-    }
     place(id, next);
-  }
-
-  function zoneDragTarget(element: HTMLElement) {
-    const zone = zones.find(({ id }) => id === element.dataset.zone);
-    if (!zone) return;
-    const corner = resizeCorners.find(({ key }) => key === element.dataset.corner);
-    if (!corner) return { id: zone.id, point: zone.point };
-    return {
-      id: `resize:${zone.side}:${corner.key}`,
-      point: {
-        x: zone.point.x + (corner.west ? 0 : zone.size.x),
-        y: zone.point.y + (corner.north ? 0 : zone.size.y),
-      },
-    };
-  }
-
-  function startZone(event: PointerEvent<HTMLDivElement>) {
-    const target = zoneDragTarget(event.currentTarget);
-    if (target) start(event, target.id, target.point);
-  }
-
-  function moveZoneWithKey(event: React.KeyboardEvent<HTMLDivElement>) {
-    const target = zoneDragTarget(event.currentTarget);
-    if (target) moveWithKey(event, target.id, target.point);
   }
 
   function leave(id: string) {
@@ -475,18 +371,6 @@ export function SeatingCanvas({
   function finish(event: PointerEvent<HTMLElement>) {
     const active = drag.current;
     if (!active || active.pointerId !== event.pointerId) return;
-    if (active.moved && split && movingTable?.table.id === active.id) {
-      if (
-        event.type !== "pointerup" ||
-        (!destination && zones.some((zone) => zone.side === assignedZone(movingTable.table)))
-      ) {
-        place(active.id, active.original);
-        if (event.type === "pointerup")
-          setOutside({ id: active.id, name: movingTable.table.name, point: movingTable.point });
-      } else if (destination) {
-        setMembership((current) => ({ ...current, [active.id]: destination.side }));
-      }
-    }
     drag.current = null;
     setMovingId(null);
   }
@@ -529,9 +413,52 @@ export function SeatingCanvas({
     );
   }
 
+  function stageResizeControls(id: string, origin: Point) {
+    if (!editable || selectedId !== id) return null;
+    const size = stageSize(id);
+    return resizeCorners.map((corner) => {
+      const resizeId = `resizeStage:${id}:${corner.key}`;
+      const point = {
+        x: origin.x + (corner.west ? 0 : size.x),
+        y: origin.y + (corner.north ? 0 : size.y),
+      };
+      return (
+        <div
+          key={corner.key}
+          role="group"
+          tabIndex={0}
+          aria-label={t("resizeZone", { name: t("stage") })}
+          className={`absolute z-30 size-4 touch-none rounded-full border-2 border-white bg-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500 ${corner.classes}`}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            start(event, resizeId, point);
+          }}
+          onPointerMove={(event) => {
+            event.stopPropagation();
+            move(event);
+          }}
+          onPointerUp={(event) => {
+            event.stopPropagation();
+            finish(event);
+          }}
+          onPointerCancel={finish}
+          onLostPointerCapture={finish}
+          onPointerLeave={() => leave(resizeId)}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            moveWithKey(event, resizeId, point);
+          }}
+        />
+      );
+    });
+  }
+
   return (
     <div
       className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#faf9f7]"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setSelectedId(null);
+      }}
       onClickCapture={(event) => {
         if (!suppressClick.current || event.detail === 0) return;
         suppressClick.current = false;
@@ -562,18 +489,24 @@ export function SeatingCanvas({
           event.preventDefault();
           const kind = event.dataTransfer.getData(seatingPaletteMime);
           const isObject = Object.keys(seatingObjectIcons).some((key) => key === kind);
-          if (!isObject && kind !== "table" && kind !== "brideArea" && kind !== "groomArea") return;
+          if (
+            !isObject &&
+            kind !== "table" &&
+            kind !== "tableTwoSided" &&
+            kind !== "tableFourSided"
+          )
+            return;
           const rect = surface.current?.getBoundingClientRect();
           if (!rect) return;
           const point = {
             x: Math.round((event.clientX - rect.left) / zoom + left),
             y: Math.round((event.clientY - rect.top) / zoom + upper),
           };
-          if (kind === "table") {
+          if (kind === "table" || kind === "tableTwoSided" || kind === "tableFourSided") {
             point.x -= tableWidth / 2;
             point.y -= tableWidth / 2;
           }
-          onPaletteDrop(kind as SeatingCanvasObject["kind"] | "table", point, zoneAt(point)?.side);
+          onPaletteDrop(kind as SeatingCanvasObject["kind"] | SeatingTableItem, point);
         }}
         onContextMenu={(event) => event.preventDefault()}
         onPointerDownCapture={(event) => {
@@ -634,90 +567,6 @@ export function SeatingCanvas({
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             }}
           >
-            {split &&
-              zones.map(({ id, side, point, size }) => {
-                const label = t(side === "BRIDE" ? "brideArea" : "groomArea");
-                return (
-                  <div
-                    key={id}
-                    data-canvas-selection
-                    onClick={() => {
-                      if (editable) setSelectedId(id);
-                    }}
-                    className={`group/zone absolute rounded-xl border-2 ${destination?.side === side ? "border-emerald-500 bg-emerald-100/40" : movingTable && !destination ? "border-amber-400 bg-amber-100/20" : selectedId === id ? "border-sky-400 bg-white/30" : "border-stone-300/80 bg-white/30"}`}
-                    style={{
-                      left: point.x - left,
-                      top: point.y - upper,
-                      width: size.x,
-                      height: size.y,
-                    }}
-                  >
-                    <div
-                      tabIndex={editable ? 0 : undefined}
-                      role="group"
-                      aria-label={t("move", { name: label })}
-                      className={`absolute left-3 top-3 rounded-md bg-white px-3 py-1 text-sm font-semibold shadow-sm ${editable ? "pointer-events-auto cursor-grab touch-none select-none" : ""}`}
-                      data-zone={id}
-                      onPointerDown={startZone}
-                      onPointerMove={move}
-                      onPointerUp={finish}
-                      onPointerCancel={finish}
-                      onLostPointerCapture={finish}
-                      onPointerLeave={() => leave(`zone:${side}`)}
-                      onKeyDown={moveZoneWithKey}
-                    >
-                      {label}
-                    </div>
-                    {editable && selectedId === id && onRemoveObject && (
-                      <button
-                        type="button"
-                        data-seating-canvas-interactive
-                        className="absolute right-3 top-3 rounded border bg-white p-1.5 text-destructive"
-                        aria-label={t("removeObject", { name: label })}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          const object = objects.find(
-                            ({ kind }) => kind === (side === "BRIDE" ? "brideArea" : "groomArea"),
-                          );
-                          if (object) onRemoveObject(object.id);
-                          setSelectedId(null);
-                          setPositions((current) => {
-                            const next = { ...current };
-                            delete next[id];
-                            delete next[`size:${side}`];
-                            return next;
-                          });
-                        }}
-                      >
-                        <X className="size-4" />
-                      </button>
-                    )}
-                    {editable &&
-                      selectedId === id &&
-                      resizeCorners.map((corner) => {
-                        const resizeId = `resize:${side}:${corner.key}`;
-                        return (
-                          <div
-                            key={corner.key}
-                            tabIndex={0}
-                            role="group"
-                            aria-label={t("resizeZone", { name: label })}
-                            className={`absolute z-20 size-4 touch-none rounded-full border-2 border-white bg-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500 ${corner.classes}`}
-                            data-zone={id}
-                            data-corner={corner.key}
-                            onPointerDown={startZone}
-                            onPointerMove={move}
-                            onPointerUp={finish}
-                            onPointerCancel={finish}
-                            onLostPointerCapture={finish}
-                            onPointerLeave={() => leave(resizeId)}
-                            onKeyDown={moveZoneWithKey}
-                          />
-                        );
-                      })}
-                  </div>
-                );
-              })}
             {plan.canvasLayout?.stage && (
               <div
                 tabIndex={editable ? 0 : undefined}
@@ -731,11 +580,26 @@ export function SeatingCanvas({
                 onPointerCancel={finish}
                 onLostPointerCapture={finish}
                 onKeyDown={(event) => moveWithKey(event, "stage", stage)}
-                className={`absolute grid h-16 w-[250px] place-items-center rounded-xl border border-rose-200 bg-rose-50 text-sm font-semibold text-rose-900 ${frameClass("stage")}`}
-                style={{ left: stage.x - left, top: stage.y - upper }}
+                className={`absolute grid place-items-center text-sm font-semibold text-rose-900 ${frameClass("stage")}`}
+                style={{
+                  left: stage.x - left,
+                  top: stage.y - upper,
+                  width: stageSize("stage").x,
+                  height: stageSize("stage").y,
+                }}
               >
-                {t("stage")}
-                {selectionDots("stage")}
+                <Image
+                  src="/images/seating/palette/stage-floral.png"
+                  alt=""
+                  fill
+                  sizes="250px"
+                  draggable={false}
+                  className="pointer-events-none select-none object-contain"
+                />
+                <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                  {t("stage")}
+                </span>
+                {stageResizeControls("stage", stage)}
               </div>
             )}
             {objectLayout.map(({ id, kind, point }) => {
@@ -754,12 +618,36 @@ export function SeatingCanvas({
                   onPointerCancel={finish}
                   onLostPointerCapture={finish}
                   onKeyDown={(event) => moveWithKey(event, id, point)}
-                  className={`absolute flex items-center justify-center gap-2 rounded-xl border border-stone-300 bg-stone-100 text-sm font-medium text-stone-800 ${kind === "aisle" ? "h-72 w-32 border-dashed" : "h-20 w-[190px]"} ${frameClass(id)}`}
-                  style={{ left: point.x - left, top: point.y - upper }}
+                  className={`absolute flex items-center justify-center gap-2 rounded-xl text-sm font-medium text-stone-800 ${kind === "stage" ? "" : "border border-stone-300 bg-stone-100"} ${kind === "aisle" ? "h-72 w-32 border-dashed" : kind === "stage" ? "" : "h-20 w-[190px]"} ${frameClass(id)}`}
+                  style={{
+                    left: point.x - left,
+                    top: point.y - upper,
+                    ...(kind === "stage"
+                      ? { width: stageSize(id).x, height: stageSize(id).y }
+                      : {}),
+                  }}
                 >
-                  <Icon className="size-5" />
-                  {t(kind)}
-                  {selectionDots(id)}
+                  {kind === "stage" ? (
+                    <>
+                      <Image
+                        src="/images/seating/palette/stage-floral.png"
+                        alt=""
+                        fill
+                        sizes="250px"
+                        draggable={false}
+                        className="pointer-events-none select-none object-contain"
+                      />
+                      <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                        {t(kind)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon className="size-5" />
+                      {t(kind)}
+                    </>
+                  )}
+                  {kind === "stage" ? stageResizeControls(id, point) : selectionDots(id)}
                   {editable && selectedId === id && onRemoveObject && (
                     <button
                       type="button"
@@ -781,6 +669,9 @@ export function SeatingCanvas({
                 tabIndex={editable ? 0 : undefined}
                 aria-label={editable ? t("move", { name: table.name }) : undefined}
                 role={editable ? "group" : undefined}
+                onFocus={(event) => {
+                  if (editable && event.target === event.currentTarget) setSelectedId(table.id);
+                }}
                 onPointerDown={(event) => start(event, table.id, point)}
                 onPointerMove={move}
                 onPointerLeave={() => leave(table.id)}
@@ -792,11 +683,39 @@ export function SeatingCanvas({
                 style={{ left: point.x - left, top: point.y - upper }}
               >
                 {renderTable(table)}
-                {selectionDots(table.id)}
-                {split && membership[table.id] === null && (
-                  <span className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-amber-100 px-2 py-1 text-xs text-amber-900">
-                    {t("outsideZones")}
-                  </span>
+                {editable && selectedId === table.id && !movingId && (
+                  <div
+                    role="group"
+                    aria-label={t("tableActions", { name: table.name })}
+                    data-seating-canvas-interactive
+                    className="absolute -top-14 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-stone-200 bg-white p-1.5 text-stone-800 shadow-md"
+                  >
+                    {(
+                      [
+                        { Icon: Pencil, label: "editTable", action: onEditTable },
+                        { Icon: Copy, label: "duplicateTable", action: onDuplicateTable },
+                        { Icon: Trash2, label: "deleteTable", action: onDeleteTable },
+                      ] as const
+                    ).map(
+                      ({ Icon, label, action }) =>
+                        action && (
+                          <button
+                            key={label}
+                            type="button"
+                            data-seating-canvas-interactive
+                            title={t(label, { name: table.name })}
+                            aria-label={t(label, { name: table.name })}
+                            disabled={
+                              saving || (label === "duplicateTable" && plan.tables.length >= 100)
+                            }
+                            className="grid size-8 place-items-center rounded-full hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-sky-500 disabled:opacity-40"
+                            onClick={() => action(table, point)}
+                          >
+                            <Icon aria-hidden="true" className="size-4" />
+                          </button>
+                        ),
+                    )}
+                  </div>
                 )}
               </div>
             ))}
@@ -829,60 +748,12 @@ export function SeatingCanvas({
           onClick={async () => {
             if (await onSaveLayout(snapshot, layoutVersion)) {
               setBaseVersion(layoutVersion + 1);
-              setBaseLayout({
-                ...snapshot,
-                tables: Object.fromEntries(
-                  Object.entries(snapshot.tables).map(([id, table]) => [
-                    id,
-                    { x: table.x, y: table.y, outsideZone: table.outsideZone ?? false, side: null },
-                  ]),
-                ),
-              });
-              setMembership((current) =>
-                Object.fromEntries(Object.entries(current).filter(([, side]) => side === null)),
-              );
+              setBaseLayout(snapshot);
             }
           }}
         >
           {t("saveLayout")}
         </Button>
-      )}
-      {split && movingTable && (
-        <p
-          role="status"
-          className="pointer-events-none absolute bottom-16 left-3 rounded-lg border bg-card px-3 py-2 text-sm"
-        >
-          {destination
-            ? t("dropInZone", { name: t(destination.side === "BRIDE" ? "brideArea" : "groomArea") })
-            : t("outsideZones")}
-        </p>
-      )}
-      {split && editable && outside && (
-        <div
-          role="status"
-          className="absolute bottom-16 left-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-card px-3 py-2 text-sm"
-        >
-          {outside.name} · {t("outsideZones")}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              place(outside.id, outside.point);
-              setMembership((current) => ({ ...current, [outside.id]: null }));
-              setOutside(null);
-            }}
-          >
-            {t("placeOutside")}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            aria-label={t("closePalette")}
-            onClick={() => setOutside(null)}
-          >
-            <X className="size-4" />
-          </Button>
-        </div>
       )}
       <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-xl border bg-card p-1 shadow-sm">
         <Button

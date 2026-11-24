@@ -20,23 +20,33 @@ const positionPrioritySchema = z
 export type PositionPriority = z.infer<typeof positionPrioritySchema>;
 
 const canvasPoint = z.object({ x: z.number(), y: z.number() });
+const canvasSizedPoint = canvasPoint
+  .extend({
+    width: z.number().positive().max(1000000).nullish(),
+    height: z.number().positive().max(1000000).nullish(),
+  })
+  .refine((point) => (point.width == null) === (point.height == null));
+export const tableShapeSchema = z.enum(["round", "twoSided", "fourSided"]);
+export type TableShape = z.infer<typeof tableShapeSchema>;
 const canvasZone = canvasPoint.extend({
   width: z.number().positive(),
   height: z.number().positive(),
 });
 const canvasLayoutSchema = z.object({
+  receptionMode: z.enum(["JOINT", "GROOM", "BRIDE"]).nullish(),
   splitZones: z.boolean(),
   tables: z.record(
     z.string(),
     canvasPoint.extend({
       outsideZone: z.boolean().optional(),
       side: z.enum(["BRIDE", "GROOM"]).nullish(),
+      shape: tableShapeSchema.nullish(),
     }),
   ),
   zones: z.object({ BRIDE: canvasZone.optional(), GROOM: canvasZone.optional() }),
-  stage: canvasPoint.nullable(),
+  stage: canvasSizedPoint.nullable(),
   objects: z.array(
-    canvasPoint.extend({
+    canvasSizedPoint.safeExtend({
       id: z.string(),
       type: z.enum(["danceFloor", "giftTable", "entrance", "aisle", "stage"]),
     }),
@@ -110,7 +120,7 @@ export type SeatingChange =
       tableId: string;
       name: string;
       capacity: number;
-      side?: SeatingSide;
+      side?: SeatingSide | "UNSPECIFIED";
       row?: number;
       column?: number;
     }
@@ -162,13 +172,16 @@ export function changeSeatingPlan(
 export const seatingCapacities = [8, 10, 12] as const;
 export type SeatingCapacity = (typeof seatingCapacities)[number];
 export type SeatingSide = "BRIDE" | "GROOM";
+export type ReceptionMode = "JOINT" | "GROOM" | "BRIDE";
 export type SeatingGenerationConfig = {
+  receptionMode?: ReceptionMode;
   expectedVersion: number;
   tableCapacity: SeatingCapacity;
   positionPriority?: PositionPriority;
   tablesPerRow: { bride: number; groom: number };
 };
 export const seatingGenerationSchema = z.object({
+  receptionMode: z.enum(["JOINT", "GROOM", "BRIDE"]).optional(),
   sourceVersion: z.number().int(),
   sourceFingerprint: z.string(),
   algorithmVersion: z.string(),

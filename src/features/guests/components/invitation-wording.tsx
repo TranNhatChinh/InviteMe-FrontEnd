@@ -41,7 +41,7 @@ export function InvitationWording({
 }: {
   weddingId: string;
   compact?: boolean;
-  onPreview?: (content: string | null) => void;
+  onPreview?: (content: string | null, recipientLabel?: string | null) => void;
 }) {
   const { t } = useTranslation("guestTools", { keyPrefix: "wording" });
   const { api } = useRuntime();
@@ -89,7 +89,7 @@ function WordingEditor({
   settings: WordingSettings;
   onSaved: () => void;
   compact: boolean;
-  onPreview?: (content: string | null) => void;
+  onPreview?: (content: string | null, recipientLabel?: string | null) => void;
 }) {
   const { t } = useTranslation("guestTools", { keyPrefix: "wording" });
   const { api } = useRuntime();
@@ -125,10 +125,12 @@ function WordingEditor({
     JSON.stringify(preview.variables) === JSON.stringify({ guestId, presets: draft });
   const previewContent =
     previewCurrent && validation.success ? (preview.data?.content ?? null) : null;
+  const previewRecipient =
+    previewCurrent && validation.success ? (preview.data?.recipientLabel ?? null) : null;
   useEffect(() => {
-    onPreview?.(previewContent);
+    onPreview?.(previewContent, previewRecipient);
     return () => onPreview?.(null);
-  }, [onPreview, previewContent]);
+  }, [onPreview, previewContent, previewRecipient]);
   function update(id: string, change: Partial<EditablePreset>) {
     setPresets((rows) => rows.map((p) => (p.id === id ? { ...p, ...change } : p)));
   }

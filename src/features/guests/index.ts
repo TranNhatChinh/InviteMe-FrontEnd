@@ -2,7 +2,9 @@ export { PlanningDashboard as GuestDashboard } from "./components/planning-dashb
 export { PlanningSeating } from "./components/planning-seating";
 export { CoupleImport } from "./components/couple-import";
 export { validateCoupleRows, type CoupleRow } from "./utils/couple-import";
+export { importBody } from "./api/planning.api";
 export type {
+  PlanningImportDecision,
   PlanningImportCommit,
   PlanningImportPreview,
   PlanningImportResult,

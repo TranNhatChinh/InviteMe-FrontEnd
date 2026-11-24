@@ -28,7 +28,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
-import { PanelLeft, Plus, Trash2, X } from "lucide-react";
+import { PanelLeft, Pencil, Plus, X } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
 import { REALTIME_EVENTS } from "@/core/realtime/realtime-events";
@@ -38,6 +38,7 @@ import { trapDialogFocus } from "@/shared/lib/dialog-focus";
 import {
   applySeatingGeneration,
   type CanvasLayout,
+  type TableShape,
   applySeatingArrangement,
   type ArrangeSeatingInput,
   type SeatingGenerationApply,
@@ -55,10 +56,16 @@ import { previewSeatMove } from "../utils/planning-seat-move";
 import { moveSeatingWithRetry } from "../utils/seating-conflict-retry";
 import { ArrangeSeatingDialog } from "./arrange-seating-dialog";
 import { GenerateSeatingDialog } from "./generate-seating-dialog";
-import { SeatingObjectPalette, type SeatingCanvasObject } from "./seating-object-palette";
+import {
+  SeatingObjectPalette,
+  type SeatingCanvasObject,
+  type SeatingTableItem,
+} from "./seating-object-palette";
+import { tableSeatPoint } from "../utils/seating-table-shape";
+import { tableSideColors } from "../utils/seating-table-side";
 import { SeatingSeatBadge } from "./seating-seat-badge";
 import { SeatingCanvas } from "./seating-canvas";
-import { sideSlots } from "../utils/seating-layout";
+import { sideSlots, nextSeatingTableNumber } from "../utils/seating-layout";
 import { wouldSplitParty } from "../utils/seating-layout";
 import {
   changeGenerationDraft,
@@ -213,6 +220,7 @@ function recipient(g: PlanningGuest) {
 
 export function PlanningSeating({ weddingId }: { weddingId: string }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [view, setView] = useState<"floor" | "list">("floor");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [objects, setObjects] = useState<SeatingCanvasObject[] | null>(null);
   const canvasDraft = useRef<CanvasLayout | undefined>(undefined);
@@ -261,6 +269,8 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     seatNumber?: number;
   } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [tableShape, setTableShape] = useState<TableShape>("round");
+  const [tableShapes, setTableShapes] = useState<Record<string, TableShape>>({});
   const [tableDrop, setTableDrop] = useState<{ x: number; y: number } | undefined>();
   const [tablePositions, setTablePositions] = useState<Record<string, { x: number; y: number }>>(
     {},
@@ -365,31 +375,26 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
   const plan = generationDraft?.plan ?? preview ?? planQuery.data;
   const roomObjects: SeatingCanvasObject[] = objects ?? [
     ...(plan?.canvasLayout?.objects.map(({ id, type }) => ({ id, kind: type })) ?? []),
-    ...(plan?.canvasLayout?.zones.BRIDE ? [{ id: "zone:BRIDE", kind: "brideArea" as const }] : []),
-    ...(plan?.canvasLayout?.zones.GROOM ? [{ id: "zone:GROOM", kind: "groomArea" as const }] : []),
   ];
 
   function addCanvasItem(
-    kind: SeatingCanvasObject["kind"] | "table",
+    kind: SeatingCanvasObject["kind"] | SeatingTableItem,
     point?: { x: number; y: number },
-    side?: TableSlot["side"],
   ) {
     if (!plan || !editable || saving) return;
-    if (kind !== "table") {
-      if (
-        (kind === "brideArea" || kind === "groomArea") &&
-        roomObjects.some((object) => object.kind === kind)
-      )
-        return;
+    if (kind !== "table" && kind !== "tableTwoSided" && kind !== "tableFourSided") {
       setObjects([...roomObjects, { id: "object:" + crypto.randomUUID(), kind, point }]);
       return;
     }
+    setTableShape(
+      kind === "tableTwoSided" ? "twoSided" : kind === "tableFourSided" ? "fourSided" : "round",
+    );
     if (plan.tables.length >= 100) return;
     const slot = [
       ...sideSlots(plan.tables, "BRIDE", plan.brideTablesPerRow ?? 2),
       ...sideSlots(plan.tables, "GROOM", plan.groomTablesPerRow ?? 2),
     ]
-      .filter((slot) => !slot.table && (!side || slot.side === side))
+      .filter((slot) => !slot.table)
       .sort((a, b) => a.row - b.row)[0];
     if (slot) {
       setTableDrop(point);
@@ -985,7 +990,15 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     tableDisabled={saving || plan.tables.length >= 100}
                     onClose={() => setPaletteOpen(false)}
                     onObject={(kind) => addCanvasItem(kind)}
-                    onTable={() => addCanvasItem("table")}
+                    onTable={(shape) =>
+                      addCanvasItem(
+                        shape === "twoSided"
+                          ? "tableTwoSided"
+                          : shape === "fourSided"
+                            ? "tableFourSided"
+                            : "table",
+                      )
+                    }
                   />
                 ) : (
                   <DropTarget
@@ -1075,6 +1088,24 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <div
+                    role="group"
+                    aria-label={t("studio.viewMode")}
+                    className="flex rounded-full bg-stone-100 p-1"
+                  >
+                    {(["floor", "list"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        aria-pressed={view === mode}
+                        disabled={saving || dragIds.length > 0}
+                        onClick={() => setView(mode)}
+                        className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${view === mode ? "bg-white text-stone-950 shadow-sm" : "text-stone-500 hover:text-stone-900"}`}
+                      >
+                        {t(mode === "floor" ? "studio.floorPlan" : "studio.listView")}
+                      </button>
+                    ))}
+                  </div>
                   {!plan.tables.length &&
                     !generationDraft &&
                     editable &&
@@ -1117,6 +1148,7 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                     )}
                   {editable && tableSlot && (
                     <AddSeatingTableDialog
+                      draft={!!generationDraft}
                       key={
                         tableSlot
                           ? `${tableSlot.side}:${tableSlot.row}:${tableSlot.column}`
@@ -1125,16 +1157,15 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       plan={plan}
                       disabled={saving}
                       slot={tableSlot}
+                      shape={tableShape}
                       onCloseSlot={() => setTableSlot(null)}
                       onChange={(input) =>
                         change(input, undefined, undefined, (next) => {
                           const created = next.tables.find(
-                            (table) =>
-                              !plan.tables.some((existing) => existing.id === table.id) &&
-                              table.side === tableSlot.side &&
-                              table.row === tableSlot.row &&
-                              table.column === tableSlot.column,
+                            (table) => !plan.tables.some((existing) => existing.id === table.id),
                           );
+                          if (created)
+                            setTableShapes((current) => ({ ...current, [created.id]: tableShape }));
                           if (created && tableDrop)
                             setTablePositions((current) => ({
                               ...current,
@@ -1148,214 +1179,380 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 </div>
               </div>
               <div className="border-b bg-card px-3 py-2">
-                <SeatingLegend canvas />
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <SeatingLegend canvas />
+                  <ul
+                    aria-label={t("layout.side")}
+                    className="flex flex-wrap gap-3 text-xs text-stone-600"
+                  >
+                    {(["GROOM", "BRIDE", null] as const).map((side) => (
+                      <li key={side ?? "none"} className="flex items-center gap-1.5">
+                        <span
+                          aria-hidden="true"
+                          className={`size-3 rounded-full ${tableSideColors(side).surface}`}
+                        />
+                        {t(`layout.${tableSideColors(side).label}`)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <SeatingCanvas
-                key={generationDraft ? "draft" : "saved"}
-                plan={plan}
-                objects={roomObjects}
-                tablePositions={tablePositions}
-                onPaletteDrop={editable && !saving ? addCanvasItem : undefined}
-                onCaptureLayout={
-                  generationDraft
-                    ? (layout: CanvasLayout) => {
-                        canvasDraft.current = layout;
-                      }
-                    : undefined
-                }
-                onSaveLayout={
-                  generationDraft
-                    ? undefined
-                    : (layout: CanvasLayout, version: number) =>
-                        change(
-                          { action: "UPDATE_CANVAS_LAYOUT", canvasLayout: layout },
-                          undefined,
-                          version,
-                        )
-                }
-                onRemoveObject={(id) =>
-                  setObjects(roomObjects.filter((object) => object.id !== id))
-                }
-                editable={
-                  editable && isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")
-                }
-                saving={saving}
-                renderTable={(table) => {
-                  const members = plan.assignments.filter((a) => a.tableId === table.id);
-                  const remote = collaboration.leases.filter(
-                    (lease) =>
-                      lease.connectionId !== collaboration.connectionId &&
-                      lease.tableId === table.id,
-                  );
-                  const ghostSeats = remote.flatMap((lease) => {
-                    const feedback = seatingDropFeedback(plan, lease.placeIds, {
-                      tableId: table.id,
-                      ...(lease.seatNumber ? { seatNumber: lease.seatNumber } : {}),
-                    });
-                    return feedback?.valid ? feedback.seats : [];
-                  });
-                  const moving = dragIds.length ? dragIds : selection;
-                  const occupied = members.filter((a) => !moving.includes(a.placeId)).length;
-                  const shortage = Math.max(0, moving.length - (table.capacity - occupied));
-                  return (
-                    <DropTarget
-                      key={table.id}
-                      anchor={`table:${table.id}`}
-                      id={`table:${table.id}`}
-                      target={{ tableId: table.id }}
-                      disabled={!editable || saving}
-                      className={`relative h-full w-full max-w-full rounded-xl p-2 transition-colors border border-transparent hover:border-stone-200 hover:bg-white/60 ${members.length === table.capacity ? "opacity-60" : ""} ${moving.length ? (shortage ? "border-red-300" : "border-primary/60") : ""}`}
-                      highlighted={dragTarget?.tableId === table.id || remote.length > 0}
-                      invalid={
-                        dragTarget?.tableId === table.id
-                          ? dragFeedback?.valid === false
-                          : shortage > 0
-                      }
-                      hint={
-                        moving.length
-                          ? dragTarget?.tableId === table.id && dragFeedback
-                            ? t(dragFeedback.messageKey, dragFeedback.messageValues)
-                            : shortage
-                              ? t("seating.shortageCount", { count: shortage })
-                              : t("seating.enoughSpace", { count: moving.length })
-                          : undefined
-                      }
-                      label={t("seating.dropZone", { table: table.name })}
-                    >
-                      {remote.length > 0 && (
-                        <p className="mb-1 truncate text-center text-xs text-muted-foreground">
-                          {t("seating.remoteSelecting", {
-                            names: remote.map((lease) => lease.displayName).join(", "),
-                          })}
-                        </p>
-                      )}
-                      {editable && (
-                        <button
-                          type="button"
-                          data-seating-canvas-interactive
-                          className="absolute right-1 top-1 z-10 rounded-md border bg-card p-1.5 text-destructive hover:bg-muted"
-                          aria-label={t("layout.deleteTable", { name: table.name })}
-                          disabled={saving}
-                          onClick={() => {
-                            setFailure(false);
-                            setPendingDelete({ id: table.id, name: table.name });
-                          }}
+              {view === "list" && (
+                <div
+                  className="min-h-0 flex-1 overflow-y-auto bg-stone-100/80 p-4 sm:p-6"
+                  aria-label={t("studio.listView")}
+                >
+                  {!plan.tables.length && (
+                    <p className="py-12 text-center text-sm text-muted-foreground">
+                      {t("studio.noTables")}
+                    </p>
+                  )}
+                  <div className="grid items-start gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {plan.tables.map((table) => {
+                      const members = plan.assignments.filter((a) => a.tableId === table.id);
+                      return (
+                        <DropTarget
+                          key={table.id}
+                          id={`table:${table.id}`}
+                          anchor={`table:${table.id}`}
+                          target={{ tableId: table.id }}
+                          disabled={!editable || saving}
+                          highlighted={dragTarget?.tableId === table.id}
+                          invalid={
+                            dragTarget?.tableId === table.id && dragFeedback?.valid === false
+                          }
+                          label={t("seating.dropZone", { table: table.name })}
+                          className={`rounded-2xl border p-5 ${tableSideColors(table.side).card} ${members.length ? "" : "border-dashed"}`}
                         >
-                          <Trash2 className="size-4" />
-                        </button>
-                      )}
-                      <div
-                        id={`seating-table-${table.id}`}
-                        className="relative aspect-square scroll-mt-6"
-                      >
-                        <button
-                          className={`absolute left-[21%] top-[21%] flex size-[58%] flex-col items-center justify-center rounded-full text-center text-sm bg-[#ffa895] text-stone-950 ${tableId === table.id ? "ring-2 ring-primary" : ""}`}
-                          aria-pressed={tableId === table.id && seat === null}
-                          aria-label={t("seating.viewTableGuests", { table: table.name })}
-                          aria-haspopup="dialog"
-                          onClick={(event) => {
-                            if (selection.length && editable) {
-                              move(selection, table.id);
-                              return;
-                            }
-                            if (
-                              event.detail !== 0 &&
-                              !(
-                                event.nativeEvent instanceof PointerEvent &&
-                                event.nativeEvent.pointerType === "touch"
-                              )
-                            )
-                              return;
-                            setTableId(table.id);
-                            setPlaceId(null);
-                            setSeat(null);
-                          }}
-                          onDoubleClick={() => {
-                            if (selection.length) return;
-                            setTableId(table.id);
-                            setPlaceId(null);
-                            setSeat(null);
-                          }}
-                        >
-                          <strong>{table.name}</strong>
-                          {table.groupId && (
-                            <span className="block max-w-24 truncate text-[10px] text-muted-foreground">
-                              {groupNames.get(table.groupId) ?? t("seating.groupScope")}
+                          <div
+                            id={`seating-table-${table.id}`}
+                            className="mb-4 flex scroll-mt-6 items-center gap-2"
+                          >
+                            <h3 className="min-w-0 flex-1 truncate text-lg font-semibold">
+                              {table.name}
+                            </h3>
+                            <span className="text-xs text-stone-600">
+                              {t(`layout.${tableSideColors(table.side).label}`)}
                             </span>
-                          )}
-                          <span>
-                            {t("seating.placesCount", {
-                              count: members.length,
-                              capacity: table.capacity,
-                            })}
-                          </span>
-                        </button>
-                        {Array.from({ length: table.capacity }, (_, i) => {
-                          const n = i + 1,
-                            angle = (i / table.capacity) * Math.PI * 2 - Math.PI / 2;
-                          const a = members.find((x) => x.seatNumber === n),
-                            p = plan.places.find((x) => x.id === a?.placeId);
-                          return (
-                            <DropTarget
-                              key={n}
-                              id={`seat:${table.id}:${n}`}
-                              target={{ tableId: table.id, seatNumber: n }}
-                              disabled={!editable || saving}
-                              invalid={
-                                moving.length > 0 &&
-                                (shortage > 0 || (!!a && !moving.includes(a.placeId)))
-                              }
-                              className={`absolute h-10 w-9 rounded-lg ${ghostSeats.includes(n) ? "border-2 border-dashed border-primary bg-primary/10" : ""} ${dragTarget?.tableId === table.id && dragFeedback?.valid && dragFeedback.seats.includes(n) ? "bg-primary/20 ring-2 ring-primary" : ""}`}
-                              label={
-                                dragTarget?.tableId === table.id &&
-                                dragFeedback?.valid &&
-                                dragFeedback.seats.includes(n)
-                                  ? t("seating.seatDestination", { table: table.name, seat: n })
-                                  : undefined
-                              }
-                              style={{
-                                left: `calc(${50 + 43 * Math.cos(angle)}% - 18px)`,
-                                top: `calc(${50 + 43 * Math.sin(angle)}% - 20px)`,
+                            <span className="text-xs text-muted-foreground">
+                              {members.length}/{table.capacity}
+                            </span>
+                            <button
+                              type="button"
+                              className="rounded-md p-1 text-stone-600 hover:bg-stone-100"
+                              aria-label={t("studio.editTable", { name: table.name })}
+                              onClick={() => {
+                                setTableId(table.id);
+                                setSeat(null);
+                                setPlaceId(null);
                               }}
                             >
-                              <DragSource
-                                id={`chair:${table.id}:${n}`}
-                                ids={p ? [p.id] : []}
-                                disabled={
-                                  !p ||
-                                  !editable ||
-                                  saving ||
-                                  (!generationDraft && status !== "connected")
+                              <Pencil className="size-4" />
+                            </button>
+                          </div>
+                          <ol className="space-y-1">
+                            {Array.from({ length: table.capacity }, (_, index) => {
+                              const number = index + 1;
+                              const assignment = members.find((a) => a.seatNumber === number);
+                              const id = assignment?.placeId;
+                              return (
+                                <li key={number}>
+                                  <DropTarget
+                                    id={`seat:${table.id}:${number}`}
+                                    target={{ tableId: table.id, seatNumber: number }}
+                                    disabled={!editable || saving}
+                                    highlighted={
+                                      dragTarget?.tableId === table.id &&
+                                      dragFeedback?.valid === true &&
+                                      dragFeedback.seats.includes(number)
+                                    }
+                                    invalid={
+                                      dragTarget?.tableId === table.id &&
+                                      dragTarget.seatNumber === number &&
+                                      dragFeedback?.valid === false
+                                    }
+                                    className="rounded-md"
+                                  >
+                                    <DragSource
+                                      id={`chair:${table.id}:${number}`}
+                                      ids={id ? [id] : []}
+                                      disabled={
+                                        !id ||
+                                        !editable ||
+                                        saving ||
+                                        (!generationDraft && status !== "connected")
+                                      }
+                                      label={t("seating.seatLabel", {
+                                        table: table.name,
+                                        seat: number,
+                                        guest: id ? placeName(id) : t("seating.emptySeat"),
+                                      })}
+                                      className="flex w-full items-center gap-3 rounded-md px-1 py-2 text-left text-sm hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-primary"
+                                      onClick={() => {
+                                        if (selection.length && editable) {
+                                          move(selection, table.id, number);
+                                          return;
+                                        }
+                                        setTableId(table.id);
+                                        setSeat(number);
+                                        setPlaceId(id ?? null);
+                                      }}
+                                    >
+                                      <span className="w-5 shrink-0 text-stone-700">{number}.</span>
+                                      <span
+                                        className={`truncate ${id ? "text-stone-950" : "text-stone-400"}`}
+                                      >
+                                        {id ? placeName(id) : t("studio.addGuest")}
+                                      </span>
+                                    </DragSource>
+                                  </DropTarget>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        </DropTarget>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className={view === "floor" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+                <SeatingCanvas
+                  key={generationDraft ? "draft" : "saved"}
+                  plan={plan}
+                  objects={roomObjects}
+                  tablePositions={tablePositions}
+                  tableShapes={tableShapes}
+                  onPaletteDrop={editable && !saving ? addCanvasItem : undefined}
+                  onCaptureLayout={(layout: CanvasLayout) => {
+                    canvasDraft.current = layout;
+                  }}
+                  onEditTable={(table) => {
+                    setTableId(table.id);
+                    setPlaceId(null);
+                    setSeat(null);
+                  }}
+                  onDeleteTable={(table) => {
+                    setFailure(false);
+                    setPendingDelete({ id: table.id, name: table.name });
+                  }}
+                  onDuplicateTable={(table, point) => {
+                    const shape =
+                      tableShapes[table.id] ??
+                      plan.canvasLayout?.tables[table.id]?.shape ??
+                      "round";
+                    void change(
+                      {
+                        action: "CREATE_TABLE",
+                        name: t("layout.defaultTableName", {
+                          number: nextSeatingTableNumber(plan.tables),
+                        }),
+                        capacity: table.capacity,
+                        groupId: table.groupId ?? "OTHER",
+                        ...(table.side ? { side: table.side } : {}),
+                      },
+                      undefined,
+                      undefined,
+                      (next) => {
+                        const created = next.tables.find(
+                          (item) => !plan.tables.some((existing) => existing.id === item.id),
+                        );
+                        if (!created) return;
+                        setTableShapes((current) => ({ ...current, [created.id]: shape }));
+                        setTablePositions((current) => ({
+                          ...current,
+                          [created.id]: { x: point.x + 32, y: point.y + 32 },
+                        }));
+                      },
+                    );
+                  }}
+                  onSaveLayout={
+                    generationDraft
+                      ? undefined
+                      : (layout: CanvasLayout, version: number) =>
+                          change(
+                            { action: "UPDATE_CANVAS_LAYOUT", canvasLayout: layout },
+                            undefined,
+                            version,
+                          )
+                  }
+                  onRemoveObject={(id) =>
+                    setObjects(roomObjects.filter((object) => object.id !== id))
+                  }
+                  editable={
+                    editable && isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")
+                  }
+                  saving={saving}
+                  renderTable={(table) => {
+                    if (view !== "floor") return null;
+                    const shape =
+                      tableShapes[table.id] ??
+                      plan.canvasLayout?.tables[table.id]?.shape ??
+                      "round";
+                    const members = plan.assignments.filter((a) => a.tableId === table.id);
+                    const remote = collaboration.leases.filter(
+                      (lease) =>
+                        lease.connectionId !== collaboration.connectionId &&
+                        lease.tableId === table.id,
+                    );
+                    const ghostSeats = remote.flatMap((lease) => {
+                      const feedback = seatingDropFeedback(plan, lease.placeIds, {
+                        tableId: table.id,
+                        ...(lease.seatNumber ? { seatNumber: lease.seatNumber } : {}),
+                      });
+                      return feedback?.valid ? feedback.seats : [];
+                    });
+                    const moving = dragIds.length ? dragIds : selection;
+                    const occupied = members.filter((a) => !moving.includes(a.placeId)).length;
+                    const shortage = Math.max(0, moving.length - (table.capacity - occupied));
+                    return (
+                      <DropTarget
+                        key={table.id}
+                        anchor={`table:${table.id}`}
+                        id={`table:${table.id}`}
+                        target={{ tableId: table.id }}
+                        disabled={!editable || saving}
+                        className={`relative h-full w-full max-w-full rounded-xl p-2 transition-colors border border-transparent hover:border-stone-200 hover:bg-white/60 ${members.length === table.capacity ? "opacity-60" : ""} ${moving.length ? (shortage ? "border-red-300" : "border-primary/60") : ""}`}
+                        highlighted={dragTarget?.tableId === table.id || remote.length > 0}
+                        invalid={
+                          dragTarget?.tableId === table.id
+                            ? dragFeedback?.valid === false
+                            : shortage > 0
+                        }
+                        hint={
+                          moving.length
+                            ? dragTarget?.tableId === table.id && dragFeedback
+                              ? t(dragFeedback.messageKey, dragFeedback.messageValues)
+                              : shortage
+                                ? t("seating.shortageCount", { count: shortage })
+                                : t("seating.enoughSpace", { count: moving.length })
+                            : undefined
+                        }
+                        label={t("seating.dropZone", { table: table.name })}
+                      >
+                        {remote.length > 0 && (
+                          <p className="mb-1 truncate text-center text-xs text-muted-foreground">
+                            {t("seating.remoteSelecting", {
+                              names: remote.map((lease) => lease.displayName).join(", "),
+                            })}
+                          </p>
+                        )}
+                        <div
+                          id={`seating-table-${table.id}`}
+                          className="relative aspect-square scroll-mt-6"
+                        >
+                          <button
+                            className={`absolute flex flex-col items-center justify-center text-center text-sm ${tableSideColors(table.side).surface} text-stone-950 ${shape === "round" ? "left-[21%] top-[21%] size-[58%] rounded-full" : "left-[14%] top-[25%] h-[50%] w-[72%] rounded-xl"} ${tableId === table.id ? "ring-2 ring-primary" : ""}`}
+                            aria-pressed={tableId === table.id && seat === null}
+                            aria-label={t("seating.viewTableGuests", { table: table.name })}
+                            aria-haspopup="dialog"
+                            onClick={(event) => {
+                              if (selection.length && editable) {
+                                move(selection, table.id);
+                                return;
+                              }
+                              if (
+                                event.detail !== 0 &&
+                                !(
+                                  event.nativeEvent instanceof PointerEvent &&
+                                  event.nativeEvent.pointerType === "touch"
+                                )
+                              )
+                                return;
+                              setTableId(table.id);
+                              setPlaceId(null);
+                              setSeat(null);
+                            }}
+                            onDoubleClick={() => {
+                              if (selection.length) return;
+                              setTableId(table.id);
+                              setPlaceId(null);
+                              setSeat(null);
+                            }}
+                          >
+                            <strong>{table.name}</strong>
+                            <span className="text-[10px] text-stone-700">
+                              {t(`layout.${tableSideColors(table.side).label}`)}
+                            </span>
+                            {table.groupId && (
+                              <span className="block max-w-24 truncate text-[10px] text-muted-foreground">
+                                {groupNames.get(table.groupId) ?? t("seating.groupScope")}
+                              </span>
+                            )}
+                            <span>
+                              {t("seating.placesCount", {
+                                count: members.length,
+                                capacity: table.capacity,
+                              })}
+                            </span>
+                          </button>
+                          {Array.from({ length: table.capacity }, (_, i) => {
+                            const n = i + 1;
+                            const seatPoint = tableSeatPoint(shape, i, table.capacity);
+                            const a = members.find((x) => x.seatNumber === n),
+                              p = plan.places.find((x) => x.id === a?.placeId);
+                            return (
+                              <DropTarget
+                                key={n}
+                                id={`seat:${table.id}:${n}`}
+                                target={{ tableId: table.id, seatNumber: n }}
+                                disabled={!editable || saving}
+                                invalid={
+                                  moving.length > 0 &&
+                                  (shortage > 0 || (!!a && !moving.includes(a.placeId)))
                                 }
-                                label={t("seating.seatLabel", {
-                                  table: table.name,
-                                  seat: n,
-                                  guest: p ? placeName(p.id) : t("seating.emptySeat"),
-                                })}
-                                onClick={() => {
-                                  if (selection.length && editable) {
-                                    move(selection, table.id, n);
-                                    return;
-                                  }
-                                  setTableId(table.id);
-                                  setSeat(n);
-                                  setPlaceId(p?.id ?? null);
+                                className={`absolute h-10 w-9 rounded-lg ${ghostSeats.includes(n) ? "border-2 border-dashed border-primary bg-primary/10" : ""} ${dragTarget?.tableId === table.id && dragFeedback?.valid && dragFeedback.seats.includes(n) ? "bg-primary/20 ring-2 ring-primary" : ""}`}
+                                label={
+                                  dragTarget?.tableId === table.id &&
+                                  dragFeedback?.valid &&
+                                  dragFeedback.seats.includes(n)
+                                    ? t("seating.seatDestination", { table: table.name, seat: n })
+                                    : undefined
+                                }
+                                style={{
+                                  left: `calc(${seatPoint.x}% - 18px)`,
+                                  top: `calc(${seatPoint.y}% - 20px)`,
                                 }}
-                                className={`relative size-full rounded focus-visible:outline-2 focus-visible:outline-primary ${p && seatsNeedingAttention.some((item) => item.id === p.id) ? "ring-2 ring-amber-500" : ""}`}
                               >
-                                <SeatingSeatBadge
-                                  name={p ? placeName(p.id) : undefined}
-                                  status={p?.person?.attendanceStatus}
-                                />
-                              </DragSource>
-                            </DropTarget>
-                          );
-                        })}
-                      </div>
-                    </DropTarget>
-                  );
-                }}
-              />
+                                <DragSource
+                                  id={`chair:${table.id}:${n}`}
+                                  ids={p ? [p.id] : []}
+                                  disabled={
+                                    !p ||
+                                    !editable ||
+                                    saving ||
+                                    (!generationDraft && status !== "connected")
+                                  }
+                                  label={t("seating.seatLabel", {
+                                    table: table.name,
+                                    seat: n,
+                                    guest: p ? placeName(p.id) : t("seating.emptySeat"),
+                                  })}
+                                  onClick={() => {
+                                    if (selection.length && editable) {
+                                      move(selection, table.id, n);
+                                      return;
+                                    }
+                                    setTableId(table.id);
+                                    setSeat(n);
+                                    setPlaceId(p?.id ?? null);
+                                  }}
+                                  className={`relative size-full rounded focus-visible:outline-2 focus-visible:outline-primary ${p && seatsNeedingAttention.some((item) => item.id === p.id) ? "ring-2 ring-amber-500" : ""}`}
+                                >
+                                  <SeatingSeatBadge
+                                    name={p ? placeName(p.id) : undefined}
+                                    status={p?.person?.attendanceStatus}
+                                  />
+                                </DragSource>
+                              </DropTarget>
+                            );
+                          })}
+                        </div>
+                      </DropTarget>
+                    );
+                  }}
+                />
+              </div>
             </section>
             <dialog
               ref={detailsRef}
@@ -1384,17 +1581,6 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                   table={inspectedTable}
                   canLayout={isWeddingWide("SEATING_EDIT") && isWeddingWide("SEATING_VIEW")}
                   saveError={failure ? message : undefined}
-                  onLayoutSave={(side, row, column) =>
-                    void change({
-                      action: "UPDATE_TABLE",
-                      tableId: inspectedTable.id,
-                      name: inspectedTable.name,
-                      capacity: inspectedTable.capacity,
-                      side,
-                      row,
-                      column,
-                    })
-                  }
                   plan={plan}
                   editable={editable}
                   saving={saving}
@@ -1418,14 +1604,22 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                       );
                     }
                   }}
-                  onSave={(name, capacity) =>
+                  onSave={(name, capacity, side) => {
+                    const positions = canvasDraft.current?.tables;
+                    if (positions)
+                      setTablePositions(
+                        Object.fromEntries(
+                          Object.entries(positions).map(([id, { x, y }]) => [id, { x, y }]),
+                        ),
+                      );
                     void change({
                       action: "UPDATE_TABLE",
                       tableId: inspectedTable.id,
                       name,
                       capacity,
-                    })
-                  }
+                      ...(side !== undefined ? { side } : {}),
+                    });
+                  }}
                   onDelete={() =>
                     void change({ action: "DELETE_TABLE", tableId: inspectedTable.id })
                   }

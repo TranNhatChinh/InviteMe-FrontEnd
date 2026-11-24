@@ -68,6 +68,7 @@ import styles from "./studio.module.css";
 import { StudioBackups } from "./studio-backups";
 import { BackgroundPanel } from "./background-panel";
 import { EffectsPanel } from "./effects-panel";
+import { PreviewMusicPlayer } from "../components/preview-music-player";
 import { MusicPanel } from "./music-panel";
 import { BrandLogo } from "@/shared/components/brand-logo";
 import { ActionMenu } from "@/shared/ui/action-menu";
@@ -98,6 +99,7 @@ function Workspace({
   onUploadImage,
   loadImages,
   resolvedMusic,
+  musicLibraryLookup = true,
 }: TemplateStudioProps) {
   const { api } = useRuntime();
   const router = useRouter();
@@ -142,6 +144,14 @@ function Workspace({
     adminLayout ? "page" : initialWording ? "presets" : initialTemplate ? "templates" : "utilities",
   );
   const [wordingPreview, setWordingPreview] = useState<string | null>(null);
+  const [coverRecipient, setCoverRecipient] = useState<string | null>(null);
+  const updateWordingPreview = useCallback(
+    (content: string | null, recipientLabel?: string | null) => {
+      setWordingPreview(content);
+      setCoverRecipient(recipientLabel ?? null);
+    },
+    [],
+  );
   const [uploads, setUploads] = useState<{ src: string; name: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [replacement, setReplacement] = useState<{
@@ -754,6 +764,13 @@ function Workspace({
         }
       >
         <FallingParticles effect={particles} />
+        {preview && (
+          <PreviewMusicPlayer
+            value={query.getNodes().ROOT?.data.props.music}
+            resolved={resolvedMusic}
+            allowLibraryLookup={musicLibraryLookup}
+          />
+        )}
         {!preview && toolbar}
         <div className={styles.layout}>
           <aside className={styles.library} aria-label={t("categories.libraryAria")}>
@@ -1005,7 +1022,7 @@ function Workspace({
                         actions.setProp("ROOT", (value: ItemProps) => {
                           value.cover = {
                             names: "Minh Quân\n& An Nhiên",
-                            date: "3 tháng 1, 2026",
+                            date: "",
                             background: "#681f30",
                             ...value.cover,
                             enabled: event.target.checked,
@@ -1038,39 +1055,8 @@ function Workspace({
                         />
                       </label>
                       <label>
-                        <input
-                          type="checkbox"
-                          checked={cover.greetingBinding === "invitationWording"}
-                          onChange={(event) =>
-                            actions.setProp("ROOT", (value: ItemProps) => {
-                              if (value.cover)
-                                value.cover.greetingBinding = event.target.checked
-                                  ? "invitationWording"
-                                  : undefined;
-                            })
-                          }
-                        />
-                        {t("library.personalizedWording")}
-                      </label>
-                      {cover.greetingBinding && (
-                        <>
-                          <p>{t("library.wordingBindingHelp")}</p>
-                        </>
-                      )}
-                      <label>
                         {t("library.coverGreeting")}
-                        <textarea
-                          maxLength={300}
-                          readOnly={!!cover.greetingBinding}
-                          aria-label={t("library.coverGreetingAria")}
-                          value={resolveCoverGreeting(cover, wordingPreview)}
-                          placeholder={t("library.coverGreetingPlaceholder")}
-                          onChange={(event) =>
-                            actions.setProp("ROOT", (value: ItemProps) => {
-                              if (value.cover) value.cover.greeting = event.target.value;
-                            })
-                          }
-                        />
+                        <textarea readOnly value={resolveCoverGreeting(coverRecipient)} />
                       </label>
                       <label>
                         {t("library.coverStyle")}
@@ -1128,17 +1114,6 @@ function Workspace({
                           <option value="fade">{t("library.fadeOpening")}</option>
                         </select>
                       </label>
-                      <label>
-                        {t("library.coverDate")}
-                        <input
-                          value={cover.date}
-                          onChange={(event) =>
-                            actions.setProp("ROOT", (value: ItemProps) => {
-                              if (value.cover) value.cover.date = event.target.value.slice(0, 100);
-                            })
-                          }
-                        />
-                      </label>
                       <button
                         onClick={() => {
                           setCoverOpen(false);
@@ -1157,10 +1132,7 @@ function Workspace({
                 </fieldset>
               )}
               <div
-                hidden={
-                  category !== "presets" &&
-                  !(category === "cover" && cover?.enabled && cover.greetingBinding)
-                }
+                hidden={category !== "presets"}
                 className={styles.wordingPanel}
                 role="region"
                 aria-label={t("library.wordingConfigAria")}
@@ -1179,7 +1151,7 @@ function Workspace({
                   </>
                 )}
                 {wordingPanel ? (
-                  wordingPanel({ onPreview: setWordingPreview })
+                  wordingPanel({ onPreview: updateWordingPreview })
                 ) : (
                   <p>
                     {t("library.openFromWedding")}{" "}
@@ -1383,13 +1355,14 @@ function Workspace({
             </RevealPausedContext.Provider>
             {showingCover && (
               <InvitationCover
+                recipientLabel={coverRecipient}
                 key={editingCover ? "cover-editor" : "cover-preview"}
                 editing={editingCover}
                 config={
                   cover ?? {
                     enabled: false,
                     names: "Minh Quân\n& An Nhiên",
-                    date: "3 tháng 1, 2026",
+                    date: "",
                     background: "#681f30",
                   }
                 }
@@ -2328,6 +2301,7 @@ export function TemplateStudio({
   onUploadImage,
   loadImages,
   resolvedMusic,
+  musicLibraryLookup = true,
 }: TemplateStudioProps) {
   const [focus, setFocus] = useState<PhotoFocus>(null);
   const [revision, setRevision] = useState(initialPreview ? 1 : 0);
@@ -2373,6 +2347,7 @@ export function TemplateStudio({
             onUploadImage={onUploadImage}
             loadImages={loadImages}
             resolvedMusic={resolvedMusic}
+            musicLibraryLookup={musicLibraryLookup}
           />
         </Editor>
       </RevealReplayContext.Provider>

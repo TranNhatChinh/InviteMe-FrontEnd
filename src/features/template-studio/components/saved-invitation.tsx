@@ -155,10 +155,8 @@ export function SavedInvitation({ weddingId }: { weddingId: string }) {
                 </Button>
               )}
               {can("WEDDING_EDIT") && (
-                <Button asChild variant="ghost">
-                  <Link href={`/weddings/${encodeURIComponent(weddingId)}/invitation-templates`}>
-                    {t("picker.changeTemplate")}
-                  </Link>
+                <Button variant="ghost" onClick={() => setStartOpen(true)}>
+                  {t("picker.changeTemplate")}
                 </Button>
               )}
             </div>
@@ -176,7 +174,7 @@ export function SavedInvitation({ weddingId }: { weddingId: string }) {
       <Modal
         open={startOpen}
         onClose={() => setStartOpen(false)}
-        title={t("saved.startDesign")}
+        title={t(doc ? "picker.changeTemplate" : "saved.startDesign")}
         size="small"
       >
         <div className="grid gap-3">
