@@ -172,9 +172,10 @@ export function getGiftLedger(
   page: number,
   search = "",
   signal?: AbortSignal,
+  pageSize = 25,
 ) {
   return api.request(
-    `${host(weddingId)}?${new URLSearchParams({ page: String(page), pageSize: "25", search })}`,
+    `${host(weddingId)}?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), search })}`,
     { signal, schema: giftLedgerSchema },
   );
 }
@@ -253,10 +254,16 @@ export function getReceptionGifts(api: ApiClient, weddingId: string, signal?: Ab
 }
 
 /** Recorded on the desk screen: a transfer there waits for the couple to confirm, whoever records it. */
-export function recordGift(api: ApiClient, weddingId: string, body: RecordGiftInput, key: string) {
+export function recordGift(
+  api: ApiClient,
+  weddingId: string,
+  body: RecordGiftInput,
+  key: string,
+  fromDesk = true,
+) {
   return api.request(host(weddingId), {
     method: "POST",
-    body: { ...body, fromDesk: true },
+    body: { ...body, fromDesk },
     headers: { "Idempotency-Key": key },
     schema: receptionGiftSchema,
   });

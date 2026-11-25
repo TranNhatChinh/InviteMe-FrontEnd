@@ -23,11 +23,13 @@ export function BankHubLinkDialog({
   mode,
   onClose,
   onFinished,
+  onExpired,
 }: {
   url: string | null;
   mode: "link" | "unlink";
   onClose: () => void;
   onFinished: () => void;
+  onExpired?: () => void;
 }) {
   const { t } = useTranslation("gifts");
   // Expiry belongs to one link: a new link starts fresh.
@@ -43,12 +45,17 @@ export function BankHubLinkDialog({
       if (event === "FINISHED_BANK_ACCOUNT_LINK" || event === "FINISHED_BANK_ACCOUNT_UNLINK")
         onFinished();
       else if (event === "BANKHUB_CLOSE_LINK") onClose();
-      else if (event === "BANKHUB_TOKEN_EXPIRED" || event === "BANKHUB_SESSION_EXPIRED")
-        setExpiredUrl(url);
+      else if (event === "BANKHUB_TOKEN_EXPIRED" || event === "BANKHUB_SESSION_EXPIRED") {
+        if (onExpired) {
+          onExpired();
+        } else {
+          setExpiredUrl(url);
+        }
+      }
     };
     window.addEventListener("message", listen);
     return () => window.removeEventListener("message", listen);
-  }, [url, onClose, onFinished]);
+  }, [url, onClose, onFinished, onExpired]);
   return (
     <Modal
       open={url !== null}

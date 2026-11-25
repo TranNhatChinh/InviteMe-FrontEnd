@@ -243,3 +243,11 @@
   min-width: 0;
   min-height: 0;
 }
+
+/* A real narrow viewport already provides the mobile experience. */
+@media (max-width: 767px) {
+  .switch,
+  .desktopLink {
+    display: none;
+  }
+}

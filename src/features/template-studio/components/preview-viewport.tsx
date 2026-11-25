@@ -1,9 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpRight, BatteryFull, Monitor, Signal, Smartphone, Wifi } from "lucide-react";
 import styles from "./preview-viewport.module.css";
+
+const smallViewportQuery = "(max-width: 767px)";
+function subscribeViewport(onChange: () => void) {
+  const query = window.matchMedia(smallViewportQuery);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+const smallViewportSnapshot = () => window.matchMedia(smallViewportQuery).matches;
+const serverViewportSnapshot = () => false;
 
 export function PreviewViewport({
   active,
@@ -17,6 +26,12 @@ export function PreviewViewport({
   embedded?: boolean;
 }) {
   const [mobile, setMobile] = useState(false);
+  const isSmallViewport = useSyncExternalStore(
+    subscribeViewport,
+    smallViewportSnapshot,
+    serverViewportSnapshot,
+  );
+  const simulatePhone = mobile && !isSmallViewport;
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [scale, setScale] = useState(1);
   const area = useRef<HTMLDivElement>(null);
@@ -77,22 +92,24 @@ export function PreviewViewport({
     <div className={`${styles.preview} ${embedded ? styles.embedded : ""}`}>
       {toolbar}
       <div className={styles.viewport}>
-        <div className={styles.switch} role="group" aria-label="Thiết bị xem trước">
-          <button type="button" aria-pressed={!mobile} onClick={() => setMobile(false)}>
-            <Monitor size={16} /> Máy tính
-          </button>
-          <button type="button" aria-pressed={mobile} onClick={() => setMobile(true)}>
-            <Smartphone size={16} /> Điện thoại
-          </button>
-        </div>
-        <div ref={area} className={styles.area} data-mobile={mobile}>
+        {!isSmallViewport && (
+          <div className={styles.switch} role="group" aria-label="Thiết bị xem trước">
+            <button type="button" aria-pressed={!mobile} onClick={() => setMobile(false)}>
+              <Monitor size={16} /> Máy tính
+            </button>
+            <button type="button" aria-pressed={mobile} onClick={() => setMobile(true)}>
+              <Smartphone size={16} /> Điện thoại
+            </button>
+          </div>
+        )}
+        <div ref={area} className={styles.area} data-mobile={simulatePhone}>
           <div
             className={styles.device}
-            style={mobile ? { width: 428 * scale, height: 889 * scale } : undefined}
+            style={simulatePhone ? { width: 428 * scale, height: 889 * scale } : undefined}
           >
             <div
               className={styles.shell}
-              style={mobile ? { transform: `scale(${scale})` } : undefined}
+              style={simulatePhone ? { transform: `scale(${scale})` } : undefined}
             >
               <span className={styles.silentButton} aria-hidden="true" />
               <span className={styles.volumeButtons} aria-hidden="true" />
@@ -117,7 +134,7 @@ export function PreviewViewport({
               </div>
             </div>
           </div>
-          {mobile && (
+          {simulatePhone && (
             <button type="button" className={styles.desktopLink} onClick={() => setMobile(false)}>
               <Monitor size={14} />
               <span>Xem giao diện trên máy tính</span>

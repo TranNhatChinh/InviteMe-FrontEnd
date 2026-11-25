@@ -36,10 +36,12 @@ function Popup({
   title,
   children,
   close,
+  container,
 }: {
   title: string;
   children: ReactNode;
   close: () => void;
+  container: HTMLElement;
 }) {
   return createPortal(
     <div
@@ -50,7 +52,8 @@ function Popup({
         background: "#0008",
         display: "grid",
         placeItems: "center",
-        padding: 20,
+        padding: 12,
+        boxSizing: "border-box",
       }}
       onClick={close}
     >
@@ -61,28 +64,61 @@ function Popup({
         style={{
           background: "#faf4ec",
           color: "#7c6a60",
-          padding: 28,
           borderRadius: 16,
           maxWidth: 420,
           width: "100%",
+          maxHeight: "calc(100dvh - 24px)",
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          boxSizing: "border-box",
           boxShadow: "0 20px 80px #0004",
         }}
         onClick={(event) => event.stopPropagation()}
       >
-        <button
-          aria-label="Đóng hộp thoại"
-          onClick={close}
-          style={{ float: "right", cursor: "pointer" }}
+        <header
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "12px 16px",
+            flexShrink: 0,
+          }}
         >
-          ✕
-        </button>
-        <h2 style={{ fontFamily: "EB Garamond, Georgia, serif", fontSize: 28, marginBottom: 20 }}>
-          {title}
-        </h2>
-        {children}
+          <h2
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontFamily: "EB Garamond, Georgia, serif",
+              fontSize: 24,
+              margin: 0,
+            }}
+          >
+            {title}
+          </h2>
+          <button
+            type="button"
+            aria-label="Đóng hộp thoại"
+            onClick={close}
+            style={{ width: 44, height: 44, flexShrink: 0, cursor: "pointer" }}
+          >
+            ✕
+          </button>
+        </header>
+        <div
+          style={{
+            minHeight: 0,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+            padding: "0 16px 16px",
+          }}
+        >
+          {children}
+        </div>
       </div>
     </div>,
-    document.body,
+    container,
   );
 }
 
@@ -245,6 +281,7 @@ export function StudioAction(props: ItemProps) {
   const mode = useStudioMode();
   const isWebsite = mode === "website";
   const [open, setOpen] = useState(false);
+  const [popupHost, setPopupHost] = useState<HTMLElement | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const kind = props.action ?? "rsvp";
   const title = props.title ?? "XÁC NHẬN THAM DỰ";
@@ -325,12 +362,13 @@ export function StudioAction(props: ItemProps) {
       ) : (
         <button
           disabled={enabled}
-          onClick={() => {
+          onClick={(event) => {
             if (kind === "gift" && guestToken && !enabled) {
               window.dispatchEvent(new CustomEvent("inviteme:open-gift"));
               return;
             }
             setSubmitted(false);
+            setPopupHost(event.currentTarget.ownerDocument.body);
             setOpen(true);
           }}
           style={{ ...buttonStyle, background: props.accent ?? defaults.accent, color: "white" }}
@@ -338,8 +376,9 @@ export function StudioAction(props: ItemProps) {
           {title}
         </button>
       )}
-      {open && !isWebsite && (
+      {open && popupHost && !isWebsite && (
         <Popup
+          container={popupHost}
           title={kind === "gift" ? "Hộp quà mừng" : "Xác nhận tham dự"}
           close={() => setOpen(false)}
         >
