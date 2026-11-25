@@ -5,6 +5,7 @@
   "studioAccessDenied": "You can't edit this invitation",
   "studioAccessDescription": "Wedding edit permission is required to open Studio.",
   "invitationPermissionRequired": "Invitation management permission is required to view wedding presets.",
+  "studioDraftSavedPublishFailed": "The draft was saved, but publishing failed. Please try publishing again.",
   "studioConflict": "This design changed in another tab. Your current edits are preserved; load the latest version before saving.",
   "studioReloadDiscard": "Load latest version and discard unsaved edits",
   "uploadedPhoto": "Photo {{id}}",

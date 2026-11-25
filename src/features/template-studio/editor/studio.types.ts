@@ -24,7 +24,7 @@ export type TemplateStudioProps = {
   adminLayout?: {
     backLabel: string;
     status: string;
-    toolbarAction: ReactNode;
+    toolbarAction?: ReactNode;
     settings: ReactNode;
   };
   initialDocument?: string;

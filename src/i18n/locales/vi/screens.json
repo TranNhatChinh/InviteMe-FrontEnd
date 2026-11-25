@@ -5,6 +5,7 @@
   "studioAccessDenied": "Bạn không có quyền chỉnh sửa thiệp",
   "studioAccessDescription": "Cần quyền chỉnh sửa wedding để mở Studio.",
   "invitationPermissionRequired": "Cần quyền quản lý lời mời để xem preset của wedding.",
+  "studioDraftSavedPublishFailed": "Đã lưu bản nháp, nhưng chưa xuất bản được. Vui lòng thử xuất bản lại.",
   "studioConflict": "Thiết kế đã thay đổi ở tab khác. Bản đang chỉnh vẫn được giữ; tải bản mới trước khi lưu tiếp.",
   "studioReloadDiscard": "Tải bản mới (bỏ sửa đổi chưa lưu)",
   "uploadedPhoto": "Ảnh {{id}}",

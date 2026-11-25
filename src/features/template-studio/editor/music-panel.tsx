@@ -100,6 +100,7 @@ export function MusicPanel({
     <div className={styles.panel}>
       {player.element}
       <h2>{t("categories.music")}</h2>
+      <p className={styles.saveHint}>{t("music.saveHint")}</p>
       {value && (
         <div className={styles.current}>
           {selected.data && playButton(selected.data)}

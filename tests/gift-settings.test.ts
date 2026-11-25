@@ -85,11 +85,29 @@ test("gift QR media uses portable storage paths without changing external URLs",
 
 test("manual QR requires bank and account number without a holder name or guest code", () => {
   const d = doc();
-  d.nodes.ROOT!.props.gift = { mode: "MANUAL", recipients: [{ role: "BRIDE", enabled: true, bankBin: "970422", accountNumber: "000000001010" }] };
+  d.nodes.ROOT!.props.gift = {
+    mode: "MANUAL",
+    recipients: [
+      { role: "BRIDE", enabled: true, bankBin: "970422", accountNumber: "000000001010" },
+    ],
+  };
   assert.equal(giftConfigurationError(studioDocumentSchema.parse(d)), null);
   const url = new URL(manualGiftQrUrl("970422", "000000001010"));
   assert.equal(url.search, "");
   assert.ok(url.pathname.includes("000000001010"));
   d.nodes.ROOT!.props.gift.recipients[0]!.accountNumber = "123";
   assert.ok(giftConfigurationError(d));
+});
+
+test("admin templates may keep gift placeholders while Couple invitations still require configuration", () => {
+  const document = studioDocumentSchema.parse(doc());
+  assert.equal(giftConfigurationError(document, { template: true }), null);
+  assert.ok(giftConfigurationError(document));
+  assert.ok(giftConfigurationError(document, { template: false }));
+  document.nodes.ROOT!.props.gift = {
+    mode: "UPLOADED",
+    recipients: [{ role: "BRIDE", enabled: true }],
+  };
+  assert.equal(giftConfigurationError(document, { template: true }), null);
+  assert.ok(giftConfigurationError(document));
 });

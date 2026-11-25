@@ -186,12 +186,17 @@ function StudioSession({
 
   async function publishDesign(serialized: string) {
     const saved = await saveDraft(serialized);
-    const published = await publishInvitationDesign(
-      api,
-      weddingId,
-      saved.version,
-      saved.wordingVersion,
-    );
+    let published;
+    try {
+      published = await publishInvitationDesign(
+        api,
+        weddingId,
+        saved.version,
+        saved.wordingVersion,
+      );
+    } catch {
+      throw new Error(t("studioDraftSavedPublishFailed"));
+    }
     acceptDesign(published);
   }
 

@@ -13,7 +13,6 @@ import {
 } from "@/features/template-studio";
 import { resolveMediaUrl } from "@/core/config/media-url";
 import { Input } from "@/shared/ui/input";
-import { Button } from "@/shared/ui/button";
 import { LoadingState } from "@/shared/feedback/loading-state";
 import { ErrorState } from "@/shared/feedback/error-state";
 import { useCurrentUser } from "@/features/auth";
@@ -25,15 +24,12 @@ export function AdminInvitationStudio({ id }: { id: string }) {
   const { t } = useTranslation("ui");
   const { t: adminText } = useTranslation("admin");
   const client = useQueryClient();
-  const [publishMessage, setPublishMessage] = useState("");
-  const [publishing, setPublishing] = useState(false);
   const [draftName, setDraftName] = useState<string>();
   const template = useQuery({
     queryKey: ["admin-template", id],
     queryFn: ({ signal }) => adminApi.template(api, id, signal),
   });
   async function save(serialized: string) {
-    setPublishMessage("");
     if (!template.data) return;
     const item = template.data;
     const name = (draftName ?? item.name).trim();
@@ -50,22 +46,18 @@ export function AdminInvitationStudio({ id }: { id: string }) {
     setDraftName((current) => (current === draftName ? undefined : current));
     await client.invalidateQueries({ queryKey: ["admin-templates"] });
   }
-  async function publish() {
-    setPublishing(true);
-    setPublishMessage("");
+  async function publish(serialized: string) {
+    await save(serialized);
     try {
       await adminApi.publishTemplate(api, id);
-      setPublishMessage(t("invitationStudio.published"));
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ["admin-template", id] }),
-        client.invalidateQueries({ queryKey: ["admin-templates"] }),
-        client.invalidateQueries({ queryKey: ["public-templates"] }),
-      ]);
     } catch {
-      setPublishMessage(t("invitationStudio.publishFailed"));
-    } finally {
-      setPublishing(false);
+      throw new Error(t("invitationStudio.draftSavedPublishFailed"));
     }
+    await Promise.all([
+      client.invalidateQueries({ queryKey: ["admin-template", id] }),
+      client.invalidateQueries({ queryKey: ["admin-templates"] }),
+      client.invalidateQueries({ queryKey: ["public-templates"] }),
+    ]);
   }
   if (template.isPending) return <LoadingState />;
   if (template.isError || !template.data)
@@ -89,15 +81,7 @@ export function AdminInvitationStudio({ id }: { id: string }) {
       backup={user ? { scope: `admin:${user.id}:${id}`, title: name } : undefined}
       adminLayout={{
         backLabel: t("invitationStudio.back"),
-        status: publishMessage,
-        toolbarAction: (
-          <Button
-            disabled={publishing || !item.configurationJson || name.trim() !== item.name}
-            onClick={() => void publish()}
-          >
-            {publishing ? t("invitationStudio.publishing") : t("invitationStudio.publish")}
-          </Button>
-        ),
+        status: "",
         settings: (
           <>
             <div className="overflow-hidden rounded-xl border">
@@ -131,6 +115,7 @@ export function AdminInvitationStudio({ id }: { id: string }) {
         ),
       }}
       onSave={save}
+      onPublish={publish}
       onUploadImage={async (file) => {
         const asset = await adminApi.uploadTemplateAsset(api, id, file);
         return { ...asset, src: resolveMediaUrl(asset.src) ?? asset.src };

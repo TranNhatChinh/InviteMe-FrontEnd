@@ -236,7 +236,7 @@ export function ImportedStudio({
     setMessage("");
     try {
       const parsed = studioDocumentSchema.parse(document);
-      const giftError = giftConfigurationError(parsed);
+      const giftError = giftConfigurationError(parsed, { template: !!props.adminLayout });
       if (giftError) {
         setError(giftError);
         setGiftWarning(giftError);

@@ -1,5 +1,9 @@
 {
   "music": {
+    "previewLoading": "Loading preview music…",
+    "previewUnavailable": "Music for this template is currently unavailable.",
+
+    "saveHint": "Use selects music for the current edit. Save a draft to keep changes, or Publish to save and make them public.",
     "cancelLoading": "Cancel loading {{name}}",
     "retry": "Reload library",
     "enabled": "Enable invitation music",

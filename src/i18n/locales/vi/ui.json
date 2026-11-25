@@ -53,6 +53,7 @@
     "sessionFailedHelp": "Kiểm tra kết nối rồi thử tải lại thông tin tài khoản."
   },
   "invitationStudio": {
+    "draftSavedPublishFailed": "Đã lưu bản nháp, nhưng chưa xuất bản được. Vui lòng thử xuất bản lại.",
     "saved": "Đã lưu bản thiết kế. Nhấn Xuất bản để cập nhật mẫu công khai.",
     "published": "Đã xuất bản mẫu thiệp.",
     "publishFailed": "Không thể xuất bản. Hãy kiểm tra thiết kế và lưu bản nháp trước.",

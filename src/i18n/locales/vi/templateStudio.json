@@ -1,5 +1,9 @@
 {
   "music": {
+    "previewLoading": "Đang tải nhạc xem trước…",
+    "previewUnavailable": "Nhạc của mẫu hiện chưa khả dụng.",
+
+    "saveHint": "Bấm “Dùng” để chọn nhạc cho bản đang chỉnh. Lưu bản nháp để giữ thay đổi, hoặc Xuất bản để lưu và công bố.",
     "cancelLoading": "Dừng tải {{name}}",
     "retry": "Tải lại thư viện",
     "enabled": "Bật nhạc trên thiệp",

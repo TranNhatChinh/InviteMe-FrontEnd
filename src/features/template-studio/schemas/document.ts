@@ -252,7 +252,9 @@ export function parseStudioDocument(value: string) {
 
 export function giftConfigurationError(
   document: z.infer<typeof studioDocumentSchema>,
+  options: { template?: boolean } = {},
 ): string | null {
+  if (options.template) return null;
   const active =
     document.widgets?.some((w) => w.type === "GIFT" && w.enabled) ||
     Object.values(document.nodes).some(

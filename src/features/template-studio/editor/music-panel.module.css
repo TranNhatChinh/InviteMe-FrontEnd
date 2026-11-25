@@ -179,3 +179,10 @@
   outline: 2px solid #4285ec;
   outline-offset: 2px;
 }
+
+.panel .saveHint {
+  margin: 0 0 14px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #75535e;
+}

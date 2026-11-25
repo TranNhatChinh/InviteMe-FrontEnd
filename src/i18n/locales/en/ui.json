@@ -53,6 +53,7 @@
     "sessionFailedHelp": "Check your connection, then try loading your account again."
   },
   "invitationStudio": {
+    "draftSavedPublishFailed": "The draft was saved, but publishing failed. Please try publishing again.",
     "saved": "Design saved. Select Publish to update the public template.",
     "published": "Invitation template published.",
     "publishFailed": "Couldn't publish. Check the design and save the draft first.",

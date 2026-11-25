@@ -588,7 +588,7 @@ function Workspace({
       const doc = parseStudioDocument(
         JSON.stringify({ schemaVersion: 1, templateId, nodes: JSON.parse(query.serialize()) }),
       );
-      const giftError = giftConfigurationError(doc);
+      const giftError = giftConfigurationError(doc, { template: !!adminLayout });
       if (giftError) {
         setMessage(giftError);
         setGiftWarning(giftError);
@@ -1210,7 +1210,7 @@ function Workspace({
                 <MusicPanel
                   value={query.getNodes().ROOT?.data.props.music}
                   resolved={resolvedMusic}
-                  disabled={preview}
+                  disabled={preview || saving !== null}
                   onChange={(music) =>
                     actions.setProp("ROOT", (value: ItemProps) => {
                       value.music = music;
