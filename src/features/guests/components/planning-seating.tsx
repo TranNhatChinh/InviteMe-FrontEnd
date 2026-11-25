@@ -364,13 +364,20 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
     const stopResync = realtime.onResync(() => {
       invalidate();
       invalidatePublication();
+      setFailure(false);
+      setMessage((current) => (current === t("seating.connectionLost") ? "" : current));
     });
     return () => {
       stopEvent();
       stopPublication();
       stopResync();
     };
-  }, [realtime, cache, weddingId]);
+  }, [realtime, cache, weddingId, t]);
+
+  const isStaleConnectionError =
+    status === "connected" && failure && message === t("seating.connectionLost");
+  const activeFailure = isStaleConnectionError ? false : failure;
+  const activeMessage = isStaleConnectionError ? "" : message;
 
   const plan = generationDraft?.plan ?? preview ?? planQuery.data;
   const roomObjects: SeatingCanvasObject[] = objects ?? [
@@ -672,9 +679,9 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
         title={t("layout.deleteTable", { name: pendingDelete?.name ?? "" })}
         description={t("layout.deleteDescription")}
       >
-        {failure && message && (
+        {activeFailure && activeMessage && (
           <p role="alert" className="mb-3 text-sm text-destructive">
-            {message}
+            {activeMessage}
           </p>
         )}
         <div className="flex justify-end gap-2">
@@ -896,12 +903,12 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
                 </span>
               ))}
           </div>
-          {message && failure && (
+          {activeMessage && activeFailure && (
             <p
-              role={failure ? "alert" : "status"}
-              className={`rounded-lg border p-3 text-sm ${failure ? "border-red-300 text-red-800" : "text-emerald-800"}`}
+              role={activeFailure ? "alert" : "status"}
+              className={`rounded-lg border p-3 text-sm ${activeFailure ? "border-red-300 text-red-800" : "text-emerald-800"}`}
             >
-              {message}
+              {activeMessage}
             </p>
           )}
           {generationDraft && (
@@ -1716,12 +1723,12 @@ export function PlanningSeating({ weddingId }: { weddingId: string }) {
             </dialog>
           </div>
         </section>
-        {message && !failure && (
+        {activeMessage && !activeFailure && (
           <div
             role="status"
             className="fixed bottom-5 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm shadow-lg"
           >
-            <span>{message}</span>
+            <span>{activeMessage}</span>
             {!saving && (
               <button
                 aria-label={t("seating.hideNotice")}
