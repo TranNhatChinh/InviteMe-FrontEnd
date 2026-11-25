@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { Archive, Copy, ExternalLink, Mail, Phone, RotateCcw, Users, X } from "lucide-react";
+import {
+  Archive,
+  Copy,
+  ExternalLink,
+  Mail,
+  Phone,
+  RotateCcw,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "@/core/api/api-error";
 import { useLocale } from "@/i18n/language-context";
@@ -292,15 +302,31 @@ export function GuestDetailDrawer({
                 </Button>
               </div>
             ) : (
-              <PlanningGuestEditForm
-                key={`${guest.id}-${guest.version}`}
-                guest={guest}
-                groups={groups}
-                busy={busy}
-                onDirtyChange={setDirty}
-                onCancel={requestCancelEdit}
-                onSave={onSave}
-              />
+              <div className="space-y-4">
+                <PlanningGuestEditForm
+                  key={`${guest.id}-${guest.version}`}
+                  guest={guest}
+                  groups={groups}
+                  busy={busy}
+                  onDirtyChange={setDirty}
+                  onCancel={requestCancelEdit}
+                  onSave={onSave}
+                />
+                {!guest.archivedAt && (
+                  <div className="border-t border-border pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full border-destructive/40 text-destructive hover:bg-destructive/10"
+                      disabled={archiving || busy}
+                      onClick={() => setConfirmation("archive")}
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                      {t("archive")}
+                    </Button>
+                  </div>
+                )}
+              </div>
             )
           ) : (
             <div className="space-y-5">

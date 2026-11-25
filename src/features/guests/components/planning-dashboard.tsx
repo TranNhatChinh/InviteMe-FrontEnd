@@ -23,7 +23,7 @@ import {
   type PlanningImportCommit,
 } from "../api/planning.api";
 import Link from "next/link";
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy, ExternalLink, Pencil } from "lucide-react";
 import { PlanningGuestCreateForm } from "./planning-guest-create-form";
 import { GuestDetailDrawer } from "./guest-detail-drawer";
 import { useTranslation } from "react-i18next";
@@ -459,41 +459,59 @@ export function PlanningDashboard({ weddingId }: { weddingId: string }) {
                               {g.group?.name ?? t("notGrouped")}
                             </span>
                           </td>
-                          {can("INVITATION_SEND") && (
+                          {(can("INVITATION_SEND") || can("GUEST_EDIT")) && (
                             <td className="px-5 py-3">
-                              {g.invitationPath ? (
-                                <div className="flex items-center justify-end gap-2 whitespace-nowrap">
-                                  <Button
-                                    variant="ghost"
-                                    className="h-11 rounded-xl bg-primary/10 px-4 text-primary hover:bg-primary/15 hover:text-primary"
-                                    asChild
-                                  >
-                                    <a
-                                      href={g.invitationPath}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                              <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                                {can("INVITATION_SEND") && g.invitationPath ? (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      className="h-11 rounded-xl bg-primary/10 px-4 text-primary hover:bg-primary/15 hover:text-primary"
+                                      asChild
                                     >
-                                      <ExternalLink className="size-4" aria-hidden="true" />
-                                      {t("openInvitation")}
-                                    </a>
-                                  </Button>
+                                      <a
+                                        href={g.invitationPath}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        <ExternalLink className="size-4" aria-hidden="true" />
+                                        {t("openInvitation")}
+                                      </a>
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      aria-label={t("copyInvitationFor", { name: g.recipientName })}
+                                      title={t("copyInvitation")}
+                                      onClick={() => {
+                                        if (g.invitationPath) void copyInvitation(g.invitationPath);
+                                      }}
+                                    >
+                                      <Copy className="size-4" aria-hidden="true" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  can("INVITATION_SEND") && (
+                                    <span className="text-muted-foreground">
+                                      {t("noInvitationLink")}
+                                    </span>
+                                  )
+                                )}
+                                {can("GUEST_EDIT") && !g.archivedAt && (
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    aria-label={t("copyInvitationFor", { name: g.recipientName })}
-                                    title={t("copyInvitation")}
+                                    aria-label={`${t("edit")} ${g.recipientName}`}
+                                    title={t("edit")}
                                     onClick={() => {
-                                      if (g.invitationPath) void copyInvitation(g.invitationPath);
+                                      setSelected(g.id);
+                                      setEditingGuest(true);
                                     }}
                                   >
-                                    <Copy className="size-4" aria-hidden="true" />
+                                    <Pencil className="size-4" aria-hidden="true" />
                                   </Button>
-                                </div>
-                              ) : (
-                                <span className="block text-right text-muted-foreground">
-                                  {t("noInvitationLink")}
-                                </span>
-                              )}
+                                )}
+                              </div>
                             </td>
                           )}
                         </tr>
