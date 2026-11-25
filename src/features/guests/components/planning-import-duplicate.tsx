@@ -25,31 +25,28 @@ export function PlanningImportDuplicate({
   const context = importDuplicateContext(check, row);
   const guest = context.target?.guest;
   const count = context.target?.differences.find((diff) => diff.field === "expectedPeople");
+  const canSelectUpdate = Boolean(context.target && !context.ambiguous);
   const options = [
     {
       value: "update" as const,
-      title: "Cập nhật khách đã có",
+      title: "Cập nhật khách cũ",
       description: context.ambiguous
         ? "Cần xác minh khách đích trước khi cập nhật."
-        : context.target && !context.canUpdate
-          ? "Không có thông tin thay đổi."
-          : !context.target
-            ? "Chưa xác định được khách trong hệ thống."
-            : "Xem và xác nhận các trường cần thay đổi.",
-      disabled: !context.canUpdate,
+        : !context.target
+          ? "Chưa xác định được khách trong hệ thống."
+          : "Chỉnh thông tin lời mời đã tồn tại.",
+      disabled: !canSelectUpdate,
     },
     {
       value: "create" as const,
-      title: "Sửa để tạo khách riêng",
-      description: context.contactConflict
-        ? "Sửa thông tin liên hệ đang trùng trước khi tạo."
-        : "Kiểm tra dòng Excel để tạo một lời mời riêng.",
+      title: "Tạo khách mới",
+      description: "Tạo lời mời riêng; cần sửa liên hệ bị trùng.",
       disabled: false,
     },
     {
       value: "skip" as const,
       title: "Bỏ qua dòng này",
-      description: "Không nhập dòng này; giữ nguyên khách hiện tại.",
+      description: "Không nhập dòng này.",
       disabled: false,
     },
   ];
@@ -165,9 +162,9 @@ export function PlanningImportDuplicate({
       <div className="flex justify-end">
         <Button
           size="sm"
-          disabled={!choice || (choice === "update" && !context.canUpdate)}
+          disabled={!choice || (choice === "update" && !canSelectUpdate)}
           onClick={() => {
-            if (choice === "update" && context.canUpdate) onUpdate();
+            if (choice === "update" && canSelectUpdate) onUpdate();
             else if (choice === "create") onCreate();
             else if (choice === "skip") onSkip();
           }}

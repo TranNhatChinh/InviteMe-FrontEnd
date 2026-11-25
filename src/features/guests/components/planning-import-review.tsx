@@ -162,7 +162,7 @@ function ImportRowEditor({
   return (
     <Modal
       open
-      title={`${creating ? "Sửa để tạo khách riêng" : "Sửa dữ liệu"} — dòng ${row.line}`}
+      title={`${creating ? "Tạo khách mới" : "Sửa dữ liệu"} — dòng ${row.line}`}
       description={
         creating
           ? "Sửa hoặc bỏ trống liên hệ bị trùng. Dòng sẽ được kiểm tra lại trước khi tạo lời mời riêng; khách đã có được giữ nguyên."
