@@ -233,3 +233,13 @@
   flex: 1;
   min-height: 0;
 }
+
+/* Keep the same device preview inside the import workspace beside its page list. */
+.embedded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}

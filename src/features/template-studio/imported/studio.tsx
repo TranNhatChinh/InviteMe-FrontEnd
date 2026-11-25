@@ -89,8 +89,6 @@ export function ImportedStudio({
   const [panel, setPanel] = useState<"pages" | "music" | "effects" | "widgets">("pages");
   const [selectedWidget, setSelectedWidget] = useState<string | null>(null);
   const widgets = document.widgets ?? [];
-  const [mobile, setMobile] = useState(false);
-  const [zoom, setZoom] = useState(100);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [dragging, setDragging] = useState(false);
@@ -344,13 +342,6 @@ export function ImportedStudio({
           style={{ fontFamily: "Arial, sans-serif" }}
         >
           <FallingParticles effect={settings.particles ?? "none"} />
-          {preview && (
-            <PreviewMusicPlayer
-              value={settings.music}
-              resolved={props.resolvedMusic}
-              allowLibraryLookup={props.musicLibraryLookup}
-            />
-          )}
           {!preview && toolbar}
           {busy && !editing && (
             <p role="status" className="bg-white px-5 py-2 text-sm">
@@ -564,63 +555,41 @@ export function ImportedStudio({
               </>
             )}
             <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label={t("preview")}>
-              {!preview && (
-                <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-b bg-white/90 p-2 text-xs">
-                  <button
-                    aria-pressed={!mobile}
-                    className="rounded border px-3 py-1"
-                    onClick={() => setMobile(false)}
-                  >
-                    Desktop
-                  </button>
-                  <button
-                    aria-pressed={mobile}
-                    className="rounded border px-3 py-1"
-                    onClick={() => setMobile(true)}
-                  >
-                    Mobile
-                  </button>
-                  <label className="flex items-center gap-2">
-                    {t("zoom")}
-                    <select
-                      aria-label={t("zoom")}
-                      value={zoom}
-                      onChange={(event) => setZoom(Number(event.target.value))}
+              <PreviewViewport active={!preview} embedded>
+                <PreviewMusicPlayer
+                  value={settings.music}
+                  resolved={props.resolvedMusic}
+                  allowLibraryLookup={props.musicLibraryLookup}
+                />
+                <div
+                  className="h-dvh min-h-0 overflow-auto bg-[#eeeae7] px-3 pb-6 pt-3 md:px-6 md:pt-20"
+                  data-imported-scroll
+                >
+                  {pages.length ? (
+                    <div
+                      className="mx-auto bg-white shadow-sm"
+                      style={{ width: "100%", maxWidth: 600 }}
                     >
-                      {[50, 75, 100, 125, 150].map((value) => (
-                        <option key={value} value={value}>
-                          {value}%
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      <ImportedPages
+                        pages={visibleDocument.pages ?? []}
+                        bounded={false}
+                        widgets={widgets}
+                        editable={!preview && !busy}
+                        selectedId={selectedWidget}
+                        onSelectWidget={(id) => {
+                          setSelectedWidget(id);
+                          setPanel("widgets");
+                        }}
+                        onWidgetChange={changeWidget}
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid min-h-64 place-content-center text-center text-sm text-muted-foreground">
+                      {t("empty")}
+                    </div>
+                  )}
                 </div>
-              )}
-              <div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6" data-imported-scroll>
-                {pages.length ? (
-                  <div
-                    className="mx-auto bg-white shadow-sm"
-                    style={{ width: `${zoom}%`, maxWidth: ((mobile ? 390 : 600) * zoom) / 100 }}
-                  >
-                    <ImportedPages
-                      pages={visibleDocument.pages ?? []}
-                      bounded={false}
-                      widgets={widgets}
-                      editable={!preview && !busy}
-                      selectedId={selectedWidget}
-                      onSelectWidget={(id) => {
-                        setSelectedWidget(id);
-                        setPanel("widgets");
-                      }}
-                      onWidgetChange={changeWidget}
-                    />
-                  </div>
-                ) : (
-                  <div className="grid min-h-64 place-content-center text-center text-sm text-muted-foreground">
-                    {t("empty")}
-                  </div>
-                )}
-              </div>
+              </PreviewViewport>
             </section>
           </div>
         </main>

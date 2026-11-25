@@ -9,10 +9,12 @@ export function PreviewViewport({
   active,
   children,
   toolbar,
+  embedded = false,
 }: {
   active: boolean;
   children: ReactNode;
   toolbar?: ReactNode;
+  embedded?: boolean;
 }) {
   const [mobile, setMobile] = useState(false);
   const [target, setTarget] = useState<HTMLElement | null>(null);
@@ -72,7 +74,7 @@ export function PreviewViewport({
 
   if (!active) return children;
   return (
-    <div className={styles.preview}>
+    <div className={`${styles.preview} ${embedded ? styles.embedded : ""}`}>
       {toolbar}
       <div className={styles.viewport}>
         <div className={styles.switch} role="group" aria-label="Thiết bị xem trước">
