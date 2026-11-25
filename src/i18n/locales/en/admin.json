@@ -31,7 +31,14 @@
     "keepFile": "Leave empty to keep the current audio.",
     "fileInvalid": "Please choose a valid MP3 file.",
     "fileSize": "The audio file must not exceed 20 MB.",
-    "uploading": "Uploading and saving audio, please wait…"
+    "uploading": "Uploading and saving audio, please wait…",
+    "dropFile": "Drag and drop your audio file here",
+    "dropNow": "Drop to select your audio",
+    "fileFormats": "MP3 format · Up to 20 MB",
+    "chooseFile": "Choose a file to upload",
+    "chooseAnother": "Choose another file",
+    "removeFile": "Remove selected file",
+    "singleFile": "Please select one MP3 file at a time."
   },
   "platformMetrics": "Platform metrics",
   "adminAreas": "Admin areas",

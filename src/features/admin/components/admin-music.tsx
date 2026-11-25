@@ -7,6 +7,7 @@ import { Pause, Play, Plus } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
 import { listMusic, saveMusic, setMusicStatus, type MusicTrack } from "@/shared/api/music.api";
+import { AdminMusicUpload } from "./admin-music-upload";
 import { useAudioPreview } from "@/shared/lib/use-audio-preview";
 import { adminApi } from "../api/admin.api";
 import { ErrorState } from "@/shared/feedback/error-state";
@@ -101,6 +102,13 @@ export function AdminMusic() {
     setError("");
     setSubmitted(false);
     setOpen(true);
+  }
+  function chooseFile(selected?: File) {
+    if (save.isPending) return;
+    player.stop();
+    setError("");
+    setFile(selected);
+    setPreviewUrl(selected ? URL.createObjectURL(selected) : "");
   }
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -273,31 +281,16 @@ export function AdminMusic() {
               <span className="text-destructive">{t("music.nameInvalid")}</span>
             )}
           </label>
-          <label className="grid gap-2 text-sm">
-            {t(editing ? "music.replaceFile" : "music.file")} {!editing && "*"}
-            <Input
-              key={`${open}-${editing?.id ?? "new"}`}
-              type="file"
-              accept=".mp3,audio/mpeg"
-              disabled={save.isPending}
-              aria-invalid={submitted && (!fileValid || (!file && !editing))}
-              onChange={(event) => {
-                player.stop();
-                const selected = event.target.files?.[0];
-                setFile(selected);
-                setPreviewUrl(selected ? URL.createObjectURL(selected) : "");
-              }}
-            />
-            <span className="text-xs text-muted-foreground">{t("music.fileHelp")}</span>
-            {editing && !file && (
-              <span className="text-xs text-muted-foreground">{t("music.keepFile")}</span>
-            )}
-            {((file && !fileValid) || (submitted && !file && !editing)) && (
-              <span role="alert" className="text-destructive">
-                {t(file && file.size > 20 * 1024 * 1024 ? "music.fileSize" : "music.fileInvalid")}
-              </span>
-            )}
-          </label>
+          <AdminMusicUpload
+            key={`${open}-${editing?.id ?? "new"}`}
+            file={file}
+            disabled={save.isPending}
+            label={t(editing ? "music.replaceFile" : "music.file")}
+            required={!editing}
+            submitted={submitted}
+            onChange={chooseFile}
+            onError={setError}
+          />
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}

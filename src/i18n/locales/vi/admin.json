@@ -31,7 +31,14 @@
     "keepFile": "Không chọn file mới: giữ nguyên nhạc hiện tại.",
     "fileInvalid": "Vui lòng chọn file MP3 hợp lệ.",
     "fileSize": "File nhạc không được vượt quá 20 MB.",
-    "uploading": "Đang tải lên và lưu nhạc, vui lòng chờ…"
+    "uploading": "Đang tải lên và lưu nhạc, vui lòng chờ…",
+    "dropFile": "Kéo thả file nhạc vào đây",
+    "dropNow": "Thả file để chọn nhạc",
+    "fileFormats": "Định dạng MP3 · Tối đa 20 MB",
+    "chooseFile": "Chọn file để tải lên",
+    "chooseAnother": "Chọn file khác",
+    "removeFile": "Bỏ file đã chọn",
+    "singleFile": "Vui lòng chọn một file MP3 mỗi lần."
   },
   "platformMetrics": "Chỉ số nền tảng",
   "adminAreas": "Khu vực quản trị",
