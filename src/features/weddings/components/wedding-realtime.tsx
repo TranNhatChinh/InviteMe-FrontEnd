@@ -43,11 +43,19 @@ export function WeddingRealtime({ weddingId }: { weddingId: string }) {
       refresh(["invitation-design", weddingId], since);
       refresh(["invitation-wording", weddingId], since);
     };
+    const invalidateGifts = (since: number | null = null) => {
+      refresh(["gift-summary", weddingId], since);
+      refresh(["gift-ledger-overview", weddingId], since);
+      refresh(["gift-ledger", weddingId], since);
+      refresh(["gift-accounts", weddingId], since);
+      refresh(["reception-gifts", weddingId], since);
+    };
     const unsubscribers = [
       realtime.onResync((since) => {
         invalidateRsvp(since);
         invalidateSeating(since);
         invalidatePublication(since);
+        invalidateGifts(since);
       }),
       realtime.on(REALTIME_EVENTS.capacity, () => invalidate()),
       realtime.on(REALTIME_EVENTS.rsvp, () => invalidateRsvp()),
@@ -62,6 +70,7 @@ export function WeddingRealtime({ weddingId }: { weddingId: string }) {
         // RSVP answers and gifts may have added a bell notification for this account (notifications feature key).
         if (change.type.startsWith("Rsvp") || change.type.startsWith("Gift"))
           void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        if (change.type.startsWith("Gift")) invalidateGifts();
         if (
           change.type === "PlanningGuestCreated" ||
           change.type === "PlanningGuestArchived" ||
