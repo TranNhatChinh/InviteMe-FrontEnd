@@ -1,18 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Pause, Play, Plus } from "lucide-react";
 import { useRuntime } from "@/core/config/runtime";
 import { ApiError } from "@/core/api/api-error";
-import {
-  listMusic,
-  saveMusic,
-  setMusicStatus,
-  validAudioUrl,
-  type MusicTrack,
-} from "@/shared/api/music.api";
+import { listMusic, saveMusic, setMusicStatus, type MusicTrack } from "@/shared/api/music.api";
 import { useAudioPreview } from "@/shared/lib/use-audio-preview";
 import { adminApi } from "../api/admin.api";
 import { ErrorState } from "@/shared/feedback/error-state";
@@ -32,7 +26,16 @@ export function AdminMusic() {
   const [editing, setEditing] = useState<MusicTrack | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [audioUrl, setAudioUrl] = useState("");
+  const [file, setFile] = useState<File | undefined>();
+  const [previewUrl, setPreviewUrl] = useState("");
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+  const fileValid =
+    !file || (/\.mp3$/i.test(file.name) && file.size > 0 && file.size <= 20 * 1024 * 1024);
+  const audioUrl = file ? previewUrl : (editing?.audioUrl ?? "");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const permissions = useQuery({
@@ -58,16 +61,24 @@ export function AdminMusic() {
     ]);
   }
   function errorMessage(reason: unknown) {
+    if (
+      reason instanceof ApiError &&
+      (reason.status === 413 || reason.backendCode === "MUSIC_FILE_SIZE")
+    )
+      return t("music.fileSize");
+    if (reason instanceof ApiError && reason.backendCode?.startsWith("MUSIC_FILE_"))
+      return t("music.fileInvalid");
     if (reason instanceof ApiError && reason.backendCode === "MUSIC_URL_EXISTS")
       return t("music.urlExists");
     if (reason instanceof ApiError && reason.status === 409) return t("music.conflict");
     return t("music.saveFailed");
   }
   const save = useMutation({
-    mutationFn: () =>
-      saveMusic(api, { name: name.trim(), audioUrl: audioUrl.trim() }, editing ?? undefined),
+    mutationFn: () => saveMusic(api, { name: name.trim(), file }, editing ?? undefined),
     onSuccess: async () => {
       setOpen(false);
+      setFile(undefined);
+      setPreviewUrl("");
       player.stop();
       await refresh();
     },
@@ -85,16 +96,18 @@ export function AdminMusic() {
     player.stop();
     setEditing(track);
     setName(track?.name ?? "");
-    setAudioUrl(track?.audioUrl ?? "");
+    setFile(undefined);
+    setPreviewUrl("");
     setError("");
     setSubmitted(false);
     setOpen(true);
   }
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (save.isPending) return;
     setSubmitted(true);
     setError("");
-    if (!name.trim() || name.trim().length > 150 || !validAudioUrl(audioUrl)) return;
+    if (!name.trim() || name.trim().length > 150 || !fileValid || (!file && !editing)) return;
     save.mutate();
   }
   const busy = save.isPending || toggle.isPending;
@@ -238,6 +251,8 @@ export function AdminMusic() {
         onClose={() => {
           if (!save.isPending) {
             setOpen(false);
+            setFile(undefined);
+            setPreviewUrl("");
             player.stop();
           }
         }}
@@ -248,6 +263,7 @@ export function AdminMusic() {
             {t("music.name")} *
             <Input
               required
+              disabled={save.isPending}
               maxLength={150}
               value={name}
               aria-invalid={submitted && !name.trim()}
@@ -258,21 +274,28 @@ export function AdminMusic() {
             )}
           </label>
           <label className="grid gap-2 text-sm">
-            {t("music.url")} *
+            {t(editing ? "music.replaceFile" : "music.file")} {!editing && "*"}
             <Input
-              type="url"
-              required
-              maxLength={2048}
-              value={audioUrl}
-              aria-invalid={submitted && !validAudioUrl(audioUrl)}
+              key={`${open}-${editing?.id ?? "new"}`}
+              type="file"
+              accept=".mp3,audio/mpeg"
+              disabled={save.isPending}
+              aria-invalid={submitted && (!fileValid || (!file && !editing))}
               onChange={(event) => {
                 player.stop();
-                setAudioUrl(event.target.value);
+                const selected = event.target.files?.[0];
+                setFile(selected);
+                setPreviewUrl(selected ? URL.createObjectURL(selected) : "");
               }}
             />
-            <span className="text-xs text-muted-foreground">{t("music.urlHelp")}</span>
-            {submitted && !validAudioUrl(audioUrl) && (
-              <span className="text-destructive">{t("music.urlInvalid")}</span>
+            <span className="text-xs text-muted-foreground">{t("music.fileHelp")}</span>
+            {editing && !file && (
+              <span className="text-xs text-muted-foreground">{t("music.keepFile")}</span>
+            )}
+            {((file && !fileValid) || (submitted && !file && !editing)) && (
+              <span role="alert" className="text-destructive">
+                {t(file && file.size > 20 * 1024 * 1024 ? "music.fileSize" : "music.fileInvalid")}
+              </span>
             )}
           </label>
           {error && (
@@ -285,11 +308,16 @@ export function AdminMusic() {
               {t("music.playFailed")}
             </p>
           )}
+          {save.isPending && (
+            <p role="status" className="text-sm text-muted-foreground">
+              {t("music.uploading")}
+            </p>
+          )}
           <div className="flex justify-between gap-3">
             <Button
               type="button"
               variant="outline"
-              disabled={!validAudioUrl(audioUrl)}
+              disabled={!audioUrl || !fileValid || save.isPending}
               onClick={() =>
                 player.toggle({
                   id: "admin-form",

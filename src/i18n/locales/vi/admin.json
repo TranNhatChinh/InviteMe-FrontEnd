@@ -24,7 +24,14 @@
     "title": "Quản lý nhạc",
     "pauseSimple": "Tạm dừng",
     "show": "Hiện",
-    "play": "Nghe thử {{name}}"
+    "play": "Nghe thử {{name}}",
+    "file": "File nhạc MP3",
+    "replaceFile": "Thay file nhạc (không bắt buộc)",
+    "fileHelp": "Chỉ nhận MP3, tối đa 20 MB. Bài mới được tạo ở trạng thái ẩn.",
+    "keepFile": "Không chọn file mới: giữ nguyên nhạc hiện tại.",
+    "fileInvalid": "Vui lòng chọn file MP3 hợp lệ.",
+    "fileSize": "File nhạc không được vượt quá 20 MB.",
+    "uploading": "Đang tải lên và lưu nhạc, vui lòng chờ…"
   },
   "platformMetrics": "Chỉ số nền tảng",
   "adminAreas": "Khu vực quản trị",

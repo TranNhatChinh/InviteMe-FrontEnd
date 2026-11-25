@@ -24,7 +24,14 @@
     "title": "Music management",
     "pauseSimple": "Pause",
     "show": "Show",
-    "play": "Preview {{name}}"
+    "play": "Preview {{name}}",
+    "file": "MP3 audio file",
+    "replaceFile": "Replace audio file (optional)",
+    "fileHelp": "MP3 only, up to 20 MB. New tracks start hidden.",
+    "keepFile": "Leave empty to keep the current audio.",
+    "fileInvalid": "Please choose a valid MP3 file.",
+    "fileSize": "The audio file must not exceed 20 MB.",
+    "uploading": "Uploading and saving audio, please wait…"
   },
   "platformMetrics": "Platform metrics",
   "adminAreas": "Admin areas",

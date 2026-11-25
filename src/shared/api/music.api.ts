@@ -56,12 +56,16 @@ export function getMusic(api: ApiClient, id: string, signal?: AbortSignal) {
 }
 export function saveMusic(
   api: ApiClient,
-  input: { name: string; audioUrl: string },
+  input: { name: string; file?: File },
   existing?: MusicTrack,
 ) {
+  const body = new FormData();
+  body.set("name", input.name);
+  if (input.file) body.set("file", input.file);
+  if (existing) body.set("expectedVersion", String(existing.version));
   return api.request(existing ? `/admin/music-tracks/${existing.id}` : "/admin/music-tracks", {
     method: existing ? "PUT" : "POST",
-    body: { ...input, ...(existing ? { expectedVersion: existing.version } : {}) },
+    body,
     schema: musicTrackSchema,
   });
 }
@@ -71,17 +75,6 @@ export function setMusicStatus(api: ApiClient, track: MusicTrack) {
     body: { isActive: !track.isActive, expectedVersion: track.version },
     schema: musicTrackSchema,
   });
-}
-export function validAudioUrl(value: string) {
-  if (value.trim().length > 2048 || /[\u0000-\u001f\u007f]/.test(value)) return false;
-  try {
-    const url = new URL(value.trim());
-    return (
-      url.protocol === "https:" && !!url.hostname && !url.username && !url.password && !url.hash
-    );
-  } catch {
-    return false;
-  }
 }
 export function audioDuration(seconds?: number) {
   if (seconds === undefined || !Number.isFinite(seconds)) return "—";
